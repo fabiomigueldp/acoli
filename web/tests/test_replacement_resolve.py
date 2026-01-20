@@ -62,7 +62,7 @@ class ReplacementResolveTests(TestCase):
         acolyte = AcolyteProfile.objects.create(parish=self.parish, display_name="Acolito")
         assignment = Assignment.objects.create(parish=self.parish, slot=other_slot, acolyte=acolyte)
         replacement = ReplacementRequest.objects.create(parish=self.parish, slot=slot, status="pending")
-        other_replacement = ReplacementRequest.objects.create(parish=self.parish, slot=other_slot, status="pending")
+        other_replacement = ReplacementRequest.objects.create(parish=self.parish, slot=other_slot, status="assigned")
 
         self._login()
         response = self.client.post(
@@ -80,6 +80,8 @@ class ReplacementResolveTests(TestCase):
         self.assertEqual(instance.status, "canceled")
         self.assertFalse(slot.required)
         self.assertFalse(other_slot.required)
+        self.assertEqual(slot.status, "finalized")
+        self.assertEqual(other_slot.status, "finalized")
         self.assertFalse(assignment.is_active)
         self.assertEqual(replacement.status, "resolved")
         self.assertEqual(other_replacement.status, "resolved")
@@ -112,6 +114,7 @@ class ReplacementResolveTests(TestCase):
         slot.refresh_from_db()
         replacement.refresh_from_db()
         self.assertFalse(slot.required)
+        self.assertEqual(slot.status, "finalized")
         self.assertEqual(replacement.status, "resolved")
 
     def test_resolve_covered_externally_marks_slot(self):

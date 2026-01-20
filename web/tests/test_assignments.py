@@ -14,6 +14,7 @@ from core.models import (
     Parish,
     ParishMembership,
     PositionType,
+    ReplacementRequest,
 )
 
 
@@ -119,3 +120,38 @@ class AssignmentLifecycleTests(TestCase):
         response = self.client.post(f"/assignments/{assignment.id}/decline/")
         self.assertEqual(response.status_code, 302)
         self.assertFalse(Confirmation.objects.filter(parish=parish, assignment=assignment).exists())
+
+    def test_cancel_assignment_blocked_when_mass_canceled(self):
+        User = get_user_model()
+        user = User.objects.create_user(email="user4@example.com", full_name="User", password="pass")
+        parish = Parish.objects.create(name="Parish")
+        community = Community.objects.create(parish=parish, code="MAT", name="Matriz")
+        position = PositionType.objects.create(parish=parish, code="LIB", name="Libriferario")
+        acolyte = AcolyteProfile.objects.create(parish=parish, user=user, display_name="Acolito")
+        ParishMembership.objects.create(parish=parish, user=user, active=True)
+        instance = MassInstance.objects.create(
+            parish=parish,
+            community=community,
+            starts_at=timezone.now() + timedelta(days=3),
+            status="canceled",
+        )
+        slot = AssignmentSlot.objects.create(
+            parish=parish,
+            mass_instance=instance,
+            position_type=position,
+            slot_index=1,
+            required=True,
+            status="assigned",
+        )
+        assignment = Assignment.objects.create(parish=parish, slot=slot, acolyte=acolyte, is_active=True)
+
+        self.client.login(email="user4@example.com", password="pass")
+        session = self.client.session
+        session["active_parish_id"] = parish.id
+        session.save()
+
+        response = self.client.post(f"/assignments/{assignment.id}/cancel/")
+        self.assertEqual(response.status_code, 302)
+        assignment.refresh_from_db()
+        self.assertTrue(assignment.is_active)
+        self.assertFalse(ReplacementRequest.objects.filter(parish=parish, slot=slot).exists())

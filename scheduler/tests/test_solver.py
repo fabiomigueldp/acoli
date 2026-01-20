@@ -107,3 +107,37 @@ class SolverTests(TestCase):
         self.assertEqual(result.required_slots_count, 1)
         self.assertEqual(result.coverage, 1)
 
+    def test_solver_ignores_canceled_instances(self):
+        parish = Parish.objects.create(name="Parish")
+        community = Community.objects.create(parish=parish, code="MAT", name="Matriz")
+        position = PositionType.objects.create(parish=parish, code="LIB", name="Libriferario")
+        acolyte = AcolyteProfile.objects.create(parish=parish, display_name="Acolito")
+        AcolyteQualification.objects.create(parish=parish, acolyte=acolyte, position_type=position, qualified=True)
+
+        canceled_instance = MassInstance.objects.create(
+            parish=parish,
+            community=community,
+            starts_at=timezone.now() + timedelta(days=1),
+            status="canceled",
+        )
+        canceled_slot = AssignmentSlot.objects.create(
+            parish=parish, mass_instance=canceled_instance, position_type=position, required=True, slot_index=1
+        )
+
+        scheduled_instance = MassInstance.objects.create(
+            parish=parish,
+            community=community,
+            starts_at=timezone.now() + timedelta(days=2),
+            status="scheduled",
+        )
+        scheduled_slot = AssignmentSlot.objects.create(
+            parish=parish, mass_instance=scheduled_instance, position_type=position, required=True, slot_index=1
+        )
+
+        solve_schedule(parish, [canceled_instance, scheduled_instance], parish.consolidation_days, {}, allow_changes=True)
+
+        canceled_slot.refresh_from_db()
+        scheduled_slot.refresh_from_db()
+        self.assertIsNone(canceled_slot.get_active_assignment())
+        self.assertIsNotNone(scheduled_slot.get_active_assignment())
+

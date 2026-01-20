@@ -131,6 +131,12 @@ class AcolyteAvailabilityRuleForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["day_of_week"].choices = [("", "Qualquer dia")] + WEEKDAY_CHOICES
 
+    def clean_day_of_week(self):
+        value = self.cleaned_data.get("day_of_week")
+        if value in ("", None):
+            return None
+        return value
+
 
 class AcolytePreferenceForm(forms.ModelForm):
     class Meta:
@@ -155,6 +161,12 @@ class AcolytePreferenceForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["weekday"].choices = [("", "Qualquer dia")] + WEEKDAY_CHOICES
+
+    def clean_weekday(self):
+        value = self.cleaned_data.get("weekday")
+        if value in ("", None):
+            return None
+        return value
 
 
 class SwapRequestForm(forms.Form):

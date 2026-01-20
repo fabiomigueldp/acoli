@@ -104,11 +104,13 @@ def cancel_mass_and_resolve_dependents(parish, instance, actor=None, notes="", r
         slot.required = False
         slot.externally_covered = False
         slot.external_coverage_notes = ""
-        slot.status = "open"
+        slot.status = "finalized"
         slot.save(update_fields=["required", "externally_covered", "external_coverage_notes", "status", "updated_at"])
 
     now = timezone.now()
-    replacements = ReplacementRequest.objects.filter(parish=parish, slot__mass_instance=instance, status="pending")
+    replacements = ReplacementRequest.objects.filter(
+        parish=parish, slot__mass_instance=instance, status__in=["pending", "assigned"]
+    )
     for replacement in replacements:
         replacement.status = "resolved"
         replacement.resolved_reason = "mass_canceled"

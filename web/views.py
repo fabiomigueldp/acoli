@@ -942,7 +942,7 @@ def replacement_resolve(request, request_id):
                 slot.required = False
                 slot.externally_covered = False
                 slot.external_coverage_notes = ""
-                slot.status = "open"
+                slot.status = "finalized"
                 slot.save(
                     update_fields=["required", "externally_covered", "external_coverage_notes", "status", "updated_at"]
                 )
@@ -1540,6 +1540,9 @@ def cancel_assignment(request, assignment_id):
     parish = request.active_parish
     assignment = get_object_or_404(Assignment, parish=parish, id=assignment_id)
     if not assignment.is_active:
+        return redirect("my_assignments")
+    if assignment.slot.mass_instance.status == "canceled":
+        messages.info(request, "A missa foi cancelada. Nenhuma acao e necessaria.")
         return redirect("my_assignments")
     if not _can_manage_assignment(request.user, assignment):
         return redirect("my_assignments")

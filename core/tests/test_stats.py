@@ -5,6 +5,7 @@ from django.utils import timezone
 
 from core.models import (
     AcolyteProfile,
+    AcolyteCreditLedger,
     AcolyteStats,
     Assignment,
     AssignmentSlot,
@@ -76,3 +77,49 @@ class StatsRecomputeTests(TestCase):
         stats = AcolyteStats.objects.get(parish=parish_a, acolyte=acolyte)
         self.assertEqual(stats.confirmation_rate, 1.0)
         self.assertEqual(stats.cancellations_rate, 0.0)
+
+    def test_credit_balance_scopes_by_parish(self):
+        parish_a = Parish.objects.create(name="Parish A")
+        parish_b = Parish.objects.create(name="Parish B")
+        community_a = Community.objects.create(parish=parish_a, code="MAT", name="Matriz")
+        position_a = PositionType.objects.create(parish=parish_a, code="LIB", name="Libriferario")
+        acolyte = AcolyteProfile.objects.create(parish=parish_a, display_name="Acolito A")
+
+        instance_a = MassInstance.objects.create(
+            parish=parish_a,
+            community=community_a,
+            starts_at=timezone.now() - timedelta(days=1),
+            status="scheduled",
+        )
+        slot_a = AssignmentSlot.objects.create(
+            parish=parish_a,
+            mass_instance=instance_a,
+            position_type=position_a,
+            slot_index=1,
+            required=True,
+            status="assigned",
+        )
+        Assignment.objects.create(
+            parish=parish_a,
+            slot=slot_a,
+            acolyte=acolyte,
+            assignment_state="published",
+        )
+
+        AcolyteCreditLedger.objects.create(
+            parish=parish_a,
+            acolyte=acolyte,
+            delta=5,
+            reason_code="served_unpopular_slot",
+        )
+        AcolyteCreditLedger.objects.create(
+            parish=parish_b,
+            acolyte=acolyte,
+            delta=100,
+            reason_code="served_unpopular_slot",
+        )
+
+        recompute_stats(parish_a)
+
+        stats = AcolyteStats.objects.get(parish=parish_a, acolyte=acolyte)
+        self.assertEqual(stats.credit_balance, 5)

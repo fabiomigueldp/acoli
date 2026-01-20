@@ -26,8 +26,7 @@ def sync_slots_for_instance(instance):
     for slot in AssignmentSlot.objects.filter(mass_instance=instance):
         if (slot.position_type_id, slot.slot_index) not in desired and slot.required:
             slot.required = False
-            if slot.status == "open":
-                slot.status = "open"
+            slot.status = "finalized"
             slot.save(update_fields=["required", "status", "updated_at"])
     return created
 

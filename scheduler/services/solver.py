@@ -81,7 +81,7 @@ def _build_candidate_map(slots, acolytes, qualifications, interest_map=None):
 
 
 def solve_schedule(parish, instances, consolidation_days, weights, allow_changes=False):
-    instances = list(instances)
+    instances = [instance for instance in instances if instance.status == "scheduled"]
     if not instances:
         return ScheduleSolveResult(coverage=0, preference_score=0, fairness_std=0, changes=0, feasible=False)
 

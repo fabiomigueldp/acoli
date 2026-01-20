@@ -37,7 +37,12 @@ def recompute_stats(parish):
         no_show = confirmations.filter(status="no_show").count()
         confirmation_rate = (confirmed / total_confirmations) if total_confirmations else 0.0
         cancellations_rate = (canceled / total_confirmations) if total_confirmations else 0.0
-        credit_balance = AcolyteCreditLedger.objects.filter(acolyte_id=acolyte_id).aggregate(total=models.Sum("delta")).get("total") or 0
+        credit_balance = (
+            AcolyteCreditLedger.objects.filter(parish=parish, acolyte_id=acolyte_id)
+            .aggregate(total=models.Sum("delta"))
+            .get("total")
+            or 0
+        )
         reliability_score = max(0.0, 100.0 - (cancellations_rate * 50.0) - (no_show * 5.0))
         AcolyteStats.objects.update_or_create(
             parish=parish,
