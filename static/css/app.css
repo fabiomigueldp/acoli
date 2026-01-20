@@ -1,0 +1,9 @@
+body { font-family: 'Space Grotesk', sans-serif; }
+.nav-link { padding: 0.45rem 0.75rem; border-radius: 999px; color: #5a6a72; }
+.nav-link:hover { background: rgba(15, 94, 77, 0.08); color: #0f5e4d; }
+.card { background: white; border-radius: 1.25rem; padding: 1.5rem; box-shadow: 0 12px 30px rgba(10, 24, 32, 0.08); }
+.label { display: block; font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: #5a6a72; margin-bottom: 0.35rem; }
+input, select, textarea { width: 100%; border: 1px solid rgba(10, 24, 32, 0.12); border-radius: 0.75rem; padding: 0.6rem 0.75rem; }
+.btn-primary { background: #0f5e4d; color: white; padding: 0.6rem 1.1rem; border-radius: 999px; font-size: 0.9rem; }
+.btn-secondary { background: rgba(10, 24, 32, 0.06); color: #0b1f26; padding: 0.5rem 0.9rem; border-radius: 999px; font-size: 0.85rem; }
+.badge { background: rgba(217, 164, 65, 0.2); color: #7a5a12; padding: 0.25rem 0.6rem; border-radius: 999px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; }

@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}Modelos{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <h2 class="font-serif text-xl">Modelos de missa</h2>
+    <div class="flex items-center gap-2">
+      <form method="post" action="{% url 'generate_instances' %}" class="flex items-center gap-2">
+        {% csrf_token %}
+        <input type="number" name="days" value="60" class="w-24" />
+        <button class="btn-secondary" type="submit">Gerar instancias</button>
+      </form>
+      <a class="btn-primary" href="{% url 'template_create' %}">Novo modelo</a>
+    </div>
+  </div>
+  <div class="space-y-2">
+    {% for template in templates %}
+      <div class="flex items-center justify-between border border-black/5 rounded-lg p-3">
+        <div>
+          <div class="font-medium">{{ template.title }}</div>
+          <div class="text-sm text-slate">{{ template.community.code }} - {{ template.get_weekday_display }} {{ template.time }}</div>
+        </div>
+        <span class="badge">{{ template.active|yesno:"ativo,inativo" }}</span>
+      </div>
+    {% empty %}
+      <p class="text-sm text-slate">Nenhum modelo cadastrado.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

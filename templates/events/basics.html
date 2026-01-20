@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}Novo evento{% endblock %}
+{% block content %}
+<div class="card max-w-3xl">
+  <h2 class="font-serif text-xl mb-4">Criar serie de eventos</h2>
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <div class="grid sm:grid-cols-2 gap-4">
+      <div>
+        <label class="label">Tipo</label>
+        {{ form.series_type }}
+      </div>
+      <div>
+        <label class="label">Titulo</label>
+        {{ form.title }}
+      </div>
+      <div>
+        <label class="label">Inicio</label>
+        {{ form.start_date }}
+      </div>
+      <div>
+        <label class="label">Fim</label>
+        {{ form.end_date }}
+      </div>
+      <div>
+        <label class="label">Horario padrao</label>
+        {{ form.default_time }}
+      </div>
+      <div>
+        <label class="label">Comunidade padrao</label>
+        {{ form.default_community }}
+      </div>
+      <div class="sm:col-span-2">
+        <label class="label">Perfil de requisitos padrao</label>
+        {{ form.default_requirement_profile }}
+      </div>
+      <div class="sm:col-span-2">
+        <label class="label">Pool de candidatos</label>
+        {{ form.candidate_pool }}
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <button class="btn-primary">Avancar</button>
+      <a class="btn-secondary" href="{% url 'event_series_list' %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

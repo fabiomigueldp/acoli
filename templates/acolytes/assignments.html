@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}Minhas escalas{% endblock %}
+{% block content %}
+<div class="card">
+  <h2 class="font-serif text-xl mb-4">Minhas escalas</h2>
+  <div class="space-y-2">
+    {% for assignment in assignments %}
+      <div class="border border-black/5 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div class="text-sm text-slate">{{ assignment.slot.mass_instance.starts_at|date:"d/m H:i" }}</div>
+          <div class="font-medium">{{ assignment.slot.mass_instance.community.code }} - {{ assignment.slot.position_type.name }}</div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          {% if assignment.confirmation %}
+            <span class="badge">{{ assignment.confirmation.status }}</span>
+            {% if assignment.confirmation.status == "pending" %}
+              <form method="post" action="{% url 'confirm_assignment' assignment.id %}">
+                {% csrf_token %}
+                <button class="btn-secondary" type="submit">Confirmar</button>
+              </form>
+              <form method="post" action="{% url 'decline_assignment' assignment.id %}">
+                {% csrf_token %}
+                <button class="btn-secondary" type="submit">Recusar</button>
+              </form>
+            {% elif assignment.confirmation.status == "confirmed" %}
+              <form method="post" action="{% url 'cancel_assignment' assignment.id %}">
+                {% csrf_token %}
+                <button class="btn-secondary" type="submit">Cancelar</button>
+              </form>
+            {% endif %}
+            <a class="btn-secondary" href="{% url 'swap_request_create' assignment.id %}">Solicitar troca</a>
+          {% else %}
+            <span class="badge">{{ assignment.assignment_state }}</span>
+            <a class="btn-secondary" href="{% url 'swap_request_create' assignment.id %}">Solicitar troca</a>
+          {% endif %}
+        </div>
+      </div>
+    {% empty %}
+      <p class="text-sm text-slate">Sem escalas atribuidas.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

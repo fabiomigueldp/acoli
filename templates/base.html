@@ -1,0 +1,100 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Acoli{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ["Space Grotesk", "sans-serif"],
+            serif: ["Fraunces", "serif"],
+          },
+          colors: {
+            ink: "#0b1f26",
+            slate: "#5a6a72",
+            sand: "#f3efe6",
+            moss: "#0f5e4d",
+            sun: "#d9a441",
+          },
+          boxShadow: {
+            soft: "0 12px 30px rgba(10, 24, 32, 0.12)",
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:wght@600;700&display=swap" />
+  <link rel="stylesheet" href="{% static 'css/app.css' %}" />
+</head>
+<body class="bg-sand text-ink min-h-screen">
+  <div class="absolute inset-0 bg-gradient-to-br from-sand via-white to-[#f2f7f1] pointer-events-none"></div>
+  <div class="relative">
+    <header class="sticky top-0 z-40 bg-white/80 backdrop-blur border-b border-black/5">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16">
+          <div class="flex items-center gap-4">
+            <a href="{% url 'dashboard' %}" class="font-serif text-xl">Acoli</a>
+            {% if active_parish %}
+              <div class="hidden sm:flex items-center text-sm text-slate">
+                <span class="font-medium text-ink">{{ active_parish.name }}</span>
+                <span class="mx-2">|</span>
+                <span>{{ active_parish.city }}</span>
+              </div>
+            {% endif %}
+          </div>
+          <div class="flex items-center gap-3">
+            {% if parish_memberships %}
+              <div class="relative group">
+                <button class="text-sm px-3 py-1.5 rounded-full border border-black/10 bg-white">Trocar paroquia</button>
+                <div class="absolute right-0 mt-2 w-56 bg-white shadow-soft rounded-xl p-2 hidden group-hover:block">
+                  {% for membership in parish_memberships %}
+                    <a class="block text-sm px-3 py-2 rounded-lg hover:bg-sand" href="{% url 'switch_parish' membership.parish_id %}">{{ membership.parish.name }}</a>
+                  {% endfor %}
+                </div>
+              </div>
+            {% endif %}
+            {% if request.user.is_authenticated %}
+              <a class="text-sm text-slate" href="{% url 'logout' %}">Sair</a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 grid lg:grid-cols-[220px_1fr] gap-6">
+      <nav class="hidden lg:flex flex-col gap-2 text-sm">
+        <a class="nav-link" href="{% url 'dashboard' %}">Painel</a>
+        <a class="nav-link" href="{% url 'calendar_month' %}">Calendario</a>
+        <a class="nav-link" href="{% url 'my_assignments' %}">Minhas escalas</a>
+        <a class="nav-link" href="{% url 'my_preferences' %}">Preferencias</a>
+        <a class="nav-link" href="{% url 'swap_requests' %}">Trocas</a>
+        <a class="nav-link" href="{% url 'event_interest' %}">Eventos</a>
+        {% if can_manage_parish %}
+          <div class="pt-3 text-xs uppercase tracking-widest text-slate">Admin</div>
+          <a class="nav-link" href="{% url 'acolyte_list' %}">Acolitos</a>
+          <a class="nav-link" href="{% url 'template_list' %}">Modelos</a>
+          <a class="nav-link" href="{% url 'event_series_list' %}">Eventos</a>
+          <a class="nav-link" href="{% url 'scheduling_dashboard' %}">Escalonar</a>
+          <a class="nav-link" href="{% url 'parish_settings' %}">Configuracoes</a>
+        {% endif %}
+      </nav>
+
+      <main>
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+
+    <nav class="fixed bottom-0 inset-x-0 bg-white border-t border-black/10 flex sm:hidden justify-around py-3 text-xs">
+      <a href="{% url 'dashboard' %}">Painel</a>
+      <a href="{% url 'calendar_month' %}">Calendario</a>
+      <a href="{% url 'my_assignments' %}">Escalas</a>
+      <a href="{% url 'swap_requests' %}">Trocas</a>
+    </nav>
+  </div>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block title %}Eventos{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="font-serif text-xl">Series de eventos</h2>
+    <a class="btn-primary" href="{% url 'event_series_create' %}">Novo evento</a>
+  </div>
+  <div class="space-y-2">
+    {% for item in series %}
+      <div class="border border-black/5 rounded-lg p-3">
+        <div class="font-medium">{{ item.title }}</div>
+        <div class="text-sm text-slate">{{ item.series_type }} - {{ item.start_date }} a {{ item.end_date }}</div>
+      </div>
+    {% empty %}
+      <p class="text-sm text-slate">Nenhum evento cadastrado.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

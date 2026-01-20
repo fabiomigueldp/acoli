@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}Trocas{% endblock %}
+{% block content %}
+<div class="card">
+  <h2 class="font-serif text-xl mb-4">Solicitacoes de troca</h2>
+  <div class="space-y-2">
+    {% for swap in swaps %}
+      <div class="border border-black/5 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div class="font-medium">{{ swap.mass_instance.starts_at|date:"d/m H:i" }}</div>
+          <div class="text-sm text-slate">{{ swap.get_swap_type_display }} - {{ swap.get_status_display }}</div>
+        </div>
+        <div class="flex items-center gap-2">
+          {% if swap.target_acolyte and swap.target_acolyte.user_id == request.user.id and swap.status == "pending" %}
+            <form method="post" action="{% url 'swap_request_accept' swap.id %}">
+              {% csrf_token %}
+              <button class="btn-secondary" type="submit">Aceitar</button>
+            </form>
+            <form method="post" action="{% url 'swap_request_reject' swap.id %}">
+              {% csrf_token %}
+              <button class="btn-secondary" type="submit">Recusar</button>
+            </form>
+          {% endif %}
+          {% if can_manage_parish and swap.status == "awaiting_approval" %}
+            <form method="post" action="{% url 'swap_request_approve' swap.id %}">
+              {% csrf_token %}
+              <button class="btn-secondary" type="submit">Aprovar</button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+    {% empty %}
+      <p class="text-sm text-slate">Nenhuma solicitacao.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

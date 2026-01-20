@@ -1,0 +1,33 @@
+from django.contrib import admin
+
+from . import models
+
+admin.site.register(models.Parish)
+admin.site.register(models.Community)
+admin.site.register(models.MembershipRole)
+admin.site.register(models.ParishMembership)
+admin.site.register(models.AcolyteProfile)
+admin.site.register(models.AcolyteIntent)
+admin.site.register(models.AcolyteAvailabilityRule)
+admin.site.register(models.FunctionType)
+admin.site.register(models.PositionType)
+admin.site.register(models.PositionTypeFunction)
+admin.site.register(models.AcolyteQualification)
+admin.site.register(models.AcolytePreference)
+admin.site.register(models.RequirementProfile)
+admin.site.register(models.RequirementProfilePosition)
+admin.site.register(models.MassTemplate)
+admin.site.register(models.EventSeries)
+admin.site.register(models.EventOccurrence)
+admin.site.register(models.EventInterest)
+admin.site.register(models.MassInstance)
+admin.site.register(models.MassOverride)
+admin.site.register(models.AssignmentSlot)
+admin.site.register(models.Assignment)
+admin.site.register(models.Confirmation)
+admin.site.register(models.SwapRequest)
+admin.site.register(models.ReplacementRequest)
+admin.site.register(models.AcolyteCreditLedger)
+admin.site.register(models.AcolyteStats)
+admin.site.register(models.AuditEvent)
+

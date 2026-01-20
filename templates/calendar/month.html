@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% load extras %}
+{% block title %}Calendario{% endblock %}
+{% block content %}
+<div class="grid gap-6">
+  <div class="card">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="font-serif text-xl">{{ month }}/{{ year }}</h2>
+        <p class="text-sm text-slate">Visualizacao mensal</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <a class="btn-secondary" href="?year={{ prev_month.year }}&month={{ prev_month.month }}">Anterior</a>
+        <a class="btn-secondary" href="?year={{ next_month.year }}&month={{ next_month.month }}">Proximo</a>
+      </div>
+    </div>
+    <form method="get" class="grid sm:grid-cols-4 gap-3 mt-4">
+      <input type="hidden" name="year" value="{{ year }}" />
+      <input type="hidden" name="month" value="{{ month }}" />
+      <div>
+        <label class="label">Comunidade</label>
+        <select name="community">
+          <option value="">Todas</option>
+          {% for community in communities %}
+            <option value="{{ community.id }}" {% if filters.community == community.id|stringformat:"s" %}selected{% endif %}>{{ community.code }} - {{ community.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="label">Status</label>
+        <select name="status">
+          <option value="">Todos</option>
+          <option value="scheduled" {% if filters.status == "scheduled" %}selected{% endif %}>Agendado</option>
+          <option value="canceled" {% if filters.status == "canceled" %}selected{% endif %}>Cancelado</option>
+        </select>
+      </div>
+      <div>
+        <label class="label">Tipo</label>
+        <select name="kind">
+          <option value="">Todos</option>
+          <option value="template" {% if filters.kind == "template" %}selected{% endif %}>Recorrente</option>
+          <option value="event" {% if filters.kind == "event" %}selected{% endif %}>Evento</option>
+        </select>
+      </div>
+      <div class="flex items-end">
+        <button class="btn-primary w-full">Filtrar</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card lg:hidden">
+    <div class="space-y-3">
+      {% for instance in instances %}
+        <a class="block border border-black/5 rounded-xl p-3 hover:bg-sand" href="{% url 'mass_detail' instance.id %}">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="text-sm text-slate">{{ instance.starts_at|date:"D d/m H:i" }}</div>
+              <div class="font-medium">{{ instance.community.code }} - {{ instance.liturgy_label|default:"Missa" }}</div>
+            </div>
+            <span class="badge">{{ instance.status }}</span>
+          </div>
+        </a>
+      {% empty %}
+        <p class="text-sm text-slate">Nenhuma missa encontrada.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card hidden lg:block">
+    <div class="grid grid-cols-7 text-xs uppercase tracking-widest text-slate">
+      <div class="p-2">Dom</div>
+      <div class="p-2">Seg</div>
+      <div class="p-2">Ter</div>
+      <div class="p-2">Qua</div>
+      <div class="p-2">Qui</div>
+      <div class="p-2">Sex</div>
+      <div class="p-2">Sab</div>
+    </div>
+    <div class="grid grid-cols-7 gap-px bg-black/5">
+      {% for week in month_grid %}
+        {% for day in week %}
+          <div class="bg-white min-h-[120px] p-2 {% if day.month != month %}opacity-50{% endif %}">
+            <div class="text-xs text-slate">{{ day|date:"d" }}</div>
+            <div class="mt-2 space-y-2">
+              {% for instance in instances_by_day|get_item:day %}
+                <a class="block text-xs rounded-lg border border-black/5 px-2 py-1 hover:bg-sand" href="{% url 'mass_detail' instance.id %}">
+                  <div class="font-medium">{{ instance.starts_at|date:"H:i" }} {{ instance.community.code }}</div>
+                  <div class="text-slate">{{ instance.liturgy_label|default:"Missa" }}</div>
+                </a>
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

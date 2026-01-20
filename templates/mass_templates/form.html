@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}Novo modelo{% endblock %}
+{% block content %}
+<div class="card max-w-2xl">
+  <h2 class="font-serif text-xl mb-4">Criar modelo</h2>
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <div class="grid sm:grid-cols-2 gap-4">
+      <div>
+        <label class="label">Titulo</label>
+        {{ form.title }}
+      </div>
+      <div>
+        <label class="label">Comunidade</label>
+        {{ form.community }}
+      </div>
+      <div>
+        <label class="label">Dia da semana</label>
+        {{ form.weekday }}
+      </div>
+      <div>
+        <label class="label">Horario</label>
+        {{ form.time }}
+      </div>
+      <div class="sm:col-span-2">
+        <label class="label">RRULE</label>
+        {{ form.rrule_text }}
+      </div>
+      <div class="sm:col-span-2">
+        <label class="label">Perfil de requisitos</label>
+        {{ form.default_requirement_profile }}
+      </div>
+      <div class="sm:col-span-2">
+        <label class="label">Notas</label>
+        {{ form.notes }}
+      </div>
+      <div class="sm:col-span-2">
+        <label class="label">Ativo</label>
+        {{ form.active }}
+      </div>
+    </div>
+    <button class="btn-primary">Salvar</button>
+  </form>
+</div>
+{% endblock %}

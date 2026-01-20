@@ -1,0 +1,37 @@
+from django.urls import path
+
+from accounts.urls import urlpatterns as account_urls
+from web import views
+
+urlpatterns = [
+    path("", views.dashboard, name="dashboard"),
+    path("calendar/", views.calendar_month, name="calendar_month"),
+    path("calendar/<int:instance_id>/", views.mass_detail, name="mass_detail"),
+    path("calendar/<int:instance_id>/update/", views.mass_update, name="mass_update"),
+    path("calendar/<int:instance_id>/move/", views.mass_move, name="mass_move"),
+    path("calendar/<int:instance_id>/cancel/", views.mass_cancel, name="mass_cancel"),
+    path("templates/", views.template_list, name="template_list"),
+    path("templates/new/", views.template_create, name="template_create"),
+    path("templates/generate/", views.generate_instances, name="generate_instances"),
+    path("events/", views.event_series_list, name="event_series_list"),
+    path("events/new/", views.event_series_create, name="event_series_create"),
+    path("events/new/days/", views.event_series_days, name="event_series_days"),
+    path("scheduling/", views.scheduling_dashboard, name="scheduling_dashboard"),
+    path("acolytes/", views.acolyte_list, name="acolyte_list"),
+    path("assignments/", views.my_assignments, name="my_assignments"),
+    path("preferences/", views.my_preferences, name="my_preferences"),
+    path("preferences/availability/<int:rule_id>/delete/", views.delete_availability, name="delete_availability"),
+    path("preferences/preferences/<int:pref_id>/delete/", views.delete_preference, name="delete_preference"),
+    path("swap-requests/", views.swap_requests, name="swap_requests"),
+    path("swap-requests/new/<int:assignment_id>/", views.swap_request_create, name="swap_request_create"),
+    path("swap-requests/<int:swap_id>/accept/", views.swap_request_accept, name="swap_request_accept"),
+    path("swap-requests/<int:swap_id>/reject/", views.swap_request_reject, name="swap_request_reject"),
+    path("swap-requests/<int:swap_id>/approve/", views.swap_request_approve, name="swap_request_approve"),
+    path("events/interest/", views.event_interest, name="event_interest"),
+    path("settings/", views.parish_settings, name="parish_settings"),
+    path("assignments/<int:assignment_id>/confirm/", views.confirm_assignment, name="confirm_assignment"),
+    path("assignments/<int:assignment_id>/decline/", views.decline_assignment, name="decline_assignment"),
+    path("assignments/<int:assignment_id>/cancel/", views.cancel_assignment, name="cancel_assignment"),
+    path("parish/switch/<int:parish_id>/", views.switch_parish, name="switch_parish"),
+] + account_urls
+

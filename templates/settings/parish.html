@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Configuracoes{% endblock %}
+{% block content %}
+<div class="card max-w-3xl">
+  <h2 class="font-serif text-xl mb-2">Configuracoes da paroquia</h2>
+  <div class="grid sm:grid-cols-2 gap-4 mt-4">
+    <div>
+      <div class="text-xs uppercase text-slate">Janela de consolidacao</div>
+      <div class="font-medium">{{ parish.consolidation_days }} dias</div>
+    </div>
+    <div>
+      <div class="text-xs uppercase text-slate">Horizonte</div>
+      <div class="font-medium">{{ parish.horizon_days }} dias</div>
+    </div>
+    <div>
+      <div class="text-xs uppercase text-slate">Trocas precisam de aprovacao</div>
+      <div class="font-medium">{{ parish.swap_requires_approval|yesno:"Sim,N?o" }}</div>
+    </div>
+  </div>
+</div>
+{% endblock %}

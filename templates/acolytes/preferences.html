@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+{% block title %}Preferencias{% endblock %}
+{% block content %}
+<div class="grid gap-6">
+  <div class="card">
+    <h2 class="font-serif text-xl mb-2">Preferencias e disponibilidade</h2>
+    {% if not acolyte %}
+      <p class="text-sm text-slate">Seu usuario nao esta vinculado a um perfil de acolito.</p>
+    {% else %}
+      <p class="text-sm text-slate">Atualize suas regras e preferencias para melhorar a escala.</p>
+    {% endif %}
+  </div>
+
+  {% if acolyte %}
+    <div class="grid lg:grid-cols-2 gap-4">
+      <div class="card">
+        <h3 class="font-semibold mb-3">Disponibilidade</h3>
+        <div class="space-y-2">
+          {% for rule in availability %}
+            <div class="border border-black/5 rounded-lg p-3 flex items-center justify-between">
+              <div>
+                <div class="text-sm text-slate">{{ rule.get_rule_type_display }}</div>
+                <div class="font-medium">{{ rule.day_of_week }} {{ rule.start_time }}-{{ rule.end_time }}</div>
+              </div>
+              <form method="post" action="{% url 'delete_availability' rule.id %}">
+                {% csrf_token %}
+                <button class="btn-secondary" type="submit">Remover</button>
+              </form>
+            </div>
+          {% empty %}
+            <p class="text-sm text-slate">Nenhuma regra cadastrada.</p>
+          {% endfor %}
+        </div>
+        <form method="post" class="space-y-3 mt-4">
+          {% csrf_token %}
+          <input type="hidden" name="form_type" value="availability" />
+          {{ availability_form.non_field_errors }}
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label class="label">Tipo</label>
+              {{ availability_form.rule_type }}
+            </div>
+            <div>
+              <label class="label">Dia da semana</label>
+              {{ availability_form.day_of_week }}
+            </div>
+            <div>
+              <label class="label">Inicio</label>
+              {{ availability_form.start_time }}
+            </div>
+            <div>
+              <label class="label">Fim</label>
+              {{ availability_form.end_time }}
+            </div>
+            <div class="sm:col-span-2">
+              <label class="label">Comunidade</label>
+              {{ availability_form.community }}
+            </div>
+            <div>
+              <label class="label">Data inicio</label>
+              {{ availability_form.start_date }}
+            </div>
+            <div>
+              <label class="label">Data fim</label>
+              {{ availability_form.end_date }}
+            </div>
+            <div class="sm:col-span-2">
+              <label class="label">Notas</label>
+              {{ availability_form.notes }}
+            </div>
+          </div>
+          <button class="btn-secondary">Adicionar</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h3 class="font-semibold mb-3">Preferencias</h3>
+        <div class="space-y-2">
+          {% for pref in preferences %}
+            <div class="border border-black/5 rounded-lg p-3 flex items-center justify-between">
+              <div>
+                <div class="text-sm text-slate">{{ pref.get_preference_type_display }}</div>
+                <div class="font-medium">Peso {{ pref.weight }}</div>
+              </div>
+              <form method="post" action="{% url 'delete_preference' pref.id %}">
+                {% csrf_token %}
+                <button class="btn-secondary" type="submit">Remover</button>
+              </form>
+            </div>
+          {% empty %}
+            <p class="text-sm text-slate">Nenhuma preferencia cadastrada.</p>
+          {% endfor %}
+        </div>
+        <form method="post" class="space-y-3 mt-4">
+          {% csrf_token %}
+          <input type="hidden" name="form_type" value="preference" />
+          {{ preference_form.non_field_errors }}
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label class="label">Tipo</label>
+              {{ preference_form.preference_type }}
+            </div>
+            <div>
+              <label class="label">Peso</label>
+              {{ preference_form.weight }}
+            </div>
+            <div>
+              <label class="label">Comunidade</label>
+              {{ preference_form.target_community }}
+            </div>
+            <div>
+              <label class="label">Posicao</label>
+              {{ preference_form.target_position }}
+            </div>
+            <div>
+              <label class="label">Funcao</label>
+              {{ preference_form.target_function }}
+            </div>
+            <div>
+              <label class="label">Modelo</label>
+              {{ preference_form.target_template }}
+            </div>
+            <div>
+              <label class="label">Parceiro</label>
+              {{ preference_form.target_acolyte }}
+            </div>
+            <div>
+              <label class="label">Dia da semana</label>
+              {{ preference_form.weekday }}
+            </div>
+            <div>
+              <label class="label">Horario inicio</label>
+              {{ preference_form.start_time }}
+            </div>
+            <div>
+              <label class="label">Horario fim</label>
+              {{ preference_form.end_time }}
+            </div>
+          </div>
+          <button class="btn-secondary">Adicionar</button>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% load extras %}
+{% block title %}Dias do evento{% endblock %}
+{% block content %}
+<div class="grid gap-6">
+  <div class="card">
+    <h2 class="font-serif text-xl mb-2">Dias do evento</h2>
+    <p class="text-sm text-slate">Revise cada dia e resolva conflitos antes de gerar.</p>
+  </div>
+  <form method="post" class="card space-y-4">
+    {% csrf_token %}
+    {{ formset.management_form }}
+    <div class="space-y-4">
+      {% for form in formset %}
+        <div class="border border-black/5 rounded-xl p-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="text-sm text-slate">{{ form.date.value }}</div>
+            {% if conflicts|index:forloop.counter0 %}
+              <span class="badge">Conflito</span>
+            {% endif %}
+          </div>
+          <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+            {{ form.date }}
+            <div>
+              <label class="label">Horario</label>
+              {{ form.time }}
+            </div>
+            <div>
+              <label class="label">Comunidade</label>
+              {{ form.community }}
+            </div>
+            <div>
+              <label class="label">Perfil</label>
+              {{ form.requirement_profile }}
+            </div>
+            <div>
+              <label class="label">Conflito</label>
+              {{ form.conflict_action }}
+            </div>
+            <div class="sm:col-span-2">
+              <label class="label">Rotulo</label>
+              {{ form.label }}
+            </div>
+          </div>
+          <div class="grid sm:grid-cols-3 gap-3 mt-3">
+            <div>
+              <label class="label">Mover para (data)</label>
+              {{ form.move_to_date }}
+            </div>
+            <div>
+              <label class="label">Mover para (hora)</label>
+              {{ form.move_to_time }}
+            </div>
+            <div>
+              <label class="label">Mover para (comunidade)</label>
+              {{ form.move_to_community }}
+            </div>
+          </div>
+          {{ form.non_field_errors }}
+        </div>
+      {% endfor %}
+    </div>
+    <div class="flex items-center gap-3">
+      <button class="btn-primary">Gerar eventos</button>
+      <a class="btn-secondary" href="{% url 'event_series_create' %}">Voltar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

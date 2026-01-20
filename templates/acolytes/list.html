@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}Acolitos{% endblock %}
+{% block content %}
+<div class="card">
+  <h2 class="font-serif text-xl mb-4">Acolitos</h2>
+  <div class="space-y-2">
+    {% for acolyte in acolytes %}
+      <div class="border border-black/5 rounded-lg p-3">
+        <div class="font-medium">{{ acolyte.display_name }}</div>
+        {% if acolyte.community_of_origin %}
+          <div class="text-sm text-slate">{{ acolyte.community_of_origin.code }}</div>
+        {% endif %}
+      </div>
+    {% empty %}
+      <p class="text-sm text-slate">Nenhum acolyto cadastrado.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

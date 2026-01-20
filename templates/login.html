@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Entrar{% endblock %}
+{% block content %}
+<div class="max-w-md mx-auto bg-white rounded-2xl shadow-soft p-8">
+  <h1 class="font-serif text-2xl mb-2">Bem-vindo</h1>
+  <p class="text-slate text-sm mb-6">Acesse sua conta para ver suas escalas e o calendario.</p>
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <div>
+      <label class="label">Email</label>
+      {{ form.username }}
+    </div>
+    <div>
+      <label class="label">Senha</label>
+      {{ form.password }}
+    </div>
+    <button class="btn-primary w-full">Entrar</button>
+  </form>
+</div>
+{% endblock %}

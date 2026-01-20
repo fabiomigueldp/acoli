@@ -1,0 +1,937 @@
+[
+  {
+    "model": "core.parish",
+    "pk": 1,
+    "fields": {
+      "name": "Paroquia Nossa Senhora Medianeira de Todas as Gracas",
+      "city": "Sorocaba",
+      "state": "SP",
+      "timezone": "America/Sao_Paulo",
+      "contact_email": "",
+      "contact_phone": "",
+      "consolidation_days": 14,
+      "horizon_days": 60,
+      "default_mass_duration_minutes": 60,
+      "min_rest_minutes_between_masses": 0,
+      "schedule_weights": {
+        "fairness_penalty": 1,
+        "stability_penalty": 10
+      },
+      "swap_requires_approval": true,
+      "notify_on_cancellation": true,
+      "auto_assign_on_decline": false,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.membershiprole",
+    "pk": 1,
+    "fields": {
+      "code": "SYSTEM_ADMIN",
+      "name": "System admin"
+    }
+  },
+  {
+    "model": "core.membershiprole",
+    "pk": 2,
+    "fields": {
+      "code": "PARISH_ADMIN",
+      "name": "Parish admin"
+    }
+  },
+  {
+    "model": "core.membershiprole",
+    "pk": 3,
+    "fields": {
+      "code": "ACOLYTE_COORDINATOR",
+      "name": "Acolyte coordinator"
+    }
+  },
+  {
+    "model": "core.membershiprole",
+    "pk": 4,
+    "fields": {
+      "code": "PASTOR",
+      "name": "Pastor"
+    }
+  },
+  {
+    "model": "core.membershiprole",
+    "pk": 5,
+    "fields": {
+      "code": "SECRETARY",
+      "name": "Secretary"
+    }
+  },
+  {
+    "model": "core.membershiprole",
+    "pk": 6,
+    "fields": {
+      "code": "ACOLYTE",
+      "name": "Acolyte"
+    }
+  },
+  {
+    "model": "core.community",
+    "pk": 1,
+    "fields": {
+      "parish": 1,
+      "code": "MAT",
+      "name": "Matriz",
+      "address": "Rua Araraquara, 27 - Jardim Leocadia - Sorocaba/SP",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.community",
+    "pk": 2,
+    "fields": {
+      "parish": 1,
+      "code": "STM",
+      "name": "Sao Tiago Maior",
+      "address": "Av. Padre Livio Emilio Calliari - Parque Ibiti Reserva - Sorocaba/SP",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.community",
+    "pk": 3,
+    "fields": {
+      "parish": 1,
+      "code": "SJT",
+      "name": "Sao Judas Tadeu",
+      "address": "Rua Henrique Emilio Colo, 28 - Jardim Sao Judas Tadeu - Sorocaba/SP",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.community",
+    "pk": 4,
+    "fields": {
+      "parish": 1,
+      "code": "SJB",
+      "name": "Sao Joao Batista",
+      "address": "Rua Pedro Wurschig, 400 - Retiro Sao Joao - Sorocaba/SP",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.community",
+    "pk": 5,
+    "fields": {
+      "parish": 1,
+      "code": "DES",
+      "name": "Divino Espirito Santo",
+      "address": "Praca dos Sorocabanos, 93 - Jardim Saira - Sorocaba/SP",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.community",
+    "pk": 6,
+    "fields": {
+      "parish": 1,
+      "code": "NSL",
+      "name": "Nossa Senhora de Lourdes",
+      "address": "Av. Eng. Carlos Reinaldo Mendes, 1009 - Alem Ponte - Sorocaba/SP",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.functiontype",
+    "pk": 1,
+    "fields": {
+      "parish": 1,
+      "code": "LIB",
+      "name": "Libriferario",
+      "description": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.functiontype",
+    "pk": 2,
+    "fields": {
+      "parish": 1,
+      "code": "CRU",
+      "name": "Cruciferario",
+      "description": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.functiontype",
+    "pk": 3,
+    "fields": {
+      "parish": 1,
+      "code": "CER",
+      "name": "Cerimoniario",
+      "description": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.functiontype",
+    "pk": 4,
+    "fields": {
+      "parish": 1,
+      "code": "TUR",
+      "name": "Turiferario",
+      "description": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.functiontype",
+    "pk": 5,
+    "fields": {
+      "parish": 1,
+      "code": "NAV",
+      "name": "Naveteiro",
+      "description": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.functiontype",
+    "pk": 6,
+    "fields": {
+      "parish": 1,
+      "code": "MIC",
+      "name": "Microfone",
+      "description": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.positiontype",
+    "pk": 1,
+    "fields": {
+      "parish": 1,
+      "code": "LIB",
+      "name": "Libriferario",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.positiontype",
+    "pk": 2,
+    "fields": {
+      "parish": 1,
+      "code": "CRU_MIC",
+      "name": "Cruciferario + Microfone",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.positiontype",
+    "pk": 3,
+    "fields": {
+      "parish": 1,
+      "code": "TUR",
+      "name": "Turiferario",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.positiontype",
+    "pk": 4,
+    "fields": {
+      "parish": 1,
+      "code": "NAV",
+      "name": "Naveteiro",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.positiontype",
+    "pk": 5,
+    "fields": {
+      "parish": 1,
+      "code": "CER_1",
+      "name": "Cerimoniario 1",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.positiontype",
+    "pk": 6,
+    "fields": {
+      "parish": 1,
+      "code": "CER_2",
+      "name": "Cerimoniario 2",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.positiontypefunction",
+    "pk": 1,
+    "fields": {
+      "position_type": 1,
+      "function_type": 1
+    }
+  },
+  {
+    "model": "core.positiontypefunction",
+    "pk": 2,
+    "fields": {
+      "position_type": 2,
+      "function_type": 2
+    }
+  },
+  {
+    "model": "core.positiontypefunction",
+    "pk": 3,
+    "fields": {
+      "position_type": 2,
+      "function_type": 6
+    }
+  },
+  {
+    "model": "core.positiontypefunction",
+    "pk": 4,
+    "fields": {
+      "position_type": 3,
+      "function_type": 4
+    }
+  },
+  {
+    "model": "core.positiontypefunction",
+    "pk": 5,
+    "fields": {
+      "position_type": 4,
+      "function_type": 5
+    }
+  },
+  {
+    "model": "core.positiontypefunction",
+    "pk": 6,
+    "fields": {
+      "position_type": 5,
+      "function_type": 3
+    }
+  },
+  {
+    "model": "core.positiontypefunction",
+    "pk": 7,
+    "fields": {
+      "position_type": 6,
+      "function_type": 3
+    }
+  },
+  {
+    "model": "core.requirementprofile",
+    "pk": 1,
+    "fields": {
+      "parish": 1,
+      "name": "Dominical Simples (1)",
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.requirementprofile",
+    "pk": 2,
+    "fields": {
+      "parish": 1,
+      "name": "Dominical (2)",
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.requirementprofile",
+    "pk": 3,
+    "fields": {
+      "parish": 1,
+      "name": "Solenidade Incenso (4)",
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.requirementprofile",
+    "pk": 4,
+    "fields": {
+      "parish": 1,
+      "name": "Solenidade Incenso (6)",
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.requirementprofileposition",
+    "pk": 1,
+    "fields": {
+      "profile": 1,
+      "position_type": 1,
+      "quantity": 1
+    }
+  },
+  {
+    "model": "core.requirementprofileposition",
+    "pk": 2,
+    "fields": {
+      "profile": 2,
+      "position_type": 1,
+      "quantity": 1
+    }
+  },
+  {
+    "model": "core.requirementprofileposition",
+    "pk": 3,
+    "fields": {
+      "profile": 2,
+      "position_type": 2,
+      "quantity": 1
+    }
+  },
+  {
+    "model": "core.requirementprofileposition",
+    "pk": 4,
+    "fields": {
+      "profile": 3,
+      "position_type": 1,
+      "quantity": 1
+    }
+  },
+  {
+    "model": "core.requirementprofileposition",
+    "pk": 5,
+    "fields": {
+      "profile": 3,
+      "position_type": 2,
+      "quantity": 1
+    }
+  },
+  {
+    "model": "core.requirementprofileposition",
+    "pk": 6,
+    "fields": {
+      "profile": 3,
+      "position_type": 3,
+      "quantity": 1
+    }
+  },
+  {
+    "model": "core.requirementprofileposition",
+    "pk": 7,
+    "fields": {
+      "profile": 3,
+      "position_type": 4,
+      "quantity": 1
+    }
+  },
+  {
+    "model": "core.requirementprofileposition",
+    "pk": 8,
+    "fields": {
+      "profile": 4,
+      "position_type": 1,
+      "quantity": 1
+    }
+  },
+  {
+    "model": "core.requirementprofileposition",
+    "pk": 9,
+    "fields": {
+      "profile": 4,
+      "position_type": 2,
+      "quantity": 1
+    }
+  },
+  {
+    "model": "core.requirementprofileposition",
+    "pk": 10,
+    "fields": {
+      "profile": 4,
+      "position_type": 3,
+      "quantity": 1
+    }
+  },
+  {
+    "model": "core.requirementprofileposition",
+    "pk": 11,
+    "fields": {
+      "profile": 4,
+      "position_type": 4,
+      "quantity": 1
+    }
+  },
+  {
+    "model": "core.requirementprofileposition",
+    "pk": 12,
+    "fields": {
+      "profile": 4,
+      "position_type": 5,
+      "quantity": 1
+    }
+  },
+  {
+    "model": "core.requirementprofileposition",
+    "pk": 13,
+    "fields": {
+      "profile": 4,
+      "position_type": 6,
+      "quantity": 1
+    }
+  },
+  {
+    "model": "core.masstemplate",
+    "pk": 1,
+    "fields": {
+      "parish": 1,
+      "title": "SJB Sabado 17:00",
+      "community": 4,
+      "weekday": 5,
+      "time": "17:00",
+      "rrule_text": "",
+      "active": true,
+      "default_requirement_profile": 1,
+      "notes": "",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.masstemplate",
+    "pk": 2,
+    "fields": {
+      "parish": 1,
+      "title": "STM Sabado 18:30",
+      "community": 2,
+      "weekday": 5,
+      "time": "18:30",
+      "rrule_text": "",
+      "active": true,
+      "default_requirement_profile": 1,
+      "notes": "",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.masstemplate",
+    "pk": 3,
+    "fields": {
+      "parish": 1,
+      "title": "SJT Sabado 19:45",
+      "community": 3,
+      "weekday": 5,
+      "time": "19:45",
+      "rrule_text": "",
+      "active": true,
+      "default_requirement_profile": 1,
+      "notes": "",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.masstemplate",
+    "pk": 4,
+    "fields": {
+      "parish": 1,
+      "title": "MAT Domingo 07:00",
+      "community": 1,
+      "weekday": 6,
+      "time": "07:00",
+      "rrule_text": "",
+      "active": true,
+      "default_requirement_profile": 1,
+      "notes": "",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.masstemplate",
+    "pk": 5,
+    "fields": {
+      "parish": 1,
+      "title": "NSL Domingo 08:15",
+      "community": 6,
+      "weekday": 6,
+      "time": "08:15",
+      "rrule_text": "",
+      "active": true,
+      "default_requirement_profile": 1,
+      "notes": "",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.masstemplate",
+    "pk": 6,
+    "fields": {
+      "parish": 1,
+      "title": "DES Domingo 09:30",
+      "community": 5,
+      "weekday": 6,
+      "time": "09:30",
+      "rrule_text": "",
+      "active": true,
+      "default_requirement_profile": 1,
+      "notes": "",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.masstemplate",
+    "pk": 7,
+    "fields": {
+      "parish": 1,
+      "title": "MAT Domingo 19:00",
+      "community": 1,
+      "weekday": 6,
+      "time": "19:00",
+      "rrule_text": "",
+      "active": true,
+      "default_requirement_profile": 1,
+      "notes": "",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.acolyteprofile",
+    "pk": 1,
+    "fields": {
+      "parish": 1,
+      "user": null,
+      "display_name": "Fabio Miguel",
+      "community_of_origin": 2,
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.acolyteprofile",
+    "pk": 2,
+    "fields": {
+      "parish": 1,
+      "user": null,
+      "display_name": "Maria Fernanda",
+      "community_of_origin": 2,
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.acolyteprofile",
+    "pk": 3,
+    "fields": {
+      "parish": 1,
+      "user": null,
+      "display_name": "Pedro Miguel",
+      "community_of_origin": 2,
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.acolyteprofile",
+    "pk": 4,
+    "fields": {
+      "parish": 1,
+      "user": null,
+      "display_name": "Melissa Martins",
+      "community_of_origin": 2,
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.acolyteprofile",
+    "pk": 5,
+    "fields": {
+      "parish": 1,
+      "user": null,
+      "display_name": "Nuno",
+      "community_of_origin": 2,
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.acolyteprofile",
+    "pk": 6,
+    "fields": {
+      "parish": 1,
+      "user": null,
+      "display_name": "Melissa Paes",
+      "community_of_origin": 1,
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.acolyteprofile",
+    "pk": 7,
+    "fields": {
+      "parish": 1,
+      "user": null,
+      "display_name": "Heloa",
+      "community_of_origin": 1,
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.acolyteprofile",
+    "pk": 8,
+    "fields": {
+      "parish": 1,
+      "user": null,
+      "display_name": "Mariana",
+      "community_of_origin": 1,
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.acolyteprofile",
+    "pk": 9,
+    "fields": {
+      "parish": 1,
+      "user": null,
+      "display_name": "Sara",
+      "community_of_origin": 1,
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.acolyteprofile",
+    "pk": 10,
+    "fields": {
+      "parish": 1,
+      "user": null,
+      "display_name": "Kalynda",
+      "community_of_origin": 1,
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.acolyteprofile",
+    "pk": 11,
+    "fields": {
+      "parish": 1,
+      "user": null,
+      "display_name": "Manuela",
+      "community_of_origin": 1,
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.acolyteprofile",
+    "pk": 12,
+    "fields": {
+      "parish": 1,
+      "user": null,
+      "display_name": "Heloisa",
+      "community_of_origin": 1,
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.acolyteprofile",
+    "pk": 13,
+    "fields": {
+      "parish": 1,
+      "user": null,
+      "display_name": "Lucca",
+      "community_of_origin": 1,
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.acolyteprofile",
+    "pk": 14,
+    "fields": {
+      "parish": 1,
+      "user": null,
+      "display_name": "Luiz Fernando",
+      "community_of_origin": 3,
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.acolyteprofile",
+    "pk": 15,
+    "fields": {
+      "parish": 1,
+      "user": null,
+      "display_name": "Leandro",
+      "community_of_origin": 3,
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.acolyteprofile",
+    "pk": 16,
+    "fields": {
+      "parish": 1,
+      "user": null,
+      "display_name": "Pedro",
+      "community_of_origin": 6,
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.acolyteprofile",
+    "pk": 17,
+    "fields": {
+      "parish": 1,
+      "user": null,
+      "display_name": "Emanuelly",
+      "community_of_origin": 6,
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.acolyteprofile",
+    "pk": 18,
+    "fields": {
+      "parish": 1,
+      "user": null,
+      "display_name": "Davi",
+      "community_of_origin": 5,
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.acolyteprofile",
+    "pk": 19,
+    "fields": {
+      "parish": 1,
+      "user": null,
+      "display_name": "Eloa",
+      "community_of_origin": 5,
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.acolyteprofile",
+    "pk": 20,
+    "fields": {
+      "parish": 1,
+      "user": null,
+      "display_name": "Maria Clara",
+      "community_of_origin": 4,
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.acolyteprofile",
+    "pk": 21,
+    "fields": {
+      "parish": 1,
+      "user": null,
+      "display_name": "Mickael Enzo",
+      "community_of_origin": 4,
+      "notes": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  }
+]

@@ -1,0 +1,94 @@
+# Acoli
+
+Sistema de escalas para acolitos com multi-paroquia, agendamento otimizado e fluxo de confirmacoes.
+
+## Stack
+- Django 5 + DRF
+- PostgreSQL (Heroku Postgres Essential)
+- HTMX + Tailwind (via CDN) para UI
+- OR-Tools CP-SAT para o solver global
+- WhiteNoise para estaticos
+
+## Setup local
+1) Crie um virtualenv e instale dependencias:
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+```
+
+2) Configure variaveis de ambiente (use `.env.example` como base).
+
+3) Rode migracoes e carregue dados iniciais:
+
+```bash
+python manage.py migrate
+python manage.py loaddata fixtures/seed_parish.json
+python manage.py createsuperuser
+```
+
+4) Inicie o servidor:
+
+```bash
+python manage.py runserver
+```
+
+## Variaveis de ambiente
+- `SECRET_KEY`
+- `DEBUG`
+- `ALLOWED_HOSTS`
+- `DATABASE_URL`
+- `DB_CONN_MAX_AGE`
+- `CSRF_TRUSTED_ORIGINS`
+- `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`
+- `DEFAULT_FROM_EMAIL`
+
+## Comandos de manutencao
+- `python manage.py generate_mass_instances --days 60`
+- `python manage.py sync_slots --days 60`
+- `python manage.py lock_consolidation_window`
+- `python manage.py recompute_acolyte_stats`
+- `python manage.py run_global_scheduler`
+- `python manage.py send_notifications`
+
+Para solicitar um job de escalonamento pelo admin, use a tela "Escalonar" ou crie um `ScheduleJobRequest` via admin/ORM.
+
+## Heroku (Basic + Postgres Essential)
+1) Crie o app e banco:
+
+```bash
+heroku create acoli
+heroku addons:create heroku-postgresql:essential-0
+```
+
+2) Configure variaveis:
+
+```bash
+heroku config:set SECRET_KEY=... ALLOWED_HOSTS=acoli.herokuapp.com
+```
+
+3) Deploy:
+
+```bash
+git push heroku main
+heroku run python manage.py migrate
+heroku run python manage.py loaddata fixtures/seed_parish.json
+```
+
+4) Configure Heroku Scheduler:
+- `python manage.py generate_mass_instances --days 60` (diario)
+- `python manage.py sync_slots --days 60` (diario)
+- `python manage.py lock_consolidation_window` (diario)
+- `python manage.py recompute_acolyte_stats` (diario)
+- `python manage.py run_global_scheduler` (noturno)
+- `python manage.py send_notifications` (a cada 10-15 min)
+
+## Testes
+```bash
+python manage.py test
+```
+
+## Docs
+- Arquitetura: `docs/ARCHITECTURE_NOTES.md`
+- Guia do usuario: `docs/USER_GUIDE.md`

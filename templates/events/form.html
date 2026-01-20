@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}Novo evento{% endblock %}
+{% block content %}
+<div class="card max-w-2xl">
+  <h2 class="font-serif text-xl mb-4">Criar serie de eventos</h2>
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <div class="grid sm:grid-cols-2 gap-4">
+      <div>
+        <label class="label">Tipo</label>
+        {{ form.series_type }}
+      </div>
+      <div>
+        <label class="label">Titulo</label>
+        {{ form.title }}
+      </div>
+      <div>
+        <label class="label">Inicio</label>
+        {{ form.start_date }}
+      </div>
+      <div>
+        <label class="label">Fim</label>
+        {{ form.end_date }}
+      </div>
+      <div class="sm:col-span-2">
+        <label class="label">Comunidade padrao</label>
+        {{ form.default_community }}
+      </div>
+      <div class="sm:col-span-2">
+        <label class="label">Regras (JSON)</label>
+        {{ form.ruleset_json }}
+      </div>
+    </div>
+    <button class="btn-primary">Salvar e gerar</button>
+  </form>
+</div>
+{% endblock %}

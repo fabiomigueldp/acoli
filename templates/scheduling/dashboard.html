@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block title %}Escalonar{% endblock %}
+{% block content %}
+<div class="grid gap-6">
+  <div class="card">
+    <h2 class="font-serif text-xl mb-2">Gerar escala</h2>
+    <p class="text-sm text-slate mb-4">Cria um job para otimizar os proximos {{ active_parish.horizon_days }} dias.</p>
+    <form method="post" class="flex items-center gap-3">
+      {% csrf_token %}
+      <button class="btn-primary" name="action" value="run">Gerar / Recalcular</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3 class="font-semibold mb-3">Publicar escala</h3>
+    <form method="post" class="grid sm:grid-cols-3 gap-3">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="publish" />
+      <div>
+        <label class="label">Data inicial</label>
+        <input type="date" name="start_date" value="{{ now|date:'Y-m-d' }}" />
+      </div>
+      <div>
+        <label class="label">Data final</label>
+        <input type="date" name="end_date" value="{{ now|date:'Y-m-d' }}" />
+      </div>
+      <div class="flex items-end">
+        <button class="btn-secondary w-full">Publicar</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="grid sm:grid-cols-2 gap-4">
+    <div class="card">
+      <div class="text-sm text-slate">Vagas abertas (consolidacao)</div>
+      <div class="text-3xl font-serif">{{ urgent_open }}</div>
+    </div>
+    <div class="card">
+      <div class="text-sm text-slate">Confirmacoes pendentes</div>
+      <div class="text-3xl font-serif">{{ pending_confirmations }}</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 class="font-semibold mb-3">Ultimos jobs</h3>
+    <div class="space-y-2">
+      {% for job in jobs %}
+        <div class="border border-black/5 rounded-lg p-3 flex items-center justify-between">
+          <div>
+            <div class="text-sm text-slate">{{ job.created_at|date:"d/m H:i" }}</div>
+            <div class="font-medium">{{ job.get_status_display }}</div>
+          </div>
+          <span class="badge">
+            {{ job.summary_json.coverage|default:"-" }} coberturas
+            {% if job.summary_json.unfilled_slots_count %}
+              / {{ job.summary_json.unfilled_slots_count }} sem cobertura
+            {% endif %}
+          </span>
+        </div>
+      {% empty %}
+        <p class="text-sm text-slate">Nenhum job executado ainda.</p>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

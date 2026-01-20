@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}Detalhe da missa{% endblock %}
+{% block content %}
+<div class="grid gap-6">
+  <div class="card">
+    <div class="text-sm text-slate">{{ instance.starts_at|date:"d/m/Y H:i" }}</div>
+    <h2 class="font-serif text-2xl">{{ instance.community.name }}</h2>
+    <p class="text-slate">{{ instance.liturgy_label|default:"Missa" }}</p>
+    <div class="mt-4 flex items-center gap-2">
+      <span class="badge">{{ instance.status }}</span>
+      {% if instance.event_series %}
+        <span class="badge">Evento</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if can_manage_parish %}
+    <div class="grid lg:grid-cols-3 gap-4">
+      <div class="card">
+        <h3 class="font-semibold mb-3">Editar informacoes</h3>
+        <form method="post" action="{% url 'mass_update' instance.id %}" class="space-y-3">
+          {% csrf_token %}
+          <div>
+            <label class="label">Rotulo</label>
+            {{ update_form.liturgy_label }}
+          </div>
+          <div>
+            <label class="label">Perfil de requisitos</label>
+            {{ update_form.requirement_profile }}
+          </div>
+          <button class="btn-secondary" type="submit">Salvar</button>
+        </form>
+      </div>
+      <div class="card">
+        <h3 class="font-semibold mb-3">Mover missa</h3>
+        <form method="post" action="{% url 'mass_move' instance.id %}" class="space-y-3">
+          {% csrf_token %}
+          <div>
+            <label class="label">Nova data/hora</label>
+            {{ move_form.starts_at }}
+          </div>
+          <div>
+            <label class="label">Nova comunidade</label>
+            {{ move_form.community }}
+          </div>
+          <button class="btn-secondary" type="submit">Mover</button>
+        </form>
+      </div>
+      <div class="card">
+        <h3 class="font-semibold mb-3">Cancelar</h3>
+        <form method="post" action="{% url 'mass_cancel' instance.id %}" class="space-y-3">
+          {% csrf_token %}
+          <div>
+            <label class="label">Motivo (opcional)</label>
+            {{ cancel_form.reason }}
+          </div>
+          <button class="btn-primary" type="submit">Cancelar missa</button>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="card">
+    <h3 class="font-semibold mb-3">Funcoes</h3>
+    <div class="space-y-2">
+      {% for slot in slots %}
+        <div class="flex flex-wrap items-center justify-between border border-black/5 rounded-lg p-3">
+          <div>
+            <div class="text-sm text-slate">{{ slot.position_type.name }}</div>
+            <div class="font-medium">{% if slot.assignment %}{{ slot.assignment.acolyte.display_name }}{% else %}Vaga aberta{% endif %}</div>
+          </div>
+          <span class="badge">{{ slot.status }}</span>
+        </div>
+      {% empty %}
+        <p class="text-sm text-slate">Sem slots configurados.</p>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}
