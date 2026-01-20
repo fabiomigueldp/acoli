@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}Escolher acolito{% endblock %}
+{% block content %}
+<div class="grid gap-6">
+  <div class="card">
+    <div class="text-sm text-slate">{{ replacement.slot.mass_instance.starts_at|date:"d/m/Y H:i" }}</div>
+    <h2 class="font-serif text-xl">Substituicao</h2>
+    <p class="text-slate">{{ replacement.slot.mass_instance.community.code }} - {{ replacement.slot.position_type.name }}</p>
+  </div>
+
+  <div class="card">
+    <form method="get" class="flex flex-wrap items-center gap-3">
+      <input class="flex-1" type="text" name="q" value="{{ query }}" placeholder="Buscar acolito" />
+      <button class="btn-secondary" type="submit">Buscar</button>
+      <a class="btn-secondary" href="{% url 'replacement_center' %}">Voltar</a>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3 class="font-semibold mb-3">Atribuir substituicao</h3>
+    <div class="space-y-2">
+      {% for acolyte in candidates %}
+        <form method="post" action="{% url 'replacement_assign' replacement.id %}" class="border border-black/5 rounded-lg p-3 flex items-center justify-between gap-3">
+          {% csrf_token %}
+          <div>
+            <div class="font-medium">{{ acolyte.display_name }}</div>
+            {% if acolyte.community_of_origin %}
+              <div class="text-sm text-slate">{{ acolyte.community_of_origin.code }}</div>
+            {% endif %}
+          </div>
+          <input type="hidden" name="acolyte_id" value="{{ acolyte.id }}" />
+          <button class="btn-primary" type="submit">Atribuir</button>
+        </form>
+      {% empty %}
+        <p class="text-sm text-slate">Nenhum acolito encontrado para este filtro.</p>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}Resolver substituicao{% endblock %}
+{% block content %}
+<div class="grid gap-6">
+  <div class="card">
+    <div class="text-sm text-slate">{{ replacement.slot.mass_instance.starts_at|date:"d/m/Y H:i" }}</div>
+    <h2 class="font-serif text-xl">Resolver substituicao</h2>
+    <p class="text-slate">{{ replacement.slot.mass_instance.community.code }} - {{ replacement.slot.position_type.name }}</p>
+    {% if replacement.notes %}
+      <p class="text-sm text-slate mt-2">{{ replacement.notes }}</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      <div>
+        <label class="text-sm font-medium">Motivo da resolucao</label>
+        <div class="mt-2 space-y-2">
+          {% for radio in form.resolution_type %}
+            <label class="flex items-center gap-2 text-sm">
+              {{ radio.tag }} {{ radio.choice_label }}
+            </label>
+          {% endfor %}
+        </div>
+        {% if form.resolution_type.errors %}
+          <p class="text-sm text-red-600 mt-1">{{ form.resolution_type.errors|join:", " }}</p>
+        {% endif %}
+      </div>
+
+      <div>
+        <label class="text-sm font-medium" for="{{ form.notes.id_for_label }}">Observacoes (opcional)</label>
+        {{ form.notes }}
+        {% if form.notes.errors %}
+          <p class="text-sm text-red-600 mt-1">{{ form.notes.errors|join:", " }}</p>
+        {% endif %}
+      </div>
+
+      <div class="rounded-lg border border-black/10 bg-sand/60 p-3">
+        <p class="text-xs text-slate mb-2">Use apenas quando a missa realmente nao vai acontecer.</p>
+        <label class="flex items-center gap-2 text-sm">
+          {{ form.confirm_cancel_mass }}
+          Confirmo o cancelamento da missa
+        </label>
+      </div>
+
+      <div class="text-xs text-slate">
+        Se a vaga continuar aberta, ela ainda aparecera como pendencia na consolidacao.
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <button class="btn-primary" type="submit">Confirmar resolucao</button>
+        <a class="btn-secondary" href="{% url 'replacement_center' %}">Voltar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -4,6 +4,8 @@ from datetime import timedelta
 from django.utils import timezone
 from ortools.sat.python import cp_model
 
+from django.db.models import F, Prefetch, Q
+
 from core.models import (
     AcolyteIntent,
     AcolytePreference,
@@ -14,6 +16,7 @@ from core.models import (
     EventInterest,
 )
 from core.services.audit import log_audit
+from core.services.assignments import assign_acolyte_to_slot, deactivate_assignment
 from core.services.availability import is_acolyte_available
 from core.services.preferences import preference_score
 
@@ -86,10 +89,29 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
     slots = list(
         AssignmentSlot.objects.filter(mass_instance__in=instances)
         .select_related("mass_instance", "mass_instance__event_series", "position_type")
-        .prefetch_related("position_type__functions")
+        .prefetch_related(
+            "position_type__functions",
+            Prefetch("assignments", queryset=Assignment.objects.filter(is_active=True), to_attr="active_assignments"),
+        )
     )
+    if not slots:
+        return ScheduleSolveResult(coverage=0, preference_score=0, fairness_std=0, changes=0, feasible=False)
+
+    decision_slots = [slot for slot in slots if slot.required]
+    if not decision_slots:
+        return ScheduleSolveResult(
+            coverage=0,
+            preference_score=0,
+            fairness_std=0,
+            changes=0,
+            required_slots_count=0,
+            unfilled_slots_count=0,
+            unfilled_details=[],
+            feasible=True,
+        )
+
     acolytes = list(parish.acolytes.filter(active=True))
-    if not slots or not acolytes:
+    if not acolytes:
         return ScheduleSolveResult(coverage=0, preference_score=0, fairness_std=0, changes=0, feasible=False)
 
     qualifications = AcolyteQualification.objects.filter(parish=parish, qualified=True)
@@ -104,11 +126,9 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
     interest_map = defaultdict(set)
     for interest in EventInterest.objects.filter(parish=parish, interested=True):
         interest_map[interest.event_series_id].add(interest.acolyte_id)
-    candidates = _build_candidate_map(slots, acolytes, qualifications, interest_map=interest_map)
-
-    required_slots = [slot for slot in slots if slot.required]
+    candidates = _build_candidate_map(decision_slots, acolytes, qualifications, interest_map=interest_map)
     unfilled_details = []
-    for slot in required_slots:
+    for slot in decision_slots:
         if not candidates.get(slot.id):
             unfilled_details.append(
                 {
@@ -125,7 +145,7 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
             preference_score=0,
             fairness_std=0,
             changes=0,
-            required_slots_count=len(required_slots),
+            required_slots_count=len(decision_slots),
             unfilled_slots_count=len(unfilled_details),
             unfilled_details=unfilled_details,
             feasible=False,
@@ -134,18 +154,18 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
     model = cp_model.CpModel()
     x = {}
 
-    for slot in slots:
+    for slot in decision_slots:
         for acolyte in candidates.get(slot.id, []):
             x[(slot.id, acolyte.id)] = model.NewBoolVar(f"x_{slot.id}_{acolyte.id}")
 
-    for slot in slots:
+    for slot in decision_slots:
         vars_for_slot = [x[(slot.id, a.id)] for a in candidates.get(slot.id, [])]
         if not vars_for_slot:
             continue
         model.Add(sum(vars_for_slot) == 1)
 
     slots_by_mass = defaultdict(list)
-    for slot in slots:
+    for slot in decision_slots:
         slots_by_mass[slot.mass_instance_id].append(slot)
     for mass_slots in slots_by_mass.values():
         for acolyte in acolytes:
@@ -156,8 +176,8 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
     mass_duration = int(getattr(parish, "default_mass_duration_minutes", 60))
     rest_minutes = int(getattr(parish, "min_rest_minutes_between_masses", 0))
     for acolyte in acolytes:
-        for i, slot_a in enumerate(slots):
-            for slot_b in slots[i + 1 :]:
+        for i, slot_a in enumerate(decision_slots):
+            for slot_b in decision_slots[i + 1 :]:
                 if slot_a.mass_instance_id == slot_b.mass_instance_id:
                     continue
                 a_start = slot_a.mass_instance.starts_at
@@ -170,7 +190,7 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
     max_services_per_week = weights.get("max_services_per_week")
     if max_services_per_week:
         slots_by_week = defaultdict(list)
-        for slot in slots:
+        for slot in decision_slots:
             key = slot.mass_instance.starts_at.isocalendar()[:2]
             slots_by_week[key].append(slot)
         for week_slots in slots_by_week.values():
@@ -182,7 +202,7 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
     max_consecutive_weekends = weights.get("max_consecutive_weekends")
     if max_consecutive_weekends:
         weekend_map = defaultdict(list)
-        for slot in slots:
+        for slot in decision_slots:
             weekday = slot.mass_instance.starts_at.weekday()
             if weekday in (5, 6):
                 date = slot.mass_instance.starts_at.date()
@@ -210,21 +230,18 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
                     if vars_in_window:
                         model.Add(sum(vars_in_window) <= int(max_consecutive_weekends))
 
-    for slot in slots:
+    for slot in decision_slots:
         for acolyte in candidates.get(slot.id, []):
             if not is_acolyte_available(acolyte, slot.mass_instance):
                 model.Add(x[(slot.id, acolyte.id)] == 0)
 
     consolidation_limit = timezone.now() + timedelta(days=consolidation_days)
     locked_slots = []
-    for slot in slots:
+    for slot in decision_slots:
         if slot.mass_instance.starts_at <= consolidation_limit and slot.is_locked:
             locked_slots.append(slot)
     for slot in locked_slots:
-        try:
-            existing_assignment = slot.assignment
-        except Assignment.DoesNotExist:
-            existing_assignment = None
+        existing_assignment = slot.get_active_assignment()
         if existing_assignment:
             for acolyte in candidates.get(slot.id, []):
                 value = 1 if acolyte.id == existing_assignment.acolyte_id else 0
@@ -237,7 +254,7 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
     rotation_terms = []
     partner_terms = []
 
-    for slot in slots:
+    for slot in decision_slots:
         for acolyte in candidates.get(slot.id, []):
             base_score = preference_score(acolyte, slot.mass_instance, slot, pref_by_acolyte.get(acolyte.id, []))
             credit_balance = stats.get(acolyte.id).credit_balance if stats.get(acolyte.id) else 0
@@ -253,10 +270,7 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
 
             preference_terms.append(base_score * x[(slot.id, acolyte.id)])
 
-            try:
-                existing_assignment = slot.assignment
-            except Assignment.DoesNotExist:
-                existing_assignment = None
+            existing_assignment = slot.get_active_assignment()
             if existing_assignment and existing_assignment.assignment_state in ["published", "locked"]:
                 if not allow_changes:
                     penalty = weights.get("stability_penalty", 10)
@@ -300,21 +314,26 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
         cutoff = timezone.now() - timedelta(days=rotation_days)
         recent_pairs = set(
             Assignment.objects.filter(
-                parish=parish, slot__mass_instance__starts_at__gte=cutoff
-            ).values_list("acolyte_id", "slot__position_type_id")
+                parish=parish,
+                assignment_state__in=["published", "locked"],
+                slot__mass_instance__starts_at__gte=cutoff,
+            )
+            .filter(created_at__lte=F("slot__mass_instance__starts_at"))
+            .filter(Q(ended_at__isnull=True) | Q(ended_at__gte=F("slot__mass_instance__starts_at")))
+            .values_list("acolyte_id", "slot__position_type_id")
         )
-        for slot in slots:
+        for slot in decision_slots:
             for acolyte in candidates.get(slot.id, []):
                 if (acolyte.id, slot.position_type_id) in recent_pairs:
                     rotation_terms.append(int(weights.get("rotation_penalty", 3)) * x[(slot.id, acolyte.id)])
 
     horizon_days = 30
-    if slots:
-        starts = [slot.mass_instance.starts_at for slot in slots]
+    if decision_slots:
+        starts = [slot.mass_instance.starts_at for slot in decision_slots]
         horizon_days = max((max(starts) - min(starts)).days, 1)
 
     if acolytes:
-        base_target = len(slots) / len(acolytes)
+        base_target = len(decision_slots) / len(acolytes)
         raw_targets = {}
         for acolyte in acolytes:
             intent = intents.get(acolyte.id)
@@ -326,30 +345,32 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
                 raw_target = base_target * factor
             raw_targets[acolyte.id] = raw_target
         total_raw = sum(raw_targets.values()) or 1
-        scale = len(slots) / total_raw
+        scale = len(decision_slots) / total_raw
         target_loads = {acolyte_id: int(round(raw * scale)) for acolyte_id, raw in raw_targets.items()}
 
         for acolyte in acolytes:
-            vars_for_acolyte = [x[(slot.id, acolyte.id)] for slot in slots if (slot.id, acolyte.id) in x]
+            vars_for_acolyte = [x[(slot.id, acolyte.id)] for slot in decision_slots if (slot.id, acolyte.id) in x]
             if vars_for_acolyte:
                 target = target_loads.get(acolyte.id, int(round(base_target)))
-                diff = model.NewIntVar(-len(slots), len(slots), f"diff_{acolyte.id}")
+                diff = model.NewIntVar(-len(decision_slots), len(decision_slots), f"diff_{acolyte.id}")
                 model.Add(diff == sum(vars_for_acolyte) - target)
-                abs_diff = model.NewIntVar(0, len(slots), f"abs_diff_{acolyte.id}")
+                abs_diff = model.NewIntVar(0, len(decision_slots), f"abs_diff_{acolyte.id}")
                 model.AddAbsEquality(abs_diff, diff)
                 fairness_terms.append(abs_diff)
 
-    objective = sum(preference_terms)
+    objective_terms = []
+    if preference_terms:
+        objective_terms.append(sum(preference_terms))
     if fairness_terms:
-        objective -= weights.get("fairness_penalty", 1) * sum(fairness_terms)
+        objective_terms.append(-weights.get("fairness_penalty", 1) * sum(fairness_terms))
     if stability_terms:
-        objective -= sum(stability_terms)
+        objective_terms.append(-sum(stability_terms))
     if rotation_terms:
-        objective -= sum(rotation_terms)
+        objective_terms.append(-sum(rotation_terms))
     if partner_terms:
-        objective += sum(partner_terms)
+        objective_terms.append(sum(partner_terms))
 
-    model.Maximize(objective)
+    model.Maximize(sum(objective_terms) if objective_terms else 0)
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = float(weights.get("max_solve_seconds", 15))
@@ -361,7 +382,7 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
             preference_score=0,
             fairness_std=0,
             changes=0,
-            required_slots_count=len(required_slots),
+            required_slots_count=len(decision_slots),
             unfilled_slots_count=len(unfilled_details),
             unfilled_details=unfilled_details,
             feasible=False,
@@ -372,7 +393,7 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
     preference_total = 0
     assignment_counts = []
 
-    for slot in slots:
+    for slot in decision_slots:
         assigned_acolyte = None
         for acolyte in candidates.get(slot.id, []):
             if solver.Value(x[(slot.id, acolyte.id)]) == 1:
@@ -382,32 +403,23 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
                 break
         if assigned_acolyte:
             coverage += 1
-            try:
-                existing = slot.assignment
-            except Assignment.DoesNotExist:
-                existing = None
+            existing = slot.get_active_assignment()
+            desired_state = existing.assignment_state if existing else "proposed"
             if not existing:
-                Assignment.objects.create(
-                    parish=parish,
-                    slot=slot,
-                    acolyte=assigned_acolyte,
-                    assignment_state="proposed",
-                )
-                log_audit(parish, None, "Assignment", slot.id, "create", {"acolyte_id": assigned_acolyte.id})
-                slot.status = "assigned"
+                assign_acolyte_to_slot(slot, assigned_acolyte, assignment_state=desired_state, end_reason="replaced_by_solver")
+                slot.status = "finalized" if slot.is_locked else "assigned"
                 slot.save(update_fields=["status", "updated_at"])
                 changes += 1
             elif existing.acolyte_id != assigned_acolyte.id:
-                existing.acolyte = assigned_acolyte
-                existing.save(update_fields=["acolyte", "updated_at"])
-                log_audit(parish, None, "Assignment", existing.id, "update", {"acolyte_id": assigned_acolyte.id})
-                slot.status = "assigned"
+                deactivate_assignment(existing, "replaced_by_solver", actor=None)
+                assign_acolyte_to_slot(slot, assigned_acolyte, assignment_state=desired_state, end_reason="replaced_by_solver")
+                slot.status = "finalized" if slot.is_locked else "assigned"
                 slot.save(update_fields=["status", "updated_at"])
                 changes += 1
 
     for acolyte in acolytes:
         count = 0
-        for slot in slots:
+        for slot in decision_slots:
             key = (slot.id, acolyte.id)
             if key in x and solver.Value(x[key]) == 1:
                 count += 1
@@ -423,7 +435,7 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
         preference_score=preference_total,
         fairness_std=fairness_std,
         changes=changes,
-        required_slots_count=len(required_slots),
+        required_slots_count=len(decision_slots),
         unfilled_slots_count=0,
         unfilled_details=[],
         feasible=True,

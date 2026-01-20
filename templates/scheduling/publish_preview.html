@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title %}Confirmar publicacao{% endblock %}
+{% block content %}
+<div class="grid gap-6">
+  <div class="card">
+    <h2 class="font-serif text-xl mb-2">Confirmar publicacao</h2>
+    <p class="text-sm text-slate">Revise os impactos antes de publicar.</p>
+  </div>
+
+  <div class="card grid sm:grid-cols-2 gap-4">
+    <div>
+      <div class="text-xs uppercase text-slate">Periodo</div>
+      <div class="font-medium">{{ start_date|date:"d/m/Y" }} a {{ end_date|date:"d/m/Y" }}</div>
+    </div>
+    <div>
+      <div class="text-xs uppercase text-slate">Escalas a publicar</div>
+      <div class="font-medium">{{ assignments_count }}</div>
+    </div>
+    <div>
+      <div class="text-xs uppercase text-slate">Acolitos impactados</div>
+      <div class="font-medium">{{ acolytes_count }}</div>
+    </div>
+    <div>
+      <div class="text-xs uppercase text-slate">E-mails previstos</div>
+      <div class="font-medium">{{ emails_count }}</div>
+    </div>
+    <div class="sm:col-span-2">
+      <div class="text-xs uppercase text-slate">Vagas abertas no periodo</div>
+      <div class="font-medium">{{ open_slots_count }}</div>
+      {% if open_slots_count %}
+        <p class="text-sm text-slate mt-1">Existem vagas abertas. Voce pode publicar mesmo assim, mas algumas confirmacoes ficarao pendentes.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <form method="post" action="{% url 'scheduling_publish_apply' %}" class="flex items-center gap-3">
+    {% csrf_token %}
+    <input type="hidden" name="start_date" value="{{ start_date|date:'Y-m-d' }}" />
+    <input type="hidden" name="end_date" value="{{ end_date|date:'Y-m-d' }}" />
+    <button class="btn-primary" type="submit">Confirmar publicacao</button>
+    <a class="btn-secondary" href="{% url 'scheduling_dashboard' %}">Cancelar</a>
+  </form>
+</div>
+{% endblock %}

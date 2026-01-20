@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% block title %}Auditoria{% endblock %}
+{% block content %}
+<div class="grid gap-6">
+  <div class="card">
+    <h2 class="font-serif text-xl mb-2">Auditoria</h2>
+    <p class="text-sm text-slate">Acompanhe alteracoes recentes na paroquia.</p>
+  </div>
+
+  <form method="get" class="card grid sm:grid-cols-4 gap-4">
+    <div>
+      <label class="label">Entidade</label>
+      <select name="entity">
+        <option value="">Todas</option>
+        <option value="MassInstance" {% if entity_type == "MassInstance" %}selected{% endif %}>MassInstance</option>
+        <option value="Assignment" {% if entity_type == "Assignment" %}selected{% endif %}>Assignment</option>
+        <option value="SwapRequest" {% if entity_type == "SwapRequest" %}selected{% endif %}>SwapRequest</option>
+        <option value="ReplacementRequest" {% if entity_type == "ReplacementRequest" %}selected{% endif %}>ReplacementRequest</option>
+        <option value="Parish" {% if entity_type == "Parish" %}selected{% endif %}>Parish</option>
+        <option value="Confirmation" {% if entity_type == "Confirmation" %}selected{% endif %}>Confirmation</option>
+      </select>
+    </div>
+    <div>
+      <label class="label">Acao</label>
+      <select name="action">
+        <option value="">Todas</option>
+        <option value="create" {% if action_type == "create" %}selected{% endif %}>create</option>
+        <option value="update" {% if action_type == "update" %}selected{% endif %}>update</option>
+        <option value="delete" {% if action_type == "delete" %}selected{% endif %}>delete</option>
+        <option value="cancel" {% if action_type == "cancel" %}selected{% endif %}>cancel</option>
+        <option value="move" {% if action_type == "move" %}selected{% endif %}>move</option>
+        <option value="publish" {% if action_type == "publish" %}selected{% endif %}>publish</option>
+        <option value="assign" {% if action_type == "assign" %}selected{% endif %}>assign</option>
+      </select>
+    </div>
+    <div>
+      <label class="label">Inicio</label>
+      <input type="date" name="start" value="{{ start_date }}" />
+    </div>
+    <div>
+      <label class="label">Fim</label>
+      <input type="date" name="end" value="{{ end_date }}" />
+    </div>
+    <div class="sm:col-span-4 flex items-center gap-2">
+      <button class="btn-secondary" type="submit">Filtrar</button>
+      <a class="btn-secondary" href="{% url 'audit_log' %}">Limpar</a>
+    </div>
+  </form>
+
+  <div class="card">
+    <div class="space-y-3">
+      {% for row in rows %}
+        <div class="border border-black/5 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div class="text-sm text-slate">{{ row.event.timestamp|date:"d/m/Y H:i" }}</div>
+            <div class="font-medium">{{ row.summary }}</div>
+            <div class="text-xs text-slate">
+              {% if row.event.actor_user %}
+                {{ row.event.actor_user.full_name|default:row.event.actor_user.email }}
+              {% else %}
+                Sistema
+              {% endif %}
+            </div>
+          </div>
+          {% if row.link %}
+            {% if row.link.1 %}
+              <a class="btn-secondary" href="{% url row.link.0 row.link.1 %}">Abrir</a>
+            {% else %}
+              <a class="btn-secondary" href="{% url row.link.0 %}">Abrir</a>
+            {% endif %}
+          {% endif %}
+        </div>
+      {% empty %}
+        <p class="text-sm text-slate">Nenhum evento encontrado.</p>
+      {% endfor %}
+    </div>
+
+    <div class="mt-4 flex items-center justify-between text-sm">
+      {% if page_obj.has_previous %}
+        <a class="btn-secondary" href="?page={{ page_obj.previous_page_number }}&entity={{ entity_type }}&action={{ action_type }}&start={{ start_date }}&end={{ end_date }}">Anterior</a>
+      {% else %}
+        <span></span>
+      {% endif %}
+      <span class="text-slate">Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}
+        <a class="btn-secondary" href="?page={{ page_obj.next_page_number }}&entity={{ entity_type }}&action={{ action_type }}&start={{ start_date }}&end={{ end_date }}">Proxima</a>
+      {% else %}
+        <span></span>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

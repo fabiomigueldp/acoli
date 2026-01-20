@@ -1,12 +1,18 @@
 import calendar as cal
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
+from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
+from django.db.models import Prefetch
 from django.forms import formset_factory
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from core.models import (
+    AcolyteQualification,
+    AuditEvent,
     Assignment,
     AssignmentSlot,
     Confirmation,
@@ -16,22 +22,37 @@ from core.models import (
     MassInstance,
     MassTemplate,
     MassOverride,
+    MembershipRole,
     ParishMembership,
+    ReplacementRequest,
     SwapRequest,
 )
 from core.services.audit import log_audit
 from core.services.calendar_generation import generate_instances_for_parish
 from core.services.event_series import apply_event_occurrences
+from core.services.assignments import assign_manual, deactivate_assignment
 from core.services.publishing import publish_assignments
 from core.services.slots import sync_slots_for_instance
-from core.services.permissions import ADMIN_ROLE_CODES, require_parish_roles, user_has_role, users_with_roles
-from core.services.replacements import create_replacement_request, mark_replacement_assigned
+from core.services.permissions import (
+    ADMIN_ROLE_CODES,
+    require_active_parish,
+    require_parish_roles,
+    user_has_role,
+    users_with_roles,
+)
+from core.services.replacements import (
+    assign_replacement,
+    cancel_mass_and_resolve_dependents,
+    create_replacement_request,
+)
 from core.services.swaps import apply_swap_request
+from core.services.availability import is_acolyte_available
 from scheduler.models import ScheduleJobRequest
 from notifications.services import enqueue_notification
-from scheduler.services.quick_fill import quick_fill_slot
+from scheduler.services.quick_fill import build_quick_fill_cache, quick_fill_slot
 from web.forms import (
     AcolyteAvailabilityRuleForm,
+    AcolyteLinkForm,
     AcolytePreferenceForm,
     EventOccurrenceForm,
     EventSeriesBasicsForm,
@@ -39,6 +60,9 @@ from web.forms import (
     MassInstanceMoveForm,
     MassInstanceUpdateForm,
     MassTemplateForm,
+    ParishSettingsForm,
+    ReplacementResolveForm,
+    SwapAssignForm,
     SwapRequestForm,
 )
 
@@ -49,7 +73,7 @@ def dashboard(request):
     if not parish:
         return render(request, "dashboard.html", {"missing_parish": True})
     upcoming = MassInstance.objects.filter(parish=parish, starts_at__gte=timezone.now()).order_by("starts_at")[:5]
-    unfilled = AssignmentSlot.objects.filter(parish=parish, status="open").count()
+    unfilled = AssignmentSlot.objects.filter(parish=parish, status="open", required=True).count()
     return render(
         request,
         "dashboard.html",
@@ -62,6 +86,7 @@ def dashboard(request):
 
 
 @login_required
+@require_active_parish
 def calendar_month(request):
     parish = request.active_parish
     today = date.today()
@@ -118,11 +143,16 @@ def calendar_month(request):
 
 
 @login_required
+@require_active_parish
 def mass_detail(request, instance_id):
     parish = request.active_parish
     instance = get_object_or_404(MassInstance, parish=parish, id=instance_id)
     sync_slots_for_instance(instance)
-    slots = instance.slots.select_related("position_type", "assignment__acolyte")
+    slots = list(instance.slots.select_related("position_type").prefetch_related(
+        Prefetch("assignments", queryset=Assignment.objects.filter(is_active=True).select_related("acolyte"), to_attr="active_assignments")
+    ))
+    position_ids = {slot.position_type_id for slot in slots}
+    quick_fill_cache = build_quick_fill_cache(parish, position_type_ids=position_ids)
     update_form = MassInstanceUpdateForm(instance=instance)
     move_form = MassInstanceMoveForm(
         parish=parish,
@@ -138,6 +168,9 @@ def mass_detail(request, instance_id):
         {
             "instance": instance,
             "slots": slots,
+            "slot_suggestions": {
+                slot.id: quick_fill_slot(slot, parish, max_candidates=3, cache=quick_fill_cache) for slot in slots
+            },
             "update_form": update_form,
             "move_form": move_form,
             "cancel_form": cancel_form,
@@ -145,7 +178,79 @@ def mass_detail(request, instance_id):
     )
 
 
+def _slot_candidate_list(parish, slot, query=None):
+    qualified_ids = AcolyteQualification.objects.filter(
+        parish=parish,
+        position_type=slot.position_type,
+        qualified=True,
+    ).values_list("acolyte_id", flat=True)
+    acolytes = parish.acolytes.filter(active=True, id__in=qualified_ids)
+    if query:
+        acolytes = acolytes.filter(display_name__icontains=query)
+    return [acolyte for acolyte in acolytes if is_acolyte_available(acolyte, slot.mass_instance)]
+
+
+def _handle_slot_assign(request, instance_id, slot_id, action_label):
+    parish = request.active_parish
+    instance = get_object_or_404(MassInstance, parish=parish, id=instance_id)
+    slot = get_object_or_404(AssignmentSlot, parish=parish, id=slot_id, mass_instance=instance)
+    if request.method == "POST":
+        acolyte_id = request.POST.get("acolyte_id")
+        if not acolyte_id:
+            messages.error(request, "Selecione um acolito para atribuir.")
+            return redirect("mass_detail", instance_id=instance.id)
+        acolyte = get_object_or_404(parish.acolytes, id=acolyte_id, active=True)
+        if not AcolyteQualification.objects.filter(
+            parish=parish, acolyte=acolyte, position_type=slot.position_type, qualified=True
+        ).exists():
+            messages.error(request, "Este acolito nao e qualificado para esta funcao.")
+            return redirect("mass_detail", instance_id=instance.id)
+        if not is_acolyte_available(acolyte, slot.mass_instance):
+            messages.error(request, "Este acolito nao esta disponivel para este horario.")
+            return redirect("mass_detail", instance_id=instance.id)
+        assignment = assign_manual(slot, acolyte, actor=request.user)
+        if assignment.acolyte.user:
+            enqueue_notification(
+                parish,
+                assignment.acolyte.user,
+                "ASSIGNMENT_PUBLISHED",
+                {"assignment_id": assignment.id},
+                idempotency_key=f"manual:{assignment.id}",
+            )
+        messages.success(request, "Escala atribuida com sucesso.")
+        return redirect("mass_detail", instance_id=instance.id)
+
+    query = request.GET.get("q", "").strip()
+    candidates = _slot_candidate_list(parish, slot, query=query)
+    return render(
+        request,
+        "calendar/assign_slot.html",
+        {
+            "instance": instance,
+            "slot": slot,
+            "candidates": candidates,
+            "action_label": action_label,
+            "query": query,
+        },
+    )
+
+
 @login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def slot_assign(request, instance_id, slot_id):
+    return _handle_slot_assign(request, instance_id, slot_id, "Atribuir")
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def slot_replace(request, instance_id, slot_id):
+    return _handle_slot_assign(request, instance_id, slot_id, "Substituir")
+
+
+@login_required
+@require_active_parish
 @require_parish_roles(ADMIN_ROLE_CODES)
 def mass_update(request, instance_id):
     parish = request.active_parish
@@ -183,6 +288,7 @@ def mass_update(request, instance_id):
 
 
 @login_required
+@require_active_parish
 @require_parish_roles(ADMIN_ROLE_CODES)
 def mass_move(request, instance_id):
     parish = request.active_parish
@@ -199,6 +305,7 @@ def mass_move(request, instance_id):
                 status="scheduled",
             ).exclude(id=instance.id)
             if conflict.exists():
+                messages.error(request, "Ja existe uma missa agendada nesse horario e comunidade.")
                 return redirect("mass_detail", instance_id=instance.id)
             payload = {
                 "from": {"starts_at": instance.starts_at.isoformat(), "community_id": instance.community_id},
@@ -215,10 +322,13 @@ def mass_move(request, instance_id):
                 created_by=request.user,
             )
             log_audit(parish, request.user, "MassInstance", instance.id, "move", payload)
+        else:
+            messages.error(request, "Nao foi possivel mover esta missa. Verifique os campos.")
     return redirect("mass_detail", instance_id=instance.id)
 
 
 @login_required
+@require_active_parish
 @require_parish_roles(ADMIN_ROLE_CODES)
 def mass_cancel(request, instance_id):
     parish = request.active_parish
@@ -227,20 +337,18 @@ def mass_cancel(request, instance_id):
         form = MassInstanceCancelForm(request.POST)
         if form.is_valid():
             reason = form.cleaned_data.get("reason", "")
-            instance.status = "canceled"
-            instance.save(update_fields=["status", "updated_at"])
-            MassOverride.objects.create(
-                parish=parish,
-                instance=instance,
-                override_type="cancel_instance",
-                payload={"reason": reason},
-                created_by=request.user,
+            cancel_mass_and_resolve_dependents(
+                parish,
+                instance,
+                actor=request.user,
+                notes=reason,
+                reason_code="manual_cancel",
             )
-            log_audit(parish, request.user, "MassInstance", instance.id, "cancel", {"reason": reason})
     return redirect("mass_detail", instance_id=instance.id)
 
 
 @login_required
+@require_active_parish
 @require_parish_roles(ADMIN_ROLE_CODES)
 def template_list(request):
     parish = request.active_parish
@@ -249,6 +357,7 @@ def template_list(request):
 
 
 @login_required
+@require_active_parish
 @require_parish_roles(ADMIN_ROLE_CODES)
 def template_create(request):
     parish = request.active_parish
@@ -265,6 +374,7 @@ def template_create(request):
 
 
 @login_required
+@require_active_parish
 @require_parish_roles(ADMIN_ROLE_CODES)
 def generate_instances(request):
     parish = request.active_parish
@@ -277,6 +387,7 @@ def generate_instances(request):
 
 
 @login_required
+@require_active_parish
 @require_parish_roles(ADMIN_ROLE_CODES)
 def event_series_list(request):
     parish = request.active_parish
@@ -285,6 +396,7 @@ def event_series_list(request):
 
 
 @login_required
+@require_active_parish
 def event_interest(request):
     parish = request.active_parish
     acolyte = parish.acolytes.filter(user=request.user).first()
@@ -312,6 +424,7 @@ def event_interest(request):
 
 
 @login_required
+@require_active_parish
 @require_parish_roles(ADMIN_ROLE_CODES)
 def event_series_create(request):
     parish = request.active_parish
@@ -336,6 +449,7 @@ def event_series_create(request):
 
 
 @login_required
+@require_active_parish
 @require_parish_roles(ADMIN_ROLE_CODES)
 def event_series_days(request):
     parish = request.active_parish
@@ -388,7 +502,30 @@ def event_series_days(request):
                     move_to_community=data.get("move_to_community"),
                 )
                 occurrences.append(occurrence)
-            apply_event_occurrences(series, occurrences, actor=request.user)
+            try:
+                apply_event_occurrences(series, occurrences, actor=request.user)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+                conflicts = []
+                for form in formset:
+                    data = form.cleaned_data
+                    conflict = MassInstance.objects.filter(
+                        parish=parish,
+                        community=data.get("community"),
+                        starts_at__date=data.get("date"),
+                        starts_at__time=data.get("time"),
+                        status="scheduled",
+                    ).first()
+                    conflicts.append(conflict)
+                return render(
+                    request,
+                    "events/days.html",
+                    {
+                        "formset": formset,
+                        "conflicts": conflicts,
+                        "draft": draft,
+                    },
+                )
             request.session.pop("event_series_draft", None)
             return redirect("event_series_list")
     else:
@@ -429,25 +566,38 @@ def event_series_days(request):
 
 
 @login_required
+@require_active_parish
 @require_parish_roles(ADMIN_ROLE_CODES)
 def scheduling_dashboard(request):
     parish = request.active_parish
     jobs = ScheduleJobRequest.objects.filter(parish=parish).order_by("-created_at")[:10]
     if request.method == "POST":
-        if request.POST.get("action") == "publish":
-            start_date = date.fromisoformat(request.POST.get("start_date"))
-            end_date = date.fromisoformat(request.POST.get("end_date"))
-            publish_assignments(parish, start_date, end_date, actor=request.user)
-        else:
+        if request.POST.get("action") == "run":
             ScheduleJobRequest.objects.create(parish=parish, requested_by=request.user, horizon_days=parish.horizon_days)
         return redirect("scheduling_dashboard")
 
+    today = timezone.now().date()
+    default_end = today + timedelta(days=parish.consolidation_days - 1)
+    start_date = date.fromisoformat(request.GET.get("start_date")) if request.GET.get("start_date") else today
+    end_date = date.fromisoformat(request.GET.get("end_date")) if request.GET.get("end_date") else default_end
+
+    publish_presets = [
+        {"label": "Proximos 14 dias", "start": today, "end": today + timedelta(days=13)},
+        {"label": "Proximos 30 dias", "start": today, "end": today + timedelta(days=29)},
+        {"label": "Horizonte completo", "start": today, "end": today + timedelta(days=parish.horizon_days - 1)},
+    ]
     consolidation_end = timezone.now() + timedelta(days=parish.consolidation_days)
     urgent_open = AssignmentSlot.objects.filter(
-        parish=parish, status="open", mass_instance__starts_at__lte=consolidation_end
+        parish=parish,
+        status="open",
+        required=True,
+        mass_instance__starts_at__lte=consolidation_end,
     ).count()
     pending_confirmations = Confirmation.objects.filter(
-        parish=parish, status="pending", assignment__slot__mass_instance__starts_at__lte=consolidation_end
+        parish=parish,
+        status="pending",
+        assignment__is_active=True,
+        assignment__slot__mass_instance__starts_at__lte=consolidation_end,
     ).count()
     return render(
         request,
@@ -457,11 +607,393 @@ def scheduling_dashboard(request):
             "urgent_open": urgent_open,
             "pending_confirmations": pending_confirmations,
             "now": timezone.now(),
+            "start_date": start_date,
+            "end_date": end_date,
+            "publish_presets": publish_presets,
         },
     )
 
 
 @login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def scheduling_publish_preview(request):
+    if request.method != "POST":
+        return redirect("scheduling_dashboard")
+    parish = request.active_parish
+    try:
+        start_date = date.fromisoformat(request.POST.get("start_date"))
+        end_date = date.fromisoformat(request.POST.get("end_date"))
+    except (TypeError, ValueError):
+        messages.error(request, "Informe um intervalo valido para publicacao.")
+        return redirect("scheduling_dashboard")
+    if end_date < start_date:
+        messages.error(request, "A data final precisa ser maior ou igual a data inicial.")
+        return redirect("scheduling_dashboard")
+
+    assignments = Assignment.objects.filter(
+        parish=parish,
+        is_active=True,
+        slot__mass_instance__starts_at__date__gte=start_date,
+        slot__mass_instance__starts_at__date__lte=end_date,
+    )
+    to_publish = assignments.filter(assignment_state="proposed")
+    open_slots = AssignmentSlot.objects.filter(
+        parish=parish,
+        status="open",
+        required=True,
+        mass_instance__starts_at__date__gte=start_date,
+        mass_instance__starts_at__date__lte=end_date,
+    )
+    acolytes_count = to_publish.values("acolyte_id").distinct().count()
+    emails_count = to_publish.filter(acolyte__user__email__isnull=False).exclude(acolyte__user__email="").count()
+
+    return render(
+        request,
+        "scheduling/publish_preview.html",
+        {
+            "start_date": start_date,
+            "end_date": end_date,
+            "assignments_count": to_publish.count(),
+            "open_slots_count": open_slots.count(),
+            "acolytes_count": acolytes_count,
+            "emails_count": emails_count,
+        },
+    )
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def scheduling_publish_apply(request):
+    if request.method != "POST":
+        return redirect("scheduling_dashboard")
+    parish = request.active_parish
+    try:
+        start_date = date.fromisoformat(request.POST.get("start_date"))
+        end_date = date.fromisoformat(request.POST.get("end_date"))
+    except (TypeError, ValueError):
+        messages.error(request, "Informe um intervalo valido para publicacao.")
+        return redirect("scheduling_dashboard")
+    if end_date < start_date:
+        messages.error(request, "A data final precisa ser maior ou igual a data inicial.")
+        return redirect("scheduling_dashboard")
+    published = publish_assignments(parish, start_date, end_date, actor=request.user)
+    messages.success(request, f"{published} escalas publicadas.")
+    return redirect("scheduling_dashboard")
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def schedule_job_detail(request, job_id):
+    parish = request.active_parish
+    job = get_object_or_404(ScheduleJobRequest, parish=parish, id=job_id)
+    summary = job.summary_json or {}
+    unfilled_details = summary.get("unfilled_details") or []
+    community_map = {
+        community.id: community
+        for community in parish.community_set.filter(id__in=[item.get("community_id") for item in unfilled_details])
+    }
+    position_ids = [item.get("position_type_id") for item in unfilled_details]
+    position_map = {
+        position.id: position
+        for position in parish.positiontype_set.filter(id__in=position_ids)
+    }
+    formatted_unfilled = []
+    for item in unfilled_details:
+        starts_at = item.get("starts_at")
+        try:
+            starts_at = timezone.localtime(datetime.fromisoformat(starts_at))
+            starts_label = starts_at.strftime("%d/%m %H:%M")
+        except (TypeError, ValueError):
+            starts_label = starts_at or "-"
+        formatted_unfilled.append(
+            {
+                "starts_at": starts_label,
+                "community": community_map.get(item.get("community_id")),
+                "position": position_map.get(item.get("position_type_id")),
+                "slot_index": item.get("slot_index"),
+            }
+        )
+    return render(
+        request,
+        "scheduling/job_detail.html",
+        {"job": job, "summary": summary, "unfilled": formatted_unfilled},
+    )
+
+
+def _audit_summary(event):
+    if event.entity_type == "MassInstance":
+        if event.action_type == "create":
+            return "Missa criada"
+        if event.action_type == "cancel":
+            return "Missa cancelada"
+        if event.action_type == "move":
+            return "Missa movida"
+        if event.action_type == "update":
+            return "Missa atualizada"
+    if event.entity_type == "Assignment":
+        if event.action_type == "create":
+            return "Escala criada"
+        if event.action_type == "assign":
+            return "Escala atribuida"
+        if event.action_type == "manual_assign":
+            return "Escala atribuida manualmente"
+        if event.action_type == "publish":
+            return "Escala publicada"
+        if event.action_type == "deactivate":
+            return "Escala desativada"
+        if event.action_type == "replace":
+            return "Escala substituida"
+    if event.entity_type == "SwapRequest":
+        if event.action_type == "create":
+            return "Troca solicitada"
+        if event.action_type == "apply":
+            return "Troca aplicada"
+        if event.action_type == "update":
+            return "Troca atualizada"
+    if event.entity_type == "ReplacementRequest":
+        if event.action_type == "create":
+            return "Substituicao aberta"
+        if event.action_type == "assign":
+            return "Substituicao atribuida"
+        if event.action_type == "update":
+            return "Substituicao atualizada"
+    if event.entity_type == "AcolyteProfile" and event.action_type == "link_user":
+        return "Acolito vinculado a usuario"
+    if event.entity_type == "Consolidation" and event.action_type == "lock":
+        return "Consolidacao aplicada"
+    if event.entity_type == "Confirmation" and event.action_type == "update":
+        return "Confirmacao atualizada"
+    if event.entity_type == "Parish" and event.action_type == "update":
+        return "Configuracoes atualizadas"
+    return f"{event.entity_type} {event.action_type}"
+
+
+def _audit_link(event):
+    if event.entity_type == "MassInstance":
+        try:
+            return "mass_detail", int(event.entity_id)
+        except (TypeError, ValueError):
+            return None
+    if event.entity_type == "SwapRequest":
+        return "swap_requests", None
+    if event.entity_type == "ReplacementRequest":
+        return "replacement_center", None
+    if event.entity_type == "Parish":
+        return "parish_settings", None
+    return None
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def audit_log(request):
+    parish = request.active_parish
+    entity_type = request.GET.get("entity") or ""
+    action_type = request.GET.get("action") or ""
+    start_date = request.GET.get("start") or ""
+    end_date = request.GET.get("end") or ""
+
+    events = AuditEvent.objects.filter(parish=parish).select_related("actor_user").order_by("-timestamp")
+    if entity_type:
+        events = events.filter(entity_type=entity_type)
+    if action_type:
+        events = events.filter(action_type=action_type)
+    if start_date:
+        try:
+            start = timezone.make_aware(datetime.combine(date.fromisoformat(start_date), time.min))
+            events = events.filter(timestamp__gte=start)
+        except ValueError:
+            messages.error(request, "Data inicial invalida.")
+    if end_date:
+        try:
+            end = timezone.make_aware(datetime.combine(date.fromisoformat(end_date), time.max))
+            events = events.filter(timestamp__lte=end)
+        except ValueError:
+            messages.error(request, "Data final invalida.")
+
+    paginator = Paginator(events, 50)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    rows = []
+    for event in page_obj:
+        link = _audit_link(event)
+        rows.append(
+            {
+                "event": event,
+                "summary": _audit_summary(event),
+                "link": link,
+            }
+        )
+    return render(
+        request,
+        "audit/list.html",
+        {
+            "page_obj": page_obj,
+            "rows": rows,
+            "entity_type": entity_type,
+            "action_type": action_type,
+            "start_date": start_date,
+            "end_date": end_date,
+        },
+    )
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def replacement_center(request):
+    parish = request.active_parish
+    now = timezone.now()
+    consolidation_end = now + timedelta(days=parish.consolidation_days)
+    replacements_qs = (
+        ReplacementRequest.objects.filter(parish=parish, status="pending")
+        .select_related("slot__mass_instance__community", "slot__mass_instance", "slot__position_type")
+        .order_by("slot__mass_instance__starts_at")
+    )
+    pending_in_window = replacements_qs.filter(slot__mass_instance__starts_at__lte=consolidation_end).count()
+    replacements = list(replacements_qs)
+    open_slots = AssignmentSlot.objects.filter(
+        parish=parish,
+        status="open",
+        required=True,
+        mass_instance__starts_at__lte=consolidation_end,
+    ).count()
+    pending_confirmations = Confirmation.objects.filter(
+        parish=parish,
+        status="pending",
+        assignment__is_active=True,
+        assignment__slot__mass_instance__starts_at__lte=consolidation_end,
+    ).count()
+    if replacements:
+        position_ids = {item.slot.position_type_id for item in replacements}
+        quick_fill_cache = build_quick_fill_cache(parish, position_type_ids=position_ids)
+        suggestions = {
+            item.id: quick_fill_slot(item.slot, parish, max_candidates=3, cache=quick_fill_cache)
+            for item in replacements
+        }
+    else:
+        suggestions = {}
+    return render(
+        request,
+        "replacements/center.html",
+        {
+            "replacements": replacements,
+            "pending_in_window": pending_in_window,
+            "open_slots": open_slots,
+            "pending_confirmations": pending_confirmations,
+            "suggestions": suggestions,
+        },
+    )
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def replacement_assign(request, request_id):
+    parish = request.active_parish
+    replacement = get_object_or_404(ReplacementRequest, parish=parish, id=request_id, status="pending")
+    if request.method == "POST":
+        acolyte_id = request.POST.get("acolyte_id")
+        acolyte = get_object_or_404(parish.acolytes, id=acolyte_id, active=True)
+        assignment = assign_replacement(parish, replacement.slot, acolyte, actor=request.user)
+        if assignment:
+            if assignment.acolyte.user:
+                enqueue_notification(
+                    parish,
+                    assignment.acolyte.user,
+                    "REPLACEMENT_ASSIGNED",
+                    {"assignment_id": assignment.id},
+                    idempotency_key=f"replacement:{assignment.id}",
+                )
+            messages.success(request, "Substituicao atribuida com sucesso.")
+        else:
+            messages.error(request, "Nao foi possivel atribuir este acolito.")
+        return redirect("replacement_center")
+    return redirect("replacement_center")
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def replacement_resolve(request, request_id):
+    parish = request.active_parish
+    replacement = get_object_or_404(ReplacementRequest, parish=parish, id=request_id, status="pending")
+    if request.method == "POST":
+        form = ReplacementResolveForm(request.POST)
+        if form.is_valid():
+            reason = form.cleaned_data["resolution_type"]
+            notes = form.cleaned_data.get("notes", "")
+            slot = replacement.slot
+            instance = slot.mass_instance
+            if reason == "mass_canceled":
+                if not form.cleaned_data.get("confirm_cancel_mass"):
+                    messages.error(request, "Confirme o cancelamento da missa para continuar.")
+                    return render(request, "replacements/resolve.html", {"replacement": replacement, "form": form})
+                cancel_mass_and_resolve_dependents(
+                    parish,
+                    instance,
+                    actor=request.user,
+                    notes=notes,
+                    reason_code="replacement_resolve",
+                )
+            elif reason == "slot_not_required":
+                slot.required = False
+                slot.externally_covered = False
+                slot.external_coverage_notes = ""
+                slot.status = "open"
+                slot.save(
+                    update_fields=["required", "externally_covered", "external_coverage_notes", "status", "updated_at"]
+                )
+            elif reason == "covered_externally":
+                slot.required = False
+                slot.externally_covered = True
+                slot.external_coverage_notes = notes
+                slot.status = "finalized"
+                slot.save(
+                    update_fields=["required", "externally_covered", "external_coverage_notes", "status", "updated_at"]
+                )
+            else:
+                slot.externally_covered = False
+                slot.external_coverage_notes = ""
+                slot.status = "open"
+                slot.save(update_fields=["externally_covered", "external_coverage_notes", "status", "updated_at"])
+
+            replacement.status = "resolved"
+            replacement.resolved_reason = reason
+            replacement.resolved_notes = notes
+            replacement.resolved_at = timezone.now()
+            replacement.save(update_fields=["status", "resolved_reason", "resolved_notes", "resolved_at", "updated_at"])
+            log_audit(parish, request.user, "ReplacementRequest", replacement.id, "update", {"status": "resolved", "reason": reason})
+            messages.success(request, "Substituicao marcada como resolvida.")
+            return redirect("replacement_center")
+    else:
+        form = ReplacementResolveForm()
+    return render(request, "replacements/resolve.html", {"replacement": replacement, "form": form})
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def replacement_pick(request, request_id):
+    parish = request.active_parish
+    replacement = get_object_or_404(ReplacementRequest, parish=parish, id=request_id, status="pending")
+    query = request.GET.get("q", "").strip()
+    candidates = _slot_candidate_list(parish, replacement.slot, query=query)
+    return render(
+        request,
+        "replacements/pick.html",
+        {
+            "replacement": replacement,
+            "candidates": candidates,
+            "query": query,
+        },
+    )
+
+
+@login_required
+@require_active_parish
 @require_parish_roles(ADMIN_ROLE_CODES)
 def acolyte_list(request):
     parish = request.active_parish
@@ -470,15 +1002,83 @@ def acolyte_list(request):
 
 
 @login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def acolyte_link(request):
+    parish = request.active_parish
+    User = get_user_model()
+    if request.method == "POST":
+        data = request.POST.copy()
+        allowed_ids = set(
+            MembershipRole.objects.filter(code__in=AcolyteLinkForm.ALLOWED_ROLE_CODES).values_list("id", flat=True)
+        )
+        if data.getlist("roles"):
+            filtered_roles = []
+            for role_id in data.getlist("roles"):
+                try:
+                    if int(role_id) in allowed_ids:
+                        filtered_roles.append(role_id)
+                except (TypeError, ValueError):
+                    continue
+            data.setlist("roles", filtered_roles)
+        form = AcolyteLinkForm(data, parish=parish, actor=request.user)
+        if form.is_valid():
+            email = form.cleaned_data["email"]
+            full_name = form.cleaned_data.get("full_name", "")
+            password = form.cleaned_data.get("password")
+            acolyte = form.cleaned_data["acolyte"]
+            roles = form.cleaned_data.get("roles") or []
+
+            user = User.objects.filter(email=email).first()
+            if not user:
+                if not full_name or not password:
+                    messages.error(request, "Informe nome e senha para criar o usuario.")
+                    return render(request, "acolytes/link_user.html", {"form": form})
+                user = User.objects.create_user(email=email, full_name=full_name, password=password)
+
+            if acolyte.user and acolyte.user_id != user.id:
+                messages.error(request, "Este acolito ja esta vinculado a outro usuario.")
+                return render(request, "acolytes/link_user.html", {"form": form})
+
+            if parish.acolytes.filter(user=user).exclude(id=acolyte.id).exists():
+                messages.error(request, "Este usuario ja esta vinculado a outro acolito nesta paroquia.")
+                return render(request, "acolytes/link_user.html", {"form": form})
+
+            acolyte.user = user
+            acolyte.save(update_fields=["user", "updated_at"])
+            membership, _ = ParishMembership.objects.get_or_create(
+                parish=parish, user=user, defaults={"active": True}
+            )
+            if not membership.active:
+                membership.active = True
+                membership.save(update_fields=["active", "updated_at"])
+            acolyte_role = MembershipRole.objects.filter(code="ACOLYTE").first()
+            if acolyte_role and not membership.roles.filter(id=acolyte_role.id).exists():
+                membership.roles.add(acolyte_role)
+            if roles:
+                allowed_roles = MembershipRole.objects.filter(code__in=AcolyteLinkForm.ALLOWED_ROLE_CODES)
+                allowed_ids = set(allowed_roles.values_list("id", flat=True))
+                membership.roles.add(*[role for role in roles if role.id in allowed_ids])
+            log_audit(parish, request.user, "AcolyteProfile", acolyte.id, "link_user", {"user_id": user.id})
+            messages.success(request, "Usuario vinculado com sucesso.")
+            return redirect("acolyte_link")
+    else:
+        form = AcolyteLinkForm(parish=parish, actor=request.user)
+    return render(request, "acolytes/link_user.html", {"form": form})
+
+
+@login_required
+@require_active_parish
 def my_assignments(request):
     parish = request.active_parish
-    assignments = Assignment.objects.filter(parish=parish, acolyte__user=request.user).select_related(
+    assignments = Assignment.objects.filter(parish=parish, acolyte__user=request.user, is_active=True).select_related(
         "slot__mass_instance", "slot__position_type", "confirmation"
     )
     return render(request, "acolytes/assignments.html", {"assignments": assignments})
 
 
 @login_required
+@require_active_parish
 def my_preferences(request):
     parish = request.active_parish
     acolyte = parish.acolytes.filter(user=request.user).first()
@@ -537,6 +1137,7 @@ def my_preferences(request):
 
 
 @login_required
+@require_active_parish
 def delete_availability(request, rule_id):
     parish = request.active_parish
     acolyte = parish.acolytes.filter(user=request.user).first()
@@ -549,6 +1150,7 @@ def delete_availability(request, rule_id):
 
 
 @login_required
+@require_active_parish
 def delete_preference(request, pref_id):
     parish = request.active_parish
     acolyte = parish.acolytes.filter(user=request.user).first()
@@ -561,6 +1163,7 @@ def delete_preference(request, pref_id):
 
 
 @login_required
+@require_active_parish
 def swap_requests(request):
     parish = request.active_parish
     swaps = SwapRequest.objects.filter(parish=parish).select_related("mass_instance", "requestor_acolyte", "target_acolyte")
@@ -573,14 +1176,21 @@ def swap_requests(request):
 
 
 @login_required
+@require_active_parish
 def swap_request_create(request, assignment_id):
     parish = request.active_parish
     assignment = get_object_or_404(Assignment, parish=parish, id=assignment_id)
+    if not assignment.is_active:
+        return redirect("my_assignments")
     if assignment.acolyte.user_id != request.user.id and not user_has_role(
         request.user, parish, ADMIN_ROLE_CODES
     ):
         return redirect("my_assignments")
-    slots_qs = assignment.slot.mass_instance.slots.exclude(id=assignment.slot_id).filter(assignment__isnull=False)
+    slots_qs = (
+        assignment.slot.mass_instance.slots.exclude(id=assignment.slot_id)
+        .filter(assignments__is_active=True)
+        .distinct()
+    )
     acolytes_qs = parish.acolytes.filter(active=True)
     if request.method == "POST":
         form = SwapRequestForm(request.POST, acolytes_qs=acolytes_qs, slots_qs=slots_qs)
@@ -590,8 +1200,13 @@ def swap_request_create(request, assignment_id):
             to_slot = form.cleaned_data.get("to_slot")
             if swap_type == "role_swap" and not to_slot:
                 return redirect("swap_request_create", assignment_id=assignment.id)
-            if swap_type == "role_swap" and to_slot and to_slot.assignment:
-                target_acolyte = to_slot.assignment.acolyte
+            open_to_admin = False
+            if swap_type == "role_swap" and to_slot:
+                to_assignment = to_slot.get_active_assignment()
+                if to_assignment:
+                    target_acolyte = to_assignment.acolyte
+            if swap_type == "acolyte_swap" and not target_acolyte:
+                open_to_admin = True
             swap = SwapRequest.objects.create(
                 parish=parish,
                 swap_type=swap_type,
@@ -602,6 +1217,7 @@ def swap_request_create(request, assignment_id):
                 to_slot=to_slot,
                 status="pending",
                 notes=form.cleaned_data.get("notes", ""),
+                open_to_admin=open_to_admin,
             )
             log_audit(parish, request.user, "SwapRequest", swap.id, "create", {"swap_type": swap.swap_type})
             if target_acolyte and target_acolyte.user:
@@ -609,9 +1225,18 @@ def swap_request_create(request, assignment_id):
                     parish,
                     target_acolyte.user,
                     "SWAP_REQUESTED",
-                    {"subject": "Solicitacao de troca", "body": "Voce recebeu um pedido de troca."},
+                    {"swap_id": swap.id},
                     idempotency_key=f"swap:{swap.id}:request",
                 )
+            if open_to_admin:
+                for user in users_with_roles(parish, ADMIN_ROLE_CODES):
+                    enqueue_notification(
+                        parish,
+                        user,
+                        "SWAP_REQUESTED",
+                        {"swap_id": swap.id},
+                        idempotency_key=f"swap:{swap.id}:admin:{user.id}",
+                    )
             return redirect("swap_requests")
     else:
         form = SwapRequestForm(acolytes_qs=acolytes_qs, slots_qs=slots_qs)
@@ -619,11 +1244,60 @@ def swap_request_create(request, assignment_id):
 
 
 @login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def swap_request_assign(request, swap_id):
+    parish = request.active_parish
+    swap = get_object_or_404(SwapRequest, parish=parish, id=swap_id)
+    if not swap.open_to_admin:
+        return redirect("swap_requests")
+    acolytes_qs = parish.acolytes.filter(active=True)
+    if request.method == "POST":
+        form = SwapAssignForm(request.POST, acolytes_qs=acolytes_qs)
+        if form.is_valid():
+            swap.target_acolyte = form.cleaned_data["target_acolyte"]
+            swap.open_to_admin = False
+            if apply_swap_request(swap, actor=request.user):
+                swap.status = "accepted"
+                swap.save(update_fields=["target_acolyte", "open_to_admin", "status", "updated_at"])
+                if swap.requestor_acolyte.user:
+                    enqueue_notification(
+                        parish,
+                        swap.requestor_acolyte.user,
+                        "SWAP_ACCEPTED",
+                        {"swap_id": swap.id},
+                        idempotency_key=f"swap:{swap.id}:accepted",
+                    )
+                if swap.target_acolyte.user:
+                    enqueue_notification(
+                        parish,
+                        swap.target_acolyte.user,
+                        "SWAP_ACCEPTED",
+                        {"swap_id": swap.id},
+                        idempotency_key=f"swap:{swap.id}:assigned",
+                    )
+                return redirect("swap_requests")
+            swap.target_acolyte = None
+            swap.open_to_admin = True
+            swap.save(update_fields=["target_acolyte", "open_to_admin", "updated_at"])
+            messages.error(request, "Nao foi possivel aplicar a troca com este acolito.")
+    else:
+        form = SwapAssignForm(acolytes_qs=acolytes_qs)
+    return render(request, "acolytes/swap_assign.html", {"swap": swap, "form": form})
+
+
+@login_required
+@require_active_parish
 def swap_request_accept(request, swap_id):
     if request.method != "POST":
         return redirect("swap_requests")
     parish = request.active_parish
     swap = get_object_or_404(SwapRequest, parish=parish, id=swap_id)
+    if swap.open_to_admin and not user_has_role(request.user, parish, ADMIN_ROLE_CODES):
+        messages.info(request, "Solicitacao em aberto. A coordenacao vai tratar esta troca.")
+        return redirect("swap_requests")
+    if swap.open_to_admin:
+        return redirect("swap_request_assign", swap_id=swap.id)
     if swap.target_acolyte and swap.target_acolyte.user_id != request.user.id and not user_has_role(
         request.user, parish, ADMIN_ROLE_CODES
     ):
@@ -636,7 +1310,7 @@ def swap_request_accept(request, swap_id):
                 parish,
                 user,
                 "SWAP_REQUESTED",
-                {"subject": "Troca aguardando aprovacao", "body": "Ha uma troca aguardando aprovacao."},
+                {"swap_id": swap.id},
                 idempotency_key=f"swap:{swap.id}:approval:{user.id}",
             )
         if swap.requestor_acolyte.user:
@@ -644,7 +1318,7 @@ def swap_request_accept(request, swap_id):
                 parish,
                 swap.requestor_acolyte.user,
                 "SWAP_REQUESTED",
-                {"subject": "Troca enviada", "body": "Sua solicitacao aguarda aprovacao."},
+                {"swap_id": swap.id},
                 idempotency_key=f"swap:{swap.id}:awaiting",
             )
         return redirect("swap_requests")
@@ -656,18 +1330,24 @@ def swap_request_accept(request, swap_id):
                 parish,
                 swap.requestor_acolyte.user,
                 "SWAP_ACCEPTED",
-                {"subject": "Troca aprovada", "body": "Sua troca foi aprovada."},
+                {"swap_id": swap.id},
                 idempotency_key=f"swap:{swap.id}:accepted",
             )
+    else:
+        messages.error(request, "Nao foi possivel aplicar a troca.")
     return redirect("swap_requests")
 
 
 @login_required
+@require_active_parish
 def swap_request_reject(request, swap_id):
     if request.method != "POST":
         return redirect("swap_requests")
     parish = request.active_parish
     swap = get_object_or_404(SwapRequest, parish=parish, id=swap_id)
+    if swap.open_to_admin and not user_has_role(request.user, parish, ADMIN_ROLE_CODES):
+        messages.info(request, "Solicitacao em aberto. A coordenacao vai tratar esta troca.")
+        return redirect("swap_requests")
     if swap.target_acolyte and swap.target_acolyte.user_id != request.user.id and not user_has_role(
         request.user, parish, ADMIN_ROLE_CODES
     ):
@@ -679,13 +1359,14 @@ def swap_request_reject(request, swap_id):
             parish,
             swap.requestor_acolyte.user,
             "SWAP_REJECTED",
-            {"subject": "Troca recusada", "body": "Sua troca foi recusada."},
+            {"swap_id": swap.id},
             idempotency_key=f"swap:{swap.id}:rejected",
         )
     return redirect("swap_requests")
 
 
 @login_required
+@require_active_parish
 @require_parish_roles(ADMIN_ROLE_CODES)
 def swap_request_approve(request, swap_id):
     if request.method != "POST":
@@ -702,17 +1383,57 @@ def swap_request_approve(request, swap_id):
                 parish,
                 swap.requestor_acolyte.user,
                 "SWAP_ACCEPTED",
-                {"subject": "Troca aprovada", "body": "Sua troca foi aprovada."},
+                {"swap_id": swap.id},
                 idempotency_key=f"swap:{swap.id}:accepted",
             )
+    else:
+        messages.error(request, "Nao foi possivel aplicar a troca.")
     return redirect("swap_requests")
 
 
 @login_required
+@require_active_parish
 @require_parish_roles(ADMIN_ROLE_CODES)
 def parish_settings(request):
     parish = request.active_parish
-    return render(request, "settings/parish.html", {"parish": parish})
+    if request.method == "POST":
+        if request.POST.get("action") == "reset":
+            before = {"schedule_weights": parish.schedule_weights}
+            parish.schedule_weights = ParishSettingsForm.DEFAULT_SCHEDULE_WEIGHTS.copy()
+            parish.save(update_fields=["schedule_weights", "updated_at"])
+            after = {"schedule_weights": parish.schedule_weights}
+            log_audit(parish, request.user, "Parish", parish.id, "update", {"from": before, "to": after})
+            messages.success(request, "Pesos restaurados para os padroes.")
+            return redirect("parish_settings")
+        form = ParishSettingsForm(request.POST, parish=parish)
+        if form.is_valid():
+            before = {
+                "consolidation_days": parish.consolidation_days,
+                "horizon_days": parish.horizon_days,
+                "default_mass_duration_minutes": parish.default_mass_duration_minutes,
+                "min_rest_minutes_between_masses": parish.min_rest_minutes_between_masses,
+                "swap_requires_approval": parish.swap_requires_approval,
+                "notify_on_cancellation": parish.notify_on_cancellation,
+                "auto_assign_on_decline": parish.auto_assign_on_decline,
+                "schedule_weights": parish.schedule_weights,
+            }
+            form.save(parish, actor=request.user)
+            after = {
+                "consolidation_days": parish.consolidation_days,
+                "horizon_days": parish.horizon_days,
+                "default_mass_duration_minutes": parish.default_mass_duration_minutes,
+                "min_rest_minutes_between_masses": parish.min_rest_minutes_between_masses,
+                "swap_requires_approval": parish.swap_requires_approval,
+                "notify_on_cancellation": parish.notify_on_cancellation,
+                "auto_assign_on_decline": parish.auto_assign_on_decline,
+                "schedule_weights": parish.schedule_weights,
+            }
+            log_audit(parish, request.user, "Parish", parish.id, "update", {"from": before, "to": after})
+            messages.success(request, "Configuracoes salvas com sucesso.")
+            return redirect("parish_settings")
+    else:
+        form = ParishSettingsForm(parish=parish)
+    return render(request, "settings/parish.html", {"parish": parish, "form": form})
 
 
 @login_required
@@ -735,11 +1456,18 @@ def _can_manage_assignment(user, assignment):
 
 
 @login_required
+@require_active_parish
 def confirm_assignment(request, assignment_id):
     if request.method != "POST":
         return redirect("my_assignments")
     parish = request.active_parish
     assignment = get_object_or_404(Assignment, parish=parish, id=assignment_id)
+    if not assignment.is_active:
+        messages.info(request, "Esta escala nao esta mais ativa.")
+        return redirect("my_assignments")
+    if assignment.slot.mass_instance.status == "canceled":
+        messages.info(request, "Esta missa foi cancelada.")
+        return redirect("my_assignments")
     if not _can_manage_assignment(request.user, assignment):
         return redirect("my_assignments")
     confirmation, _ = Confirmation.objects.get_or_create(parish=parish, assignment=assignment)
@@ -751,11 +1479,18 @@ def confirm_assignment(request, assignment_id):
 
 
 @login_required
+@require_active_parish
 def decline_assignment(request, assignment_id):
     if request.method != "POST":
         return redirect("my_assignments")
     parish = request.active_parish
     assignment = get_object_or_404(Assignment, parish=parish, id=assignment_id)
+    if not assignment.is_active:
+        messages.info(request, "Esta escala nao esta mais ativa.")
+        return redirect("my_assignments")
+    if assignment.slot.mass_instance.status == "canceled":
+        messages.info(request, "Esta missa foi cancelada.")
+        return redirect("my_assignments")
     if not _can_manage_assignment(request.user, assignment):
         return redirect("my_assignments")
     confirmation, _ = Confirmation.objects.get_or_create(parish=parish, assignment=assignment)
@@ -763,46 +1498,49 @@ def decline_assignment(request, assignment_id):
     confirmation.updated_by = request.user
     confirmation.save(update_fields=["status", "updated_by", "timestamp"])
     slot = assignment.slot
+    deactivate_assignment(assignment, "declined", actor=request.user)
     slot.status = "open"
     slot.save(update_fields=["status", "updated_at"])
     log_audit(parish, request.user, "Confirmation", confirmation.id, "update", {"status": "declined"})
-    replacement = create_replacement_request(parish, slot, actor=request.user)
+    replacement = create_replacement_request(
+        parish,
+        slot,
+        actor=request.user,
+        notes=f"Criada por recusa de {assignment.acolyte.display_name}",
+    )
     if parish.notify_on_cancellation:
         for user in users_with_roles(parish, ADMIN_ROLE_CODES):
             enqueue_notification(
                 parish,
                 user,
                 "ASSIGNMENT_CANCELED_ALERT_ADMIN",
-                {"subject": "Escala cancelada", "body": f"Vaga aberta em {slot.mass_instance.starts_at:%d/%m %H:%M}."},
+                {"slot_id": slot.id},
                 idempotency_key=f"cancel:{assignment.id}:{user.id}",
             )
     if parish.auto_assign_on_decline:
         candidates = quick_fill_slot(slot, parish, max_candidates=1)
         if candidates:
-            assignment.acolyte = candidates[0]
-            assignment.assignment_state = "proposed"
-            assignment.save(update_fields=["acolyte", "assignment_state", "updated_at"])
-            confirmation.status = "pending"
-            confirmation.updated_by = request.user
-            confirmation.save(update_fields=["status", "updated_by", "timestamp"])
-            mark_replacement_assigned(parish, slot, actor=request.user)
-            if assignment.acolyte.user:
+            new_assignment = assign_replacement(parish, slot, candidates[0], actor=request.user)
+            if new_assignment.acolyte.user:
                 enqueue_notification(
                     parish,
-                    assignment.acolyte.user,
+                    new_assignment.acolyte.user,
                     "REPLACEMENT_ASSIGNED",
-                    {"subject": "Nova escala", "body": f"Voce foi escalado para {slot.mass_instance.starts_at:%d/%m %H:%M}."},
-                    idempotency_key=f"replacement:{assignment.id}",
+                    {"assignment_id": new_assignment.id},
+                    idempotency_key=f"replacement:{new_assignment.id}",
                 )
     return redirect("my_assignments")
 
 
 @login_required
+@require_active_parish
 def cancel_assignment(request, assignment_id):
     if request.method != "POST":
         return redirect("my_assignments")
     parish = request.active_parish
     assignment = get_object_or_404(Assignment, parish=parish, id=assignment_id)
+    if not assignment.is_active:
+        return redirect("my_assignments")
     if not _can_manage_assignment(request.user, assignment):
         return redirect("my_assignments")
     confirmation, _ = Confirmation.objects.get_or_create(parish=parish, assignment=assignment)
@@ -810,17 +1548,23 @@ def cancel_assignment(request, assignment_id):
     confirmation.updated_by = request.user
     confirmation.save(update_fields=["status", "updated_by", "timestamp"])
     slot = assignment.slot
+    deactivate_assignment(assignment, "canceled", actor=request.user)
     slot.status = "open"
     slot.save(update_fields=["status", "updated_at"])
     log_audit(parish, request.user, "Confirmation", confirmation.id, "update", {"status": "canceled_by_acolyte"})
-    create_replacement_request(parish, slot, actor=request.user)
+    create_replacement_request(
+        parish,
+        slot,
+        actor=request.user,
+        notes=f"Criada por cancelamento de {assignment.acolyte.display_name}",
+    )
     if parish.notify_on_cancellation:
         for user in users_with_roles(parish, ADMIN_ROLE_CODES):
             enqueue_notification(
                 parish,
                 user,
                 "ASSIGNMENT_CANCELED_ALERT_ADMIN",
-                {"subject": "Escala cancelada", "body": f"Vaga aberta em {slot.mass_instance.starts_at:%d/%m %H:%M}."},
+                {"slot_id": slot.id},
                 idempotency_key=f"cancel:{assignment.id}:{user.id}",
             )
     return redirect("my_assignments")

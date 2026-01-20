@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load extras %}
 {% block title %}Preferencias{% endblock %}
 {% block content %}
 <div class="grid gap-6">
@@ -20,7 +21,12 @@
             <div class="border border-black/5 rounded-lg p-3 flex items-center justify-between">
               <div>
                 <div class="text-sm text-slate">{{ rule.get_rule_type_display }}</div>
-                <div class="font-medium">{{ rule.day_of_week }} {{ rule.start_time }}-{{ rule.end_time }}</div>
+                <div class="font-medium">
+                  {{ rule.day_of_week|weekday_label }}
+                  {% if rule.start_time or rule.end_time %}
+                    {{ rule.start_time|default:"--:--" }}-{{ rule.end_time|default:"--:--" }}
+                  {% endif %}
+                </div>
               </div>
               <form method="post" action="{% url 'delete_availability' rule.id %}">
                 {% csrf_token %}
@@ -80,7 +86,12 @@
             <div class="border border-black/5 rounded-lg p-3 flex items-center justify-between">
               <div>
                 <div class="text-sm text-slate">{{ pref.get_preference_type_display }}</div>
-                <div class="font-medium">Peso {{ pref.weight }}</div>
+                <div class="font-medium">
+                  Peso {{ pref.weight }}
+                  {% if pref.weekday is not None %}
+                    · {{ pref.weekday|weekday_label }}
+                  {% endif %}
+                </div>
               </div>
               <form method="post" action="{% url 'delete_preference' pref.id %}">
                 {% csrf_token %}

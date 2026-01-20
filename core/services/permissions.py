@@ -1,6 +1,8 @@
 from functools import wraps
 
+from django.contrib import messages
 from django.http import HttpResponseForbidden
+from django.shortcuts import redirect
 
 from core.models import ParishMembership
 
@@ -59,4 +61,15 @@ def require_parish_roles(role_codes):
         return _wrapped
 
     return decorator
+
+
+def require_active_parish(view_func):
+    @wraps(view_func)
+    def _wrapped(request, *args, **kwargs):
+        if not getattr(request, "active_parish", None):
+            messages.info(request, "Selecione uma paroquia para continuar.")
+            return redirect("dashboard")
+        return view_func(request, *args, **kwargs)
+
+    return _wrapped
 

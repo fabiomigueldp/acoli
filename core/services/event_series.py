@@ -81,6 +81,7 @@ def apply_event_occurrences(event_series, occurrences, actor=None):
                     parish=event_series.parish,
                     community_id=move_to_community_id,
                     starts_at=move_to,
+                    status="scheduled",
                 ).exclude(id=existing.id).exists()
                 if conflict:
                     raise ValueError("Conflito ao mover missa existente para o novo horario/comunidade.")

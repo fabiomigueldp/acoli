@@ -13,19 +13,23 @@
 
   <div class="card">
     <h3 class="font-semibold mb-3">Publicar escala</h3>
-    <form method="post" class="grid sm:grid-cols-3 gap-3">
+    <div class="flex flex-wrap items-center gap-2 mb-4">
+      {% for preset in publish_presets %}
+        <a class="btn-secondary" href="?start_date={{ preset.start|date:'Y-m-d' }}&end_date={{ preset.end|date:'Y-m-d' }}">{{ preset.label }}</a>
+      {% endfor %}
+    </div>
+    <form method="post" action="{% url 'scheduling_publish_preview' %}" class="grid sm:grid-cols-3 gap-3">
       {% csrf_token %}
-      <input type="hidden" name="action" value="publish" />
       <div>
         <label class="label">Data inicial</label>
-        <input type="date" name="start_date" value="{{ now|date:'Y-m-d' }}" />
+        <input type="date" name="start_date" value="{{ start_date|date:'Y-m-d' }}" />
       </div>
       <div>
         <label class="label">Data final</label>
-        <input type="date" name="end_date" value="{{ now|date:'Y-m-d' }}" />
+        <input type="date" name="end_date" value="{{ end_date|date:'Y-m-d' }}" />
       </div>
       <div class="flex items-end">
-        <button class="btn-secondary w-full">Publicar</button>
+        <button class="btn-secondary w-full">Revisar publicacao</button>
       </div>
     </form>
   </div>
@@ -45,7 +49,7 @@
     <h3 class="font-semibold mb-3">Ultimos jobs</h3>
     <div class="space-y-2">
       {% for job in jobs %}
-        <div class="border border-black/5 rounded-lg p-3 flex items-center justify-between">
+        <a class="border border-black/5 rounded-lg p-3 flex items-center justify-between hover:bg-sand" href="{% url 'schedule_job_detail' job.id %}">
           <div>
             <div class="text-sm text-slate">{{ job.created_at|date:"d/m H:i" }}</div>
             <div class="font-medium">{{ job.get_status_display }}</div>
@@ -56,7 +60,7 @@
               / {{ job.summary_json.unfilled_slots_count }} sem cobertura
             {% endif %}
           </span>
-        </div>
+        </a>
       {% empty %}
         <p class="text-sm text-slate">Nenhum job executado ainda.</p>
       {% endfor %}

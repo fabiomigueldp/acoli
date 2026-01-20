@@ -7,7 +7,7 @@
 - Calendario: `MassTemplate` (recorrencia) + `MassInstance` (instancia) + `MassOverride` (cancelar/mover/alterar requisitos).
 - Eventos: `EventSeries` + `EventOccurrence` (dias) com resolucao de conflitos e `EventInterest` para pool de interessados.
 - MassInstance: unicidade garantida apenas para status `scheduled`, preservando historico de cancelamentos.
-- Escalas: `AssignmentSlot` + `Assignment` + `Confirmation` + `SwapRequest` + `ReplacementRequest`.
+- Escalas: `AssignmentSlot` + `Assignment` (historico com `is_active`) + `Confirmation` + `SwapRequest` + `ReplacementRequest` (com resolucao e motivo).
 - Auditoria: `AuditEvent` para historico de alteracoes criticas.
 
 ## Motor de escalonamento
@@ -16,6 +16,12 @@
 - Objetivo: preferencias + penalidade de estabilidade + balanceamento de carga + bonus de credito.
 - Pool de candidatos: series de eventos podem limitar escalas a acolitos interessados.
 - Quick fill: heuristica simples para substituicoes dentro da consolidacao.
+
+## Ciclo de vida de assignments
+- Cada slot pode ter varios assignments historicos.
+- Apenas um assignment ativo por slot (constraint parcial).
+- Cancelamentos/recusas desativam o assignment e abrem vaga.
+- Substituicoes criam um novo assignment ativo e mantem historico.
 
 ## Jobs e background
 - Jobs sao disparados por `ScheduleJobRequest` e processados pelo comando `run_global_scheduler`.
@@ -29,3 +35,10 @@
 - `CONN_MAX_AGE` para reduzir churn de conexoes.
 - WhiteNoise para estaticos.
 - Gunicorn com poucos workers/threads para evitar picos de memoria.
+
+## Notificacoes
+- Templates de mensagem centralizados em `notifications/services.py`.
+- Links absolutos via `APP_BASE_URL` quando configurado (mantem compatibilidade local).
+
+## Auditoria
+- Tela de auditoria para coordenacao com filtros simples por entidade/acao.

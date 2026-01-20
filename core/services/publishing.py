@@ -15,6 +15,7 @@ def publish_assignments(parish, start_date, end_date, actor=None):
             parish=parish,
             slot__mass_instance__starts_at__date__gte=start_date,
             slot__mass_instance__starts_at__date__lte=end_date,
+            is_active=True,
         )
         .select_related("slot__mass_instance", "acolyte__user")
         .order_by("slot__mass_instance__starts_at")
@@ -37,22 +38,18 @@ def publish_assignments(parish, start_date, end_date, actor=None):
             confirmation.save(update_fields=["updated_by", "timestamp"])
         log_audit(parish, actor, "Assignment", assignment.id, "publish", {"assignment_id": assignment.id})
         if assignment.acolyte.user:
-            payload = {
-                "subject": "Escala publicada",
-                "body": f"Voce recebeu uma escala em {assignment.slot.mass_instance.starts_at:%d/%m %H:%M}.",
-            }
             enqueue_notification(
                 parish,
                 assignment.acolyte.user,
                 ASSIGNMENT_PUBLISHED,
-                payload,
+                {"assignment_id": assignment.id},
                 idempotency_key=f"publish:{assignment.id}",
             )
             enqueue_notification(
                 parish,
                 assignment.acolyte.user,
                 CONFIRMATION_REQUESTED,
-                payload,
+                {"assignment_id": assignment.id},
                 idempotency_key=f"confirm:{assignment.id}",
             )
     return published

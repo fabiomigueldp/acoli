@@ -14,10 +14,12 @@
       <div>
         <label class="label">Alvo (opcional)</label>
         {{ form.target_acolyte }}
+        <p class="text-xs text-slate mt-1">Sem alvo: a coordenacao escolhe o substituto.</p>
       </div>
       <div class="sm:col-span-2">
         <label class="label">Trocar funcao (slot destino)</label>
         {{ form.to_slot }}
+        <p class="text-xs text-slate mt-1">Para troca de funcao dentro da mesma missa.</p>
       </div>
       <div class="sm:col-span-2">
         <label class="label">Notas</label>

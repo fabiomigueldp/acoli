@@ -18,12 +18,12 @@
                 {% csrf_token %}
                 <button class="btn-secondary" type="submit">Confirmar</button>
               </form>
-              <form method="post" action="{% url 'decline_assignment' assignment.id %}">
+              <form method="post" action="{% url 'decline_assignment' assignment.id %}" onsubmit="return confirm('Tem certeza que deseja recusar esta escala?');">
                 {% csrf_token %}
                 <button class="btn-secondary" type="submit">Recusar</button>
               </form>
             {% elif assignment.confirmation.status == "confirmed" %}
-              <form method="post" action="{% url 'cancel_assignment' assignment.id %}">
+              <form method="post" action="{% url 'cancel_assignment' assignment.id %}" onsubmit="return confirm('Tem certeza que deseja cancelar esta escala?');">
                 {% csrf_token %}
                 <button class="btn-secondary" type="submit">Cancelar</button>
               </form>

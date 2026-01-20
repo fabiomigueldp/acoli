@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}Vincular usuario{% endblock %}
+{% block content %}
+<div class="grid gap-6">
+  <div class="card max-w-3xl">
+    <h2 class="font-serif text-xl mb-2">Vincular usuario</h2>
+    <p class="text-sm text-slate">Associe um usuario existente ou crie um novo para um acolito.</p>
+  </div>
+
+  <form method="post" class="card max-w-3xl space-y-4">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <div class="grid sm:grid-cols-2 gap-4">
+      <div>
+        <label class="label">Email</label>
+        {{ form.email }}
+      </div>
+      <div>
+        <label class="label">Nome completo</label>
+        {{ form.full_name }}
+      </div>
+      <div>
+        <label class="label">Senha (se criar usuario)</label>
+        {{ form.password }}
+      </div>
+      <div>
+        <label class="label">Acolito</label>
+        {{ form.acolyte }}
+      </div>
+      <div class="sm:col-span-2">
+        <label class="label">Papeis adicionais</label>
+        {{ form.roles }}
+        <p class="text-xs text-slate mt-1">O papel de acolito sera sempre adicionado automaticamente.</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <button class="btn-primary" type="submit">Vincular</button>
+      <a class="btn-secondary" href="{% url 'acolyte_list' %}">Voltar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

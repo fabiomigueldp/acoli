@@ -1,7 +1,13 @@
 {% extends 'base.html' %}
 {% block title %}Painel{% endblock %}
 {% block content %}
-{% if missing_parish %}
+{% if no_parishes %}
+  <div class="card">
+    <h2 class="font-serif text-xl mb-2">Nenhuma paroquia cadastrada</h2>
+    <p class="text-sm text-slate mb-3">Crie uma paroquia para comecar a operar o sistema.</p>
+    <a class="btn-secondary" href="/admin/">Abrir Django admin</a>
+  </div>
+{% elif missing_parish %}
   <div class="card">Nenhuma paroquia ativa. Contate o administrador.</div>
 {% else %}
   <div class="grid gap-6">

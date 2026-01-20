@@ -7,7 +7,10 @@
 4) Cadastre acolitos, qualificacoes e vincule usuarios aos perfis.
 5) Rode o escalonamento em "Escalonar" e publique a escala.
 6) Acompanhe confirmacoes e trate cancelamentos/substituicoes.
-7) Rode o job de consolidacao para travar as missas dentro da janela.
+7) Use a tela "Substituicoes" para resolver vagas abertas rapidamente e marcar resolucoes.
+8) Ajuste as configuracoes da paroquia (janelas, pesos, notificacoes) conforme necessario.
+9) Consulte a tela "Auditoria" para rastrear mudancas importantes.
+10) Rode o job de consolidacao para travar as missas dentro da janela.
 
 ## Acolito
 - Veja suas escalas em "Minhas escalas".

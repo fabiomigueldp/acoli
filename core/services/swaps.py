@@ -1,4 +1,5 @@
 from core.models import AcolyteQualification, Confirmation
+from core.services.assignments import assign_acolyte_to_slot, deactivate_assignment
 from core.services.audit import log_audit
 from core.services.availability import is_acolyte_available
 
@@ -14,14 +15,18 @@ def apply_swap_request(swap, actor=None):
     if swap.swap_type == "acolyte_swap":
         if not swap.target_acolyte or not swap.from_slot:
             return False
-        assignment = swap.from_slot.assignment
+        assignment = swap.from_slot.get_active_assignment()
+        if not assignment:
+            return False
         target = swap.target_acolyte
         if not _is_qualified(parish, target, swap.from_slot.position_type):
             return False
         if not is_acolyte_available(target, swap.mass_instance):
             return False
-        assignment.acolyte = target
-        assignment.save(update_fields=["acolyte", "updated_at"])
+        deactivate_assignment(assignment, "swap", actor=actor)
+        assignment = assign_acolyte_to_slot(
+            swap.from_slot, target, actor=actor, assignment_state=assignment.assignment_state, end_reason="swap"
+        )
         confirmation, _ = Confirmation.objects.get_or_create(parish=parish, assignment=assignment)
         confirmation.status = "pending"
         confirmation.updated_by = actor
@@ -32,8 +37,8 @@ def apply_swap_request(swap, actor=None):
     if swap.swap_type == "role_swap":
         if not swap.from_slot or not swap.to_slot:
             return False
-        from_assignment = swap.from_slot.assignment
-        to_assignment = swap.to_slot.assignment
+        from_assignment = swap.from_slot.get_active_assignment()
+        to_assignment = swap.to_slot.get_active_assignment()
         if not from_assignment or not to_assignment:
             return False
         if not _is_qualified(parish, from_assignment.acolyte, swap.to_slot.position_type):
@@ -44,10 +49,15 @@ def apply_swap_request(swap, actor=None):
             return False
         if not is_acolyte_available(to_assignment.acolyte, swap.mass_instance):
             return False
-        from_assignment.acolyte, to_assignment.acolyte = to_assignment.acolyte, from_assignment.acolyte
-        from_assignment.save(update_fields=["acolyte", "updated_at"])
-        to_assignment.save(update_fields=["acolyte", "updated_at"])
-        for assignment in (from_assignment, to_assignment):
+        deactivate_assignment(from_assignment, "swap", actor=actor)
+        deactivate_assignment(to_assignment, "swap", actor=actor)
+        new_from = assign_acolyte_to_slot(
+            swap.from_slot, to_assignment.acolyte, actor=actor, assignment_state=from_assignment.assignment_state, end_reason="swap"
+        )
+        new_to = assign_acolyte_to_slot(
+            swap.to_slot, from_assignment.acolyte, actor=actor, assignment_state=to_assignment.assignment_state, end_reason="swap"
+        )
+        for assignment in (new_from, new_to):
             confirmation, _ = Confirmation.objects.get_or_create(parish=parish, assignment=assignment)
             confirmation.status = "pending"
             confirmation.updated_by = actor

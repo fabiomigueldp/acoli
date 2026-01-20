@@ -45,3 +45,29 @@ class ConsolidationLockTests(TestCase):
         self.assertTrue(slot.is_locked)
         self.assertEqual(slot.status, "finalized")
         self.assertEqual(assignment.assignment_state, "locked")
+
+    def test_lock_consolidation_window_with_open_slot(self):
+        parish = Parish.objects.create(name="Parish", consolidation_days=14)
+        community = Community.objects.create(parish=parish, code="MAT", name="Matriz")
+        position = PositionType.objects.create(parish=parish, code="LIB", name="Libriferario")
+
+        instance = MassInstance.objects.create(
+            parish=parish,
+            community=community,
+            starts_at=timezone.now() + timedelta(days=3),
+            status="scheduled",
+        )
+        slot = AssignmentSlot.objects.create(
+            parish=parish,
+            mass_instance=instance,
+            position_type=position,
+            slot_index=1,
+            required=True,
+            status="open",
+        )
+
+        call_command("lock_consolidation_window", parish_id=parish.id)
+
+        slot.refresh_from_db()
+        self.assertTrue(slot.is_locked)
+        self.assertEqual(slot.status, "open")

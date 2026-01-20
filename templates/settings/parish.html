@@ -1,21 +1,106 @@
 {% extends 'base.html' %}
 {% block title %}Configuracoes{% endblock %}
 {% block content %}
-<div class="card max-w-3xl">
-  <h2 class="font-serif text-xl mb-2">Configuracoes da paroquia</h2>
-  <div class="grid sm:grid-cols-2 gap-4 mt-4">
-    <div>
-      <div class="text-xs uppercase text-slate">Janela de consolidacao</div>
-      <div class="font-medium">{{ parish.consolidation_days }} dias</div>
-    </div>
-    <div>
-      <div class="text-xs uppercase text-slate">Horizonte</div>
-      <div class="font-medium">{{ parish.horizon_days }} dias</div>
-    </div>
-    <div>
-      <div class="text-xs uppercase text-slate">Trocas precisam de aprovacao</div>
-      <div class="font-medium">{{ parish.swap_requires_approval|yesno:"Sim,N?o" }}</div>
-    </div>
+<div class="grid gap-6">
+  <div class="card max-w-3xl">
+    <h2 class="font-serif text-xl mb-2">Configuracoes da paroquia</h2>
+    <p class="text-sm text-slate">Ajuste janelas de consolidacao, pesos e regras operacionais.</p>
   </div>
+
+  <form method="post" class="card max-w-3xl space-y-6">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <div class="grid sm:grid-cols-2 gap-4">
+      <div>
+        <label class="label">Consolidacao (dias)</label>
+        {{ form.consolidation_days }}
+        <p class="text-xs text-slate mt-1">Define quando as escalas ficam travadas para confirmacao.</p>
+      </div>
+      <div>
+        <label class="label">Horizonte (dias)</label>
+        {{ form.horizon_days }}
+        {% if form.horizon_days.errors %}
+          <p class="text-xs text-red-600 mt-1">{{ form.horizon_days.errors|join:", " }}</p>
+        {% endif %}
+        <p class="text-xs text-slate mt-1">Intervalo maximo para gerar escalas futuras.</p>
+      </div>
+      <div>
+        <label class="label">Duracao padrao da missa (min)</label>
+        {{ form.default_mass_duration_minutes }}
+      </div>
+      <div>
+        <label class="label">Descanso minimo entre missas (min)</label>
+        {{ form.min_rest_minutes_between_masses }}
+      </div>
+    </div>
+
+    <div class="grid sm:grid-cols-2 gap-4">
+      <label class="flex items-center gap-2">
+        {{ form.swap_requires_approval }}
+        <span class="text-sm">Trocas exigem aprovacao</span>
+      </label>
+      <label class="flex items-center gap-2">
+        {{ form.notify_on_cancellation }}
+        <span class="text-sm">Notificar coordenacao em cancelamentos</span>
+      </label>
+      <label class="flex items-center gap-2">
+        {{ form.auto_assign_on_decline }}
+        <span class="text-sm">Auto atribuir substituto ao recusar</span>
+      </label>
+    </div>
+
+    <div class="grid sm:grid-cols-2 gap-4">
+      <div>
+        <label class="label">Penalidade de estabilidade</label>
+        {{ form.stability_penalty }}
+      </div>
+      <div>
+        <label class="label">Penalidade de fairness</label>
+        {{ form.fairness_penalty }}
+      </div>
+      <div>
+        <label class="label">Peso de credito</label>
+        {{ form.credit_weight }}
+      </div>
+      <div>
+        <label class="label">Tempo maximo do solver (s)</label>
+        {{ form.max_solve_seconds }}
+      </div>
+      <div>
+        <label class="label">Maximo por semana</label>
+        {{ form.max_services_per_week }}
+      </div>
+      <div>
+        <label class="label">Maximo fins de semana seguidos</label>
+        {{ form.max_consecutive_weekends }}
+      </div>
+      <div>
+        <label class="label">Penalidade de rotacao</label>
+        {{ form.rotation_penalty }}
+      </div>
+      <div>
+        <label class="label">Janela de rotacao (dias)</label>
+        {{ form.rotation_days }}
+      </div>
+    </div>
+
+    <details class="border border-black/5 rounded-xl p-4">
+      <summary class="cursor-pointer font-medium">Avancado: JSON de pesos</summary>
+      <div class="mt-3">
+        <label class="label">schedule_weights</label>
+        {{ form.schedule_weights_json }}
+        {% if form.schedule_weights_json.errors %}
+          <p class="text-xs text-red-600 mt-1">{{ form.schedule_weights_json.errors|join:", " }}</p>
+        {% endif %}
+        <p class="text-xs text-slate mt-1">Use apenas se precisar ajustar pesos nao listados acima.</p>
+      </div>
+    </details>
+
+    <div class="flex items-center gap-3">
+      <button class="btn-primary" type="submit">Salvar configuracoes</button>
+      <button class="btn-secondary" type="submit" name="action" value="reset">Restaurar padroes</button>
+      <a class="btn-secondary" href="{% url 'dashboard' %}">Voltar</a>
+    </div>
+  </form>
 </div>
 {% endblock %}

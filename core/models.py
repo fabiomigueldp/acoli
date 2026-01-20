@@ -337,6 +337,8 @@ class AssignmentSlot(TimeStampedModel):
     position_type = models.ForeignKey(PositionType, on_delete=models.CASCADE)
     slot_index = models.PositiveSmallIntegerField(default=1)
     required = models.BooleanField(default=True)
+    externally_covered = models.BooleanField(default=False)
+    external_coverage_notes = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="open")
     is_locked = models.BooleanField(default=False)
     locked_at = models.DateTimeField(null=True, blank=True)
@@ -344,20 +346,49 @@ class AssignmentSlot(TimeStampedModel):
     class Meta:
         unique_together = ("mass_instance", "position_type", "slot_index")
 
+    def get_active_assignment(self):
+        if hasattr(self, "active_assignments"):
+            return self.active_assignments[0] if self.active_assignments else None
+        return self.assignments.filter(is_active=True).first()
+
+    @property
+    def active_assignment(self):
+        return self.get_active_assignment()
+
 
 class Assignment(TimeStampedModel):
+    END_REASON_CHOICES = [
+        ("declined", "Declined"),
+        ("canceled", "Canceled"),
+        ("replaced", "Replaced"),
+        ("replaced_by_solver", "Replaced by solver"),
+        ("manual_unassign", "Manual unassign"),
+        ("swap", "Swap"),
+    ]
     STATE_CHOICES = [
         ("proposed", "Proposed"),
         ("published", "Published"),
         ("locked", "Locked"),
     ]
     parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
-    slot = models.OneToOneField(AssignmentSlot, on_delete=models.CASCADE, related_name="assignment")
+    slot = models.ForeignKey(AssignmentSlot, on_delete=models.CASCADE, related_name="assignments")
     acolyte = models.ForeignKey(AcolyteProfile, on_delete=models.PROTECT)
     assigned_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     assigned_at = models.DateTimeField(auto_now_add=True)
     assignment_state = models.CharField(max_length=20, choices=STATE_CHOICES, default="proposed")
     published_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    end_reason = models.CharField(max_length=30, choices=END_REASON_CHOICES, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["slot"],
+                condition=Q(is_active=True),
+                name="unique_active_assignment_per_slot",
+            )
+        ]
 
 
 class Confirmation(TimeStampedModel):
@@ -398,6 +429,7 @@ class SwapRequest(TimeStampedModel):
     to_slot = models.ForeignKey(AssignmentSlot, on_delete=models.SET_NULL, null=True, blank=True, related_name="swap_to")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     notes = models.TextField(blank=True)
+    open_to_admin = models.BooleanField(default=False)
 
 
 class ReplacementRequest(TimeStampedModel):
@@ -405,6 +437,13 @@ class ReplacementRequest(TimeStampedModel):
         ("pending", "Pending"),
         ("assigned", "Assigned"),
         ("canceled", "Canceled"),
+        ("resolved", "Resolved"),
+    ]
+    RESOLUTION_CHOICES = [
+        ("mass_canceled", "Mass canceled"),
+        ("slot_not_required", "Slot not required"),
+        ("covered_externally", "Covered externally"),
+        ("other", "Other"),
     ]
     parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
     slot = models.ForeignKey(AssignmentSlot, on_delete=models.CASCADE)
@@ -412,6 +451,9 @@ class ReplacementRequest(TimeStampedModel):
     proposed_acolyte = models.ForeignKey(AcolyteProfile, on_delete=models.SET_NULL, null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     notes = models.TextField(blank=True)
+    resolved_reason = models.CharField(max_length=30, choices=RESOLUTION_CHOICES, blank=True)
+    resolved_notes = models.TextField(blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
 
 
 class AcolyteCreditLedger(TimeStampedModel):

@@ -28,7 +28,11 @@ python manage.py loaddata fixtures/seed_parish.json
 python manage.py createsuperuser
 ```
 
-4) Inicie o servidor:
+4) Vincule o superuser a uma paroquia (PARISH_ADMIN ou COORDINATOR):
+- Acesse `/admin/` e crie um `ParishMembership` para o usuario.
+- Ou use a tela "Vincular usuarios" para adicionar o papel.
+
+5) Inicie o servidor:
 
 ```bash
 python manage.py runserver
@@ -43,6 +47,7 @@ python manage.py runserver
 - `CSRF_TRUSTED_ORIGINS`
 - `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`
 - `DEFAULT_FROM_EMAIL`
+- `APP_BASE_URL` (usado para links absolutos em emails)
 
 ## Comandos de manutencao
 - `python manage.py generate_mass_instances --days 60`
@@ -65,7 +70,7 @@ heroku addons:create heroku-postgresql:essential-0
 2) Configure variaveis:
 
 ```bash
-heroku config:set SECRET_KEY=... ALLOWED_HOSTS=acoli.herokuapp.com
+heroku config:set SECRET_KEY=... ALLOWED_HOSTS=acoli.herokuapp.com APP_BASE_URL=https://acoli.herokuapp.com
 ```
 
 3) Deploy:

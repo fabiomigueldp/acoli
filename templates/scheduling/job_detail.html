@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}Detalhes do job{% endblock %}
+{% block content %}
+<div class="grid gap-6">
+  <div class="card">
+    <h2 class="font-serif text-xl mb-2">Job {{ job.id }}</h2>
+    <div class="text-sm text-slate">Status: {{ job.get_status_display }}</div>
+    <div class="text-sm text-slate">Criado: {{ job.created_at|date:"d/m H:i" }}</div>
+    {% if job.started_at %}<div class="text-sm text-slate">Inicio: {{ job.started_at|date:"d/m H:i" }}</div>{% endif %}
+    {% if job.finished_at %}<div class="text-sm text-slate">Fim: {{ job.finished_at|date:"d/m H:i" }}</div>{% endif %}
+  </div>
+
+  <div class="card grid sm:grid-cols-3 gap-4">
+    <div>
+      <div class="text-xs uppercase text-slate">Cobertura</div>
+      <div class="font-medium">{{ summary.coverage|default:"-" }}</div>
+    </div>
+    <div>
+      <div class="text-xs uppercase text-slate">Preferencia</div>
+      <div class="font-medium">{{ summary.preference_score|default:"-" }}</div>
+    </div>
+    <div>
+      <div class="text-xs uppercase text-slate">Fairness</div>
+      <div class="font-medium">{{ summary.fairness_std|default:"-" }}</div>
+    </div>
+    <div>
+      <div class="text-xs uppercase text-slate">Mudancas</div>
+      <div class="font-medium">{{ summary.changes|default:"-" }}</div>
+    </div>
+    <div>
+      <div class="text-xs uppercase text-slate">Slots exigidos</div>
+      <div class="font-medium">{{ summary.required_slots_count|default:"-" }}</div>
+    </div>
+    <div>
+      <div class="text-xs uppercase text-slate">Sem cobertura</div>
+      <div class="font-medium">{{ summary.unfilled_slots_count|default:"0" }}</div>
+    </div>
+  </div>
+
+  {% if unfilled %}
+    <div class="card">
+      <h3 class="font-semibold mb-3">Slots sem cobertura</h3>
+      <div class="space-y-2">
+        {% for item in unfilled %}
+          <div class="border border-black/5 rounded-lg p-3">
+            <div class="font-medium">{{ item.starts_at }}</div>
+            <div class="text-sm text-slate">
+              {% if item.community %}
+                {{ item.community.code }} - {{ item.community.name }}
+              {% else %}
+                Comunidade nao informada
+              {% endif %}
+              {% if item.position %} | {{ item.position.name }}{% endif %}
+              {% if item.slot_index %} ({{ item.slot_index }}){% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  <a class="btn-secondary" href="{% url 'scheduling_dashboard' %}">Voltar</a>
+</div>
+{% endblock %}

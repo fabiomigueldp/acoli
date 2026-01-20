@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from django.db import models
+from django.db.models import F, Q
 from django.utils import timezone
 
 from core.models import AcolyteCreditLedger, AcolyteStats, Assignment, Confirmation
@@ -11,10 +12,25 @@ def recompute_stats(parish):
     start_30 = now - timedelta(days=30)
     start_90 = now - timedelta(days=90)
     assignments = Assignment.objects.filter(parish=parish, assignment_state__in=["published", "locked"])
+    active_at_service = assignments.filter(
+        created_at__lte=F("slot__mass_instance__starts_at")
+    ).filter(
+        Q(ended_at__isnull=True) | Q(ended_at__gte=F("slot__mass_instance__starts_at"))
+    )
     for acolyte_id in assignments.values_list("acolyte_id", flat=True).distinct():
-        recent_30 = assignments.filter(acolyte_id=acolyte_id, slot__mass_instance__starts_at__gte=start_30).count()
-        recent_90 = assignments.filter(acolyte_id=acolyte_id, slot__mass_instance__starts_at__gte=start_90).count()
-        confirmations = Confirmation.objects.filter(assignment__acolyte_id=acolyte_id)
+        recent_30 = active_at_service.filter(
+            acolyte_id=acolyte_id, slot__mass_instance__starts_at__gte=start_30, slot__mass_instance__starts_at__lte=now
+        ).count()
+        recent_90 = active_at_service.filter(
+            acolyte_id=acolyte_id, slot__mass_instance__starts_at__gte=start_90, slot__mass_instance__starts_at__lte=now
+        ).count()
+        confirmations = Confirmation.objects.filter(
+            parish=parish,
+            assignment__acolyte_id=acolyte_id,
+            assignment__assignment_state__in=["published", "locked"],
+            assignment__slot__mass_instance__starts_at__gte=start_90,
+            assignment__slot__mass_instance__starts_at__lte=now,
+        )
         total_confirmations = confirmations.count()
         confirmed = confirmations.filter(status="confirmed").count()
         canceled = confirmations.filter(status__in=["declined", "canceled_by_acolyte"]).count()
@@ -34,7 +50,10 @@ def recompute_stats(parish):
                 "no_show_count": no_show,
                 "credit_balance": credit_balance,
                 "reliability_score": reliability_score,
-                "last_served_at": assignments.filter(acolyte_id=acolyte_id).order_by("-slot__mass_instance__starts_at").values_list("slot__mass_instance__starts_at", flat=True).first(),
+                "last_served_at": active_at_service.filter(acolyte_id=acolyte_id)
+                .order_by("-slot__mass_instance__starts_at")
+                .values_list("slot__mass_instance__starts_at", flat=True)
+                .first(),
             },
         )
     return True
