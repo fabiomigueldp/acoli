@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block title %}Relatorio de frequencia{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="card space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="font-serif text-xl">Relatorio de frequencia</h2>
+        <p class="text-sm text-slate">Resumo de servicos por acolito no periodo.</p>
+      </div>
+    </div>
+    <form method="get" class="grid sm:grid-cols-3 gap-3">
+      <div>
+        <label class="label">Data inicio</label>
+        <input type="date" name="start" value="{{ start_date|date:'Y-m-d' }}" />
+      </div>
+      <div>
+        <label class="label">Data final</label>
+        <input type="date" name="end" value="{{ end_date|date:'Y-m-d' }}" />
+      </div>
+      <div class="flex items-end">
+        <button class="btn-primary" type="submit">Atualizar</button>
+      </div>
+    </form>
+    <div class="text-xs text-slate">Media do periodo: {{ avg_total|floatformat:1 }}</div>
+  </div>
+
+  <div class="card overflow-x-auto">
+    <table class="min-w-full text-sm">
+      <thead>
+        <tr class="text-left text-xs text-slate uppercase tracking-widest">
+          <th class="py-2 pr-3">Acolito</th>
+          <th class="py-2 pr-3">Total</th>
+          <th class="py-2 pr-3">Ultimos 30</th>
+          <th class="py-2 pr-3">Ultimos 90</th>
+          <th class="py-2 pr-3">Confiabilidade</th>
+          <th class="py-2 pr-3">Creditos</th>
+          <th class="py-2 pr-3">Conta</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr class="border-t border-black/5">
+            <td class="py-2 pr-3 font-medium">{{ row.acolyte.display_name }}</td>
+            <td class="py-2 pr-3">
+              <div class="flex items-center gap-2">
+                <span class="font-medium">{{ row.total }}</span>
+                <div class="h-2 w-24 bg-sand rounded-full overflow-hidden">
+                  <div class="h-2 bg-moss" style="width: {% widthratio row.total max_total 100 %}%"></div>
+                </div>
+              </div>
+            </td>
+            <td class="py-2 pr-3">{{ row.services_30 }}</td>
+            <td class="py-2 pr-3">{{ row.services_90 }}</td>
+            <td class="py-2 pr-3">{{ row.reliability|floatformat:0 }}%</td>
+            <td class="py-2 pr-3">{{ row.credit }}</td>
+            <td class="py-2 pr-3">
+              {% if row.has_user %}
+                <span class="text-xs uppercase tracking-widest">Vinculado</span>
+              {% else %}
+                <span class="text-xs text-slate">Sem login</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td class="py-4 text-sm text-slate" colspan="7">Nenhum dado no periodo.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

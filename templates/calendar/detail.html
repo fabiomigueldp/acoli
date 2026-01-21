@@ -81,6 +81,18 @@
                   <div class="font-medium">{% if active %}{{ active.acolyte.display_name }}{% else %}Vaga aberta{% endif %}</div>
                 {% endwith %}
               {% endif %}
+              {% if slot.all_assignments and slot.all_assignments|length > 1 %}
+                <div class="text-xs text-slate mt-2">
+                  <div class="uppercase tracking-wide text-slate">Historico recente</div>
+                  <div class="space-y-1">
+                    {% for past in slot.all_assignments %}
+                      {% if not past.is_active %}
+                        <div>{{ past.acolyte.display_name }}{% if past.end_reason %} ({{ past.end_reason }}){% endif %}</div>
+                      {% endif %}
+                    {% endfor %}
+                  </div>
+                </div>
+              {% endif %}
             </div>
             <span class="badge">{{ slot.status }}</span>
           </div>

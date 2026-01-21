@@ -53,6 +53,9 @@ python manage.py runserver
 - Para clientes sem sessao, envie `X-Parish-ID` (ou `?parish_id=`) nas requisicoes `/api/*`.
 - O usuario precisa ter membership ativa na paroquia (ou ser SYSTEM_ADMIN).
 
+## Calendario (ICS)
+- Apos gerar o link em "Minhas escalas", use `/calendar/my.ics?token=...` para assinar o calendario.
+
 ## Comandos de manutencao
 - `python manage.py generate_mass_instances --days 60`
 - `python manage.py sync_slots --days 60`

@@ -2,7 +2,18 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
-from core.models import AcolyteAvailabilityRule, AcolyteProfile, Community, MembershipRole, Parish, ParishMembership
+from core.models import (
+    AcolyteAvailabilityRule,
+    AcolyteProfile,
+    Community,
+    MembershipRole,
+    Parish,
+    ParishMembership,
+    PositionType,
+    RequirementProfile,
+    RequirementProfilePosition,
+    MassInstance,
+)
 
 
 class PreferencesViewTests(TestCase):
@@ -102,3 +113,18 @@ class PreferencesViewTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Ja existe uma regra semelhante nesse dia/horario.")
+
+    def test_preferences_diagnostics_when_no_qualification(self):
+        position = PositionType.objects.create(parish=self.parish, code="LIB", name="Libriferario")
+        profile = RequirementProfile.objects.create(parish=self.parish, name="Perfil")
+        RequirementProfilePosition.objects.create(profile=profile, position_type=position, quantity=1)
+        MassInstance.objects.create(
+            parish=self.parish,
+            community=self.community,
+            requirement_profile=profile,
+            starts_at=timezone.now() + timezone.timedelta(days=5),
+            status="scheduled",
+        )
+        response = self.client.get("/preferences/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Sem qualificacoes definidas")

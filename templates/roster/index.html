@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+{% load extras %}
+{% block title %}Roster{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="card space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="font-serif text-xl">Visao geral das escalas</h2>
+        <p class="text-sm text-slate">Uma visao compacta para encontrar buracos e agir rapido.</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <a class="btn-secondary" href="{% url 'roster_export_pdf' %}?start={{ start_date|date:'Y-m-d' }}&end={{ end_date|date:'Y-m-d' }}{% if community_id %}&community={{ community_id }}{% endif %}{% if kind %}&kind={{ kind }}{% endif %}">Exportar PDF</a>
+        <button class="btn-secondary" type="button" data-whatsapp-url="{% url 'roster_export_whatsapp' %}?start={{ start_date|date:'Y-m-d' }}&end={{ end_date|date:'Y-m-d' }}{% if community_id %}&community={{ community_id }}{% endif %}{% if kind %}&kind={{ kind }}{% endif %}">Copiar WhatsApp</button>
+      </div>
+    </div>
+    <form method="get" class="grid sm:grid-cols-5 gap-3">
+      <div>
+        <label class="label">Data inicio</label>
+        <input type="date" name="start" value="{{ start_date|date:'Y-m-d' }}" />
+      </div>
+      <div>
+        <label class="label">Data final</label>
+        <input type="date" name="end" value="{{ end_date|date:'Y-m-d' }}" />
+      </div>
+      <div>
+        <label class="label">Comunidade</label>
+        <select name="community">
+          <option value="">Todas</option>
+          {% for community in communities %}
+            <option value="{{ community.id }}"{% if community_id|stringformat:"s" == community.id|stringformat:"s" %} selected{% endif %}>{{ community.code }} - {{ community.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="label">Tipo</label>
+        <select name="kind">
+          <option value="">Todos</option>
+          <option value="template"{% if kind == "template" %} selected{% endif %}>Templates</option>
+          <option value="event"{% if kind == "event" %} selected{% endif %}>Eventos</option>
+        </select>
+      </div>
+      <div class="flex items-end">
+        <button class="btn-primary" type="submit">Filtrar</button>
+      </div>
+    </form>
+    <div class="flex flex-wrap gap-2 text-xs">
+      {% for preset in presets %}
+        <a class="btn-secondary" href="?start={{ preset.start|date:'Y-m-d' }}&end={{ preset.end|date:'Y-m-d' }}{% if community_id %}&community={{ community_id }}{% endif %}{% if kind %}&kind={{ kind }}{% endif %}">{{ preset.label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if not days %}
+    <div class="card">
+      <p class="text-sm text-slate">Nenhuma missa encontrada no periodo selecionado.</p>
+    </div>
+  {% endif %}
+
+  {% for day in days %}
+    <div class="card">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="font-semibold">{{ day.date|date:"d/m/Y" }}</h3>
+          <p class="text-xs text-slate">{{ day.date|date:"l" }}</p>
+        </div>
+      </div>
+      <div class="overflow-x-auto mt-4">
+        <table class="min-w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs text-slate uppercase tracking-widest">
+              <th class="py-2 pr-3">Hora</th>
+              <th class="py-2 pr-3">Comunidade</th>
+              <th class="py-2 pr-3">Rotulo</th>
+              {% for column in columns %}
+                <th class="py-2 pr-3" title="{{ column.title }}">{{ column.label }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in day.items %}
+              {% with instance=item.instance %}
+                <tr class="border-t border-black/5 {% if instance.status == 'canceled' %}text-slate{% endif %}">
+                  <td class="py-2 pr-3">{{ instance.starts_at|date:"H:i" }}</td>
+                  <td class="py-2 pr-3">{{ instance.community.code }}</td>
+                  <td class="py-2 pr-3">{{ instance.liturgy_label|default:"Missa" }}</td>
+                  {% for column in columns %}
+                    {% with slot=item.slot_map|get_item:column.key %}
+                      <td class="py-2 pr-3">
+                        {% if instance.status == "canceled" %}
+                          <span class="text-xs uppercase tracking-widest">Cancelada</span>
+                        {% elif not slot %}
+                          <span class="text-slate">N/A</span>
+                        {% elif slot.externally_covered %}
+                          <span class="text-xs uppercase tracking-widest">Externo</span>
+                        {% elif not slot.required %}
+                          <span class="text-slate">N/A</span>
+                        {% else %}
+                          {% with active=slot.active_assignment %}
+                            {% if active %}
+                              <a class="text-ink hover:underline" href="{% url 'mass_detail' instance.id %}">{{ active.acolyte.display_name }}</a>
+                              {% if slot.is_locked %}
+                                <span class="ml-2 badge">Consolidada</span>
+                              {% endif %}
+                            {% else %}
+                              <a class="inline-flex items-center gap-2 px-2 py-1 rounded-lg bg-red-50 text-red-700 border border-red-200" href="{% url 'slot_assign' instance.id slot.id %}">
+                                ABERTO
+                              </a>
+                              {% if slot.is_locked %}
+                                <span class="ml-2 badge">Consolidada</span>
+                              {% endif %}
+                            {% endif %}
+                          {% endwith %}
+                        {% endif %}
+                      </td>
+                    {% endwith %}
+                  {% endfor %}
+                </tr>
+              {% endwith %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+
+<script>
+  document.querySelectorAll("[data-whatsapp-url]").forEach(function(btn) {
+    btn.addEventListener("click", async function() {
+      const url = btn.getAttribute("data-whatsapp-url");
+      try {
+        const response = await fetch(url, { credentials: "same-origin" });
+        const text = await response.text();
+        await navigator.clipboard.writeText(text);
+        btn.textContent = "Copiado";
+        setTimeout(() => { btn.textContent = "Copiar WhatsApp"; }, 1600);
+      } catch (err) {
+        alert("Nao foi possivel copiar. Abra o link e copie manualmente.");
+      }
+    });
+  });
+</script>
+{% endblock %}

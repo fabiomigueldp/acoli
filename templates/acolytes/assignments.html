@@ -1,43 +1,87 @@
 {% extends 'base.html' %}
+{% load extras %}
 {% block title %}Minhas escalas{% endblock %}
 {% block content %}
-<div class="card">
-  <h2 class="font-serif text-xl mb-4">Minhas escalas</h2>
-  <div class="space-y-2">
-    {% for assignment in assignments %}
-      <div class="border border-black/5 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div class="text-sm text-slate">{{ assignment.slot.mass_instance.starts_at|date:"d/m H:i" }}</div>
-          <div class="font-medium">{{ assignment.slot.mass_instance.community.code }} - {{ assignment.slot.position_type.name }}</div>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-          {% if assignment.confirmation %}
-            <span class="badge">{{ assignment.confirmation.status }}</span>
-            {% if assignment.confirmation.status == "pending" %}
-              <form method="post" action="{% url 'confirm_assignment' assignment.id %}">
-                {% csrf_token %}
-                <button class="btn-secondary" type="submit">Confirmar</button>
-              </form>
-              <form method="post" action="{% url 'decline_assignment' assignment.id %}" onsubmit="return confirm('Tem certeza que deseja recusar esta escala?');">
-                {% csrf_token %}
-                <button class="btn-secondary" type="submit">Recusar</button>
-              </form>
-            {% elif assignment.confirmation.status == "confirmed" %}
-              <form method="post" action="{% url 'cancel_assignment' assignment.id %}" onsubmit="return confirm('Tem certeza que deseja cancelar esta escala?');">
-                {% csrf_token %}
-                <button class="btn-secondary" type="submit">Cancelar</button>
-              </form>
-            {% endif %}
-            <a class="btn-secondary" href="{% url 'swap_request_create' assignment.id %}">Solicitar troca</a>
-          {% else %}
-            <span class="badge">{{ assignment.assignment_state }}</span>
-            <a class="btn-secondary" href="{% url 'swap_request_create' assignment.id %}">Solicitar troca</a>
-          {% endif %}
-        </div>
+<div class="space-y-6">
+  <div class="card">
+    <h2 class="font-serif text-xl mb-2">Minhas escalas</h2>
+    <p class="text-sm text-slate">Consulte suas escalas e confirme com antecedencia.</p>
+    {% if calendar_feed_url %}
+      <div class="mt-4 flex flex-wrap items-center gap-2 text-sm">
+        <span class="text-slate">Assinar calendario:</span>
+        <a class="text-ink underline" href="{{ calendar_feed_url }}">{{ calendar_feed_url }}</a>
+        <button class="btn-secondary" type="button" data-copy="{{ calendar_feed_url }}">Copiar link</button>
+        <form method="post" action="{% url 'calendar_feed_token' %}">
+          {% csrf_token %}
+          <button class="btn-secondary" type="submit">Gerar novo link</button>
+        </form>
       </div>
-    {% empty %}
-      <p class="text-sm text-slate">Sem escalas atribuidas.</p>
-    {% endfor %}
+    {% else %}
+      <form method="post" action="{% url 'calendar_feed_token' %}" class="mt-4">
+        {% csrf_token %}
+        <button class="btn-secondary" type="submit">Gerar link do calendario</button>
+      </form>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3 class="font-semibold mb-3">Proximas escalas</h3>
+    <div class="space-y-2">
+      {% for assignment in assignments %}
+        <div class="border border-black/5 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div class="text-sm text-slate">{{ assignment.slot.mass_instance.starts_at|date:"d/m H:i" }}</div>
+            <div class="font-medium">{{ assignment.slot.mass_instance.community.code }} - {{ assignment.slot.position_type.name }}</div>
+            {% with team=team_names_map|get_item:assignment.slot.mass_instance_id %}
+              {% if team %}
+                <div class="text-xs text-slate mt-1">Equipe: {{ team }}</div>
+              {% endif %}
+            {% endwith %}
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            {% if assignment.confirmation %}
+              <span class="badge">{{ assignment.confirmation.status }}</span>
+              {% if assignment.confirmation.status == "pending" %}
+                <form method="post" action="{% url 'confirm_assignment' assignment.id %}">
+                  {% csrf_token %}
+                  <button class="btn-secondary" type="submit">Confirmar</button>
+                </form>
+                <form method="post" action="{% url 'decline_assignment' assignment.id %}" onsubmit="return confirm('Tem certeza que deseja recusar esta escala?');">
+                  {% csrf_token %}
+                  <button class="btn-secondary" type="submit">Recusar</button>
+                </form>
+              {% elif assignment.confirmation.status == "confirmed" %}
+                <form method="post" action="{% url 'cancel_assignment' assignment.id %}" onsubmit="return confirm('Tem certeza que deseja cancelar esta escala?');">
+                  {% csrf_token %}
+                  <button class="btn-secondary" type="submit">Cancelar</button>
+                </form>
+              {% endif %}
+              <a class="btn-secondary" href="{% url 'swap_request_create' assignment.id %}">Solicitar troca</a>
+            {% else %}
+              <span class="badge">{{ assignment.assignment_state }}</span>
+              <a class="btn-secondary" href="{% url 'swap_request_create' assignment.id %}">Solicitar troca</a>
+            {% endif %}
+          </div>
+        </div>
+      {% empty %}
+        <p class="text-sm text-slate">Sem escalas atribuidas.</p>
+      {% endfor %}
+    </div>
   </div>
 </div>
+
+<script>
+  document.querySelectorAll("[data-copy]").forEach(function(btn) {
+    btn.addEventListener("click", async function() {
+      const value = btn.getAttribute("data-copy");
+      try {
+        await navigator.clipboard.writeText(value);
+        btn.textContent = "Copiado";
+        setTimeout(() => { btn.textContent = "Copiar link"; }, 1600);
+      } catch (err) {
+        alert("Nao foi possivel copiar.");
+      }
+    });
+  });
+</script>
 {% endblock %}

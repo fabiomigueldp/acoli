@@ -10,9 +10,12 @@ from core.models import (
     Assignment,
     AssignmentSlot,
     Community,
+    FamilyGroup,
     MassInstance,
     Parish,
     PositionType,
+    RequirementProfile,
+    RequirementProfilePosition,
 )
 from scheduler.services.solver import solve_schedule
 
@@ -178,4 +181,76 @@ class SolverTests(TestCase):
         slot.refresh_from_db()
         self.assertEqual(result.coverage, 1)
         self.assertEqual(slot.get_active_assignment().acolyte_id, acolyte_a.id)
+
+    def test_solver_requires_senior_when_configured(self):
+        parish = Parish.objects.create(name="Parish")
+        community = Community.objects.create(parish=parish, code="MAT", name="Matriz")
+        position = PositionType.objects.create(parish=parish, code="LIB", name="Libriferario")
+        profile = RequirementProfile.objects.create(parish=parish, name="Solenidade", min_senior_per_mass=1)
+        RequirementProfilePosition.objects.create(profile=profile, position_type=position, quantity=1)
+        senior = AcolyteProfile.objects.create(
+            parish=parish, display_name="Senior", experience_level="senior"
+        )
+        junior = AcolyteProfile.objects.create(
+            parish=parish, display_name="Junior", experience_level="intermediate"
+        )
+        AcolyteQualification.objects.create(parish=parish, acolyte=senior, position_type=position, qualified=True)
+        AcolyteQualification.objects.create(parish=parish, acolyte=junior, position_type=position, qualified=True)
+
+        instance = MassInstance.objects.create(
+            parish=parish,
+            community=community,
+            requirement_profile=profile,
+            starts_at=timezone.now() + timedelta(days=3),
+            status="scheduled",
+        )
+
+        solve_schedule(parish, [instance], parish.consolidation_days, {"fairness_penalty": 0}, allow_changes=True)
+
+        slot = AssignmentSlot.objects.filter(parish=parish, mass_instance=instance).first()
+        self.assertEqual(slot.get_active_assignment().acolyte_id, senior.id)
+
+    def test_solver_family_bonus_groups_members(self):
+        parish = Parish.objects.create(name="Parish")
+        community = Community.objects.create(parish=parish, code="MAT", name="Matriz")
+        position = PositionType.objects.create(parish=parish, code="LIB", name="Libriferario")
+        profile = RequirementProfile.objects.create(parish=parish, name="Dupla")
+        RequirementProfilePosition.objects.create(profile=profile, position_type=position, quantity=2)
+
+        family = FamilyGroup.objects.create(parish=parish, name="Familia A")
+        fam_a = AcolyteProfile.objects.create(parish=parish, display_name="A1", family_group=family)
+        fam_b = AcolyteProfile.objects.create(parish=parish, display_name="A2", family_group=family)
+        other_a = AcolyteProfile.objects.create(parish=parish, display_name="B1")
+        other_b = AcolyteProfile.objects.create(parish=parish, display_name="B2")
+        for acolyte in (fam_a, fam_b, other_a, other_b):
+            AcolyteQualification.objects.create(parish=parish, acolyte=acolyte, position_type=position, qualified=True)
+
+        mass_a = MassInstance.objects.create(
+            parish=parish,
+            community=community,
+            requirement_profile=profile,
+            starts_at=timezone.now() + timedelta(days=3),
+            status="scheduled",
+        )
+        mass_b = MassInstance.objects.create(
+            parish=parish,
+            community=community,
+            requirement_profile=profile,
+            starts_at=timezone.now() + timedelta(days=4),
+            status="scheduled",
+        )
+
+        solve_schedule(
+            parish,
+            [mass_a, mass_b],
+            parish.consolidation_days,
+            {"family_group_bonus": 10, "fairness_penalty": 0, "stability_penalty": 0},
+            allow_changes=True,
+        )
+
+        fam_assignments = Assignment.objects.filter(
+            parish=parish, is_active=True, acolyte_id__in=[fam_a.id, fam_b.id]
+        ).select_related("slot__mass_instance")
+        mass_ids = {assignment.slot.mass_instance_id for assignment in fam_assignments}
+        self.assertEqual(len(mass_ids), 1)
 

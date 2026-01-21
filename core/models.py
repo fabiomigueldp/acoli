@@ -69,13 +69,29 @@ class ParishMembership(TimeStampedModel):
         return self.roles.filter(code=role_code).exists()
 
 
+class FamilyGroup(TimeStampedModel):
+    parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
+    name = models.CharField(max_length=120)
+    notes = models.TextField(blank=True)
+
+    def __str__(self):
+        return self.name
+
+
 class AcolyteProfile(TimeStampedModel):
+    EXPERIENCE_CHOICES = [
+        ("beginner", "Beginner"),
+        ("intermediate", "Intermediate"),
+        ("senior", "Senior"),
+    ]
     parish = models.ForeignKey(Parish, on_delete=models.CASCADE, related_name="acolytes")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     display_name = models.CharField(max_length=200)
     community_of_origin = models.ForeignKey(Community, on_delete=models.SET_NULL, null=True, blank=True)
+    family_group = models.ForeignKey(FamilyGroup, on_delete=models.SET_NULL, null=True, blank=True)
     notes = models.TextField(blank=True)
     active = models.BooleanField(default=True)
+    experience_level = models.CharField(max_length=20, choices=EXPERIENCE_CHOICES, default="intermediate")
 
     class Meta:
         constraints = [
@@ -197,6 +213,7 @@ class RequirementProfile(TimeStampedModel):
     name = models.CharField(max_length=150)
     notes = models.TextField(blank=True)
     active = models.BooleanField(default=True)
+    min_senior_per_mass = models.PositiveSmallIntegerField(default=0)
 
     def __str__(self):
         return self.name
@@ -481,6 +498,16 @@ class AcolyteStats(TimeStampedModel):
     last_served_at = models.DateTimeField(null=True, blank=True)
     reliability_score = models.FloatField(default=0.0)
     credit_balance = models.IntegerField(default=0)
+
+
+class CalendarFeedToken(TimeStampedModel):
+    parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    token = models.CharField(max_length=64, unique=True)
+    rotated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ("parish", "user")
 
 
 class AuditEvent(models.Model):

@@ -200,6 +200,41 @@
       </div>
 
       <div class="space-y-6">
+        {% if diagnostics %}
+          <div class="card">
+            <h3 class="font-semibold">Diagnostico rapido</h3>
+            <p class="text-sm text-slate">Resumo das oportunidades nos proximos 30 dias.</p>
+            <div class="mt-4 grid sm:grid-cols-2 gap-3 text-sm">
+              <div class="border border-black/5 rounded-lg p-3">
+                <div class="text-xs text-slate uppercase tracking-wide">Missas no periodo</div>
+                <div class="text-xl font-semibold">{{ diagnostics.total }}</div>
+              </div>
+              <div class="border border-black/5 rounded-lg p-3">
+                <div class="text-xs text-slate uppercase tracking-wide">Oportunidades elegiveis</div>
+                <div class="text-xl font-semibold">{{ diagnostics.eligible_opportunities }}</div>
+              </div>
+              <div class="border border-black/5 rounded-lg p-3">
+                <div class="text-xs text-slate uppercase tracking-wide">Qualificacoes</div>
+                <div class="text-xl font-semibold">{{ diagnostics.qualified_positions }}</div>
+              </div>
+              <div class="border border-black/5 rounded-lg p-3">
+                <div class="text-xs text-slate uppercase tracking-wide">Bloqueios por disponibilidade</div>
+                <div class="text-xl font-semibold">{{ diagnostics.blocked_availability }}</div>
+              </div>
+            </div>
+            {% if diagnostics.reasons %}
+              <div class="mt-4 text-sm text-slate">
+                <p class="font-medium text-ink">Possiveis motivos:</p>
+                <ul class="list-disc list-inside space-y-1">
+                  {% for reason in diagnostics.reasons %}
+                    <li>{{ reason }}</li>
+                  {% endfor %}
+                </ul>
+              </div>
+            {% endif %}
+          </div>
+        {% endif %}
+
         <div class="card">
           <div>
             <h3 class="font-semibold">Preferencias atuais</h3>

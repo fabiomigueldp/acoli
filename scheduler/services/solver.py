@@ -204,6 +204,22 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
             if vars_for_acolyte:
                 model.Add(sum(vars_for_acolyte) <= 1)
 
+    senior_ids = {acolyte.id for acolyte in acolytes if acolyte.experience_level == "senior"}
+    if senior_ids:
+        for mass_id, mass_slots in slots_by_mass.items():
+            min_senior = 0
+            mass_instance = mass_slots[0].mass_instance if mass_slots else None
+            if mass_instance and mass_instance.requirement_profile:
+                min_senior = getattr(mass_instance.requirement_profile, "min_senior_per_mass", 0) or 0
+            if min_senior:
+                vars_for_senior = [
+                    x[(slot.id, acolyte_id)]
+                    for slot in mass_slots
+                    for acolyte_id in senior_ids
+                    if (slot.id, acolyte_id) in x
+                ]
+                model.Add(sum(vars_for_senior) >= int(min_senior))
+
     mass_duration = int(getattr(parish, "default_mass_duration_minutes", 60))
     rest_minutes = int(getattr(parish, "min_rest_minutes_between_masses", 0))
     min_gap = (mass_duration + rest_minutes) * 60
@@ -284,6 +300,7 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
     stability_terms = []
     rotation_terms = []
     partner_terms = []
+    family_terms = []
 
     for slot in decision_slots:
         for acolyte in candidates.get(slot.id, []):
@@ -329,7 +346,7 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
             for mass_id in slots_by_mass.keys():
                 a_var = mass_acolyte_vars.get(mass_id, {}).get(pref.acolyte_id)
                 b_var = mass_acolyte_vars.get(mass_id, {}).get(pref.target_acolyte_id)
-                if not a_var or not b_var:
+                if a_var is None or b_var is None:
                     continue
                 pair_var = model.NewBoolVar(f"pair_{pref.acolyte_id}_{pref.target_acolyte_id}_{mass_id}")
                 model.Add(pair_var <= a_var)
@@ -339,6 +356,39 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
                 if pref.preference_type == "avoid_partner":
                     weight = -weight
                 partner_terms.append(weight * pair_var)
+
+    family_bonus = int(weights.get("family_group_bonus", 2))
+    if family_bonus:
+        families = defaultdict(list)
+        for acolyte in acolytes:
+            if acolyte.family_group_id:
+                families[acolyte.family_group_id].append(acolyte.id)
+        for family_id, members in families.items():
+            if len(members) < 2:
+                continue
+            for mass_id, mass_slots in slots_by_mass.items():
+                member_vars = {}
+                for acolyte_id in members:
+                    vars_for_acolyte = [
+                        x[(slot.id, acolyte_id)]
+                        for slot in mass_slots
+                        if (slot.id, acolyte_id) in x
+                    ]
+                    if not vars_for_acolyte:
+                        continue
+                    assigned_var = model.NewBoolVar(f"family_{family_id}_{mass_id}_{acolyte_id}")
+                    for var in vars_for_acolyte:
+                        model.Add(assigned_var >= var)
+                    model.Add(assigned_var <= sum(vars_for_acolyte))
+                    member_vars[acolyte_id] = assigned_var
+                member_ids = list(member_vars.keys())
+                for idx, acolyte_id in enumerate(member_ids):
+                    for other_id in member_ids[idx + 1 :]:
+                        pair_var = model.NewBoolVar(f"family_pair_{family_id}_{mass_id}_{acolyte_id}_{other_id}")
+                        model.Add(pair_var <= member_vars[acolyte_id])
+                        model.Add(pair_var <= member_vars[other_id])
+                        model.Add(pair_var >= member_vars[acolyte_id] + member_vars[other_id] - 1)
+                        family_terms.append(family_bonus * pair_var)
 
     rotation_days = int(weights.get("rotation_days", 60))
     if rotation_days > 0:
@@ -400,6 +450,8 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
         objective_terms.append(-sum(rotation_terms))
     if partner_terms:
         objective_terms.append(sum(partner_terms))
+    if family_terms:
+        objective_terms.append(sum(family_terms))
 
     model.Maximize(sum(objective_terms) if objective_terms else 0)
 

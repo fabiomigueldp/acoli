@@ -1,25 +1,32 @@
 import calendar as cal
 from datetime import date, datetime, time, timedelta
+from uuid import uuid4
 
 from django.contrib import messages
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Prefetch, Q
+from django.db.models import Count, F, Prefetch, Q
 from django.forms import formset_factory
+from django.http import HttpResponse, HttpResponseNotFound
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 
 from core.models import (
     AcolyteAvailabilityRule,
     AcolyteQualification,
+    AcolyteStats,
     AuditEvent,
     Assignment,
     AssignmentSlot,
+    CalendarFeedToken,
     Confirmation,
     EventOccurrence,
     EventSeries,
     EventInterest,
+    FamilyGroup,
     MassInstance,
     MassTemplate,
     MassOverride,
@@ -47,7 +54,7 @@ from core.services.replacements import (
     create_replacement_request,
 )
 from core.services.swaps import apply_swap_request
-from core.services.availability import is_acolyte_available
+from core.services.availability import is_acolyte_available, is_acolyte_available_with_rules
 from scheduler.models import ScheduleJobRequest
 from notifications.services import enqueue_notification
 from scheduler.services.quick_fill import build_quick_fill_cache, quick_fill_slot
@@ -146,15 +153,253 @@ def calendar_month(request):
     )
 
 
+def _parse_date(value, fallback):
+    try:
+        return date.fromisoformat(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _build_roster_context(parish, start_date, end_date, community_id=None, kind=None):
+    instances = (
+        MassInstance.objects.filter(parish=parish, starts_at__date__range=(start_date, end_date))
+        .select_related("community", "template", "event_series", "requirement_profile")
+        .prefetch_related(
+            Prefetch(
+                "slots",
+                queryset=AssignmentSlot.objects.select_related("position_type").prefetch_related(
+                    Prefetch(
+                        "assignments",
+                        queryset=Assignment.objects.filter(is_active=True).select_related("acolyte"),
+                        to_attr="active_assignments",
+                    )
+                ),
+            )
+        )
+        .order_by("starts_at")
+    )
+    if community_id:
+        instances = instances.filter(community_id=community_id)
+    if kind == "event":
+        instances = instances.exclude(event_series=None)
+    elif kind == "template":
+        instances = instances.exclude(template=None)
+
+    column_keys = {}
+    column_max_index = {}
+    for instance in instances:
+        for slot in instance.slots.all():
+            key = (slot.position_type_id, slot.slot_index)
+            column_keys[key] = slot.position_type
+            column_max_index[slot.position_type_id] = max(
+                column_max_index.get(slot.position_type_id, 0), slot.slot_index
+            )
+
+    def _col_sort(item):
+        position = item[1]
+        return (position.code or position.name, item[0][1])
+
+    columns = []
+    for key, position in sorted(column_keys.items(), key=_col_sort):
+        suffix = ""
+        if column_max_index.get(position.id, 0) > 1:
+            suffix = f" {key[1]}"
+        label = f"{position.code}{suffix}" if position.code else f"{position.name}{suffix}"
+        columns.append({"key": key, "label": label, "title": position.name})
+
+    days = []
+    current_day = None
+    day_bucket = None
+    for instance in instances:
+        instance_day = instance.starts_at.date()
+        if instance_day != current_day:
+            day_bucket = {"date": instance_day, "items": []}
+            days.append(day_bucket)
+            current_day = instance_day
+        slot_map = {(slot.position_type_id, slot.slot_index): slot for slot in instance.slots.all()}
+        day_bucket["items"].append({"instance": instance, "slot_map": slot_map})
+
+    return {"days": days, "columns": columns, "instances": instances}
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def roster_view(request):
+    parish = request.active_parish
+    today = timezone.localdate()
+    start_date = _parse_date(request.GET.get("start"), today)
+    end_date = _parse_date(request.GET.get("end"), today + timedelta(days=13))
+    community_id = request.GET.get("community") or ""
+    kind = request.GET.get("kind") or ""
+
+    saturday_offset = (5 - today.weekday()) % 7
+    next_saturday = today + timedelta(days=saturday_offset)
+    next_sunday = next_saturday + timedelta(days=1)
+
+    presets = [
+        {"label": "Proximo fim de semana", "start": next_saturday, "end": next_sunday},
+        {"label": "Proximos 7 dias", "start": today, "end": today + timedelta(days=6)},
+        {"label": "Proximos 14 dias", "start": today, "end": today + timedelta(days=13)},
+        {
+            "label": "Mes atual",
+            "start": today.replace(day=1),
+            "end": (today.replace(day=1) + timedelta(days=32)).replace(day=1) - timedelta(days=1),
+        },
+    ]
+
+    context = _build_roster_context(
+        parish,
+        start_date,
+        end_date,
+        community_id=community_id or None,
+        kind=kind or None,
+    )
+    communities = parish.community_set.filter(active=True).order_by("code")
+    return render(
+        request,
+        "roster/index.html",
+        {
+            "parish": parish,
+            "start_date": start_date,
+            "end_date": end_date,
+            "community_id": community_id,
+            "kind": kind,
+            "communities": communities,
+            "presets": presets,
+            "days": context["days"],
+            "columns": context["columns"],
+        },
+    )
+
+
+def _build_roster_lines(days, columns):
+    lines = []
+    for day in days:
+        lines.append(day["date"].strftime("%a %d/%m"))
+        for item in day["items"]:
+            instance = item["instance"]
+            line = f"{instance.starts_at.strftime('%H:%M')} {instance.community.code}"
+            if instance.liturgy_label:
+                line = f"{line} - {instance.liturgy_label}"
+            cells = []
+            for column in columns:
+                slot = item["slot_map"].get(column["key"])
+                if not slot:
+                    cells.append(f"{column['label']}: N/A")
+                    continue
+                if instance.status == "canceled":
+                    cells.append(f"{column['label']}: CANCELADA")
+                    continue
+                active = slot.get_active_assignment()
+                if slot.externally_covered:
+                    cells.append(f"{column['label']}: EXTERNO")
+                elif not slot.required:
+                    cells.append(f"{column['label']}: N/A")
+                elif active:
+                    cells.append(f"{column['label']}: {active.acolyte.display_name}")
+                else:
+                    cells.append(f"{column['label']}: ABERTO")
+            lines.append(f"{line} — " + " | ".join(cells))
+        lines.append("")
+    return "\n".join(lines).strip()
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def roster_export_whatsapp(request):
+    parish = request.active_parish
+    today = timezone.localdate()
+    start_date = _parse_date(request.GET.get("start"), today)
+    end_date = _parse_date(request.GET.get("end"), today + timedelta(days=13))
+    community_id = request.GET.get("community") or ""
+    kind = request.GET.get("kind") or ""
+    context = _build_roster_context(
+        parish,
+        start_date,
+        end_date,
+        community_id=community_id or None,
+        kind=kind or None,
+    )
+    text = _build_roster_lines(context["days"], context["columns"])
+    response = HttpResponse(text, content_type="text/plain; charset=utf-8")
+    response["Content-Disposition"] = "inline; filename=escala.txt"
+    return response
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def roster_export_pdf(request):
+    parish = request.active_parish
+    today = timezone.localdate()
+    start_date = _parse_date(request.GET.get("start"), today)
+    end_date = _parse_date(request.GET.get("end"), today + timedelta(days=13))
+    community_id = request.GET.get("community") or ""
+    kind = request.GET.get("kind") or ""
+    context = _build_roster_context(
+        parish,
+        start_date,
+        end_date,
+        community_id=community_id or None,
+        kind=kind or None,
+    )
+    lines = _build_roster_lines(context["days"], context["columns"]).splitlines()
+
+    from io import BytesIO
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    y = height - 40
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(40, y, parish.name)
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(40, y - 14, f"Periodo: {start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}")
+    pdf.drawString(40, y - 28, f"Gerado em {timezone.localtime(timezone.now()).strftime('%d/%m/%Y %H:%M')}")
+    y -= 50
+
+    for line in lines:
+        if y < 60:
+            pdf.showPage()
+            y = height - 40
+            pdf.setFont("Helvetica", 10)
+        if not line.strip():
+            y -= 8
+            continue
+        pdf.drawString(40, y, line)
+        y -= 14
+
+    pdf.save()
+    buffer.seek(0)
+    response = HttpResponse(buffer.read(), content_type="application/pdf")
+    response["Content-Disposition"] = "inline; filename=escala.pdf"
+    return response
+
+
 @login_required
 @require_active_parish
 def mass_detail(request, instance_id):
     parish = request.active_parish
     instance = get_object_or_404(MassInstance, parish=parish, id=instance_id)
     sync_slots_for_instance(instance)
-    slots = list(instance.slots.select_related("position_type").prefetch_related(
-        Prefetch("assignments", queryset=Assignment.objects.filter(is_active=True).select_related("acolyte"), to_attr="active_assignments")
-    ))
+    slots = list(
+        instance.slots.select_related("position_type").prefetch_related(
+            Prefetch(
+                "assignments",
+                queryset=Assignment.objects.filter(is_active=True).select_related("acolyte"),
+                to_attr="active_assignments",
+            ),
+            Prefetch(
+                "assignments",
+                queryset=Assignment.objects.select_related("acolyte").order_by("-created_at")[:5],
+                to_attr="all_assignments",
+            ),
+        )
+    )
     position_ids = {slot.position_type_id for slot in slots}
     quick_fill_cache = build_quick_fill_cache(parish, position_type_ids=position_ids)
     update_form = MassInstanceUpdateForm(instance=instance, parish=parish)
@@ -851,6 +1096,59 @@ def audit_log(request):
 @login_required
 @require_active_parish
 @require_parish_roles(ADMIN_ROLE_CODES)
+def reports_frequency(request):
+    parish = request.active_parish
+    today = timezone.localdate()
+    start_date = _parse_date(request.GET.get("start"), today - timedelta(days=29))
+    end_date = _parse_date(request.GET.get("end"), today)
+
+    assignments = (
+        Assignment.objects.filter(
+            parish=parish,
+            assignment_state__in=["published", "locked"],
+            slot__mass_instance__starts_at__date__range=(start_date, end_date),
+        )
+        .filter(created_at__lte=F("slot__mass_instance__starts_at"))
+        .filter(Q(ended_at__isnull=True) | Q(ended_at__gte=F("slot__mass_instance__starts_at")))
+    )
+    counts = {row["acolyte_id"]: row["total"] for row in assignments.values("acolyte_id").annotate(total=Count("id"))}
+    stats_map = {stat.acolyte_id: stat for stat in AcolyteStats.objects.filter(parish=parish)}
+
+    rows = []
+    for acolyte in parish.acolytes.filter(active=True).order_by("display_name"):
+        stat = stats_map.get(acolyte.id)
+        total = counts.get(acolyte.id, 0)
+        rows.append(
+            {
+                "acolyte": acolyte,
+                "total": total,
+                "services_30": stat.services_last_30_days if stat else 0,
+                "services_90": stat.services_last_90_days if stat else 0,
+                "reliability": stat.reliability_score if stat else 0,
+                "credit": stat.credit_balance if stat else 0,
+                "has_user": bool(acolyte.user_id),
+            }
+        )
+
+    max_total = max([row["total"] for row in rows], default=0) or 1
+    avg_total = sum(row["total"] for row in rows) / len(rows) if rows else 0
+
+    return render(
+        request,
+        "reports/frequency.html",
+        {
+            "rows": rows,
+            "start_date": start_date,
+            "end_date": end_date,
+            "max_total": max_total,
+            "avg_total": avg_total,
+        },
+    )
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
 def replacement_center(request):
     parish = request.active_parish
     now = timezone.now()
@@ -1092,10 +1390,131 @@ def acolyte_link(request):
 @require_active_parish
 def my_assignments(request):
     parish = request.active_parish
+    feed_token = CalendarFeedToken.objects.filter(parish=parish, user=request.user).first()
+    calendar_feed_url = None
+    if feed_token:
+        calendar_feed_url = request.build_absolute_uri(
+            f"{reverse('calendar_feed')}?token={feed_token.token}"
+        )
     assignments = Assignment.objects.filter(parish=parish, acolyte__user=request.user, is_active=True).select_related(
         "slot__mass_instance", "slot__position_type", "confirmation"
     )
-    return render(request, "acolytes/assignments.html", {"assignments": assignments})
+    mass_ids = list(assignments.values_list("slot__mass_instance_id", flat=True))
+    team_map = {}
+    team_names_map = {}
+    if mass_ids:
+        teammates = (
+            Assignment.objects.filter(
+                parish=parish,
+                is_active=True,
+                slot__mass_instance_id__in=mass_ids,
+            )
+            .select_related("acolyte", "slot__mass_instance")
+            .order_by("slot__mass_instance_id", "slot__position_type__name")
+        )
+        for assignment in teammates:
+            team_map.setdefault(assignment.slot.mass_instance_id, []).append(assignment)
+        for mass_id, items in team_map.items():
+            names = [item.acolyte.display_name for item in items]
+            team_names_map[mass_id] = ", ".join(names)
+
+    return render(
+        request,
+        "acolytes/assignments.html",
+        {
+            "assignments": assignments,
+            "team_map": team_map,
+            "team_names_map": team_names_map,
+            "calendar_feed_url": calendar_feed_url,
+        },
+    )
+
+
+@login_required
+@require_active_parish
+def calendar_feed_token(request):
+    parish = request.active_parish
+    if request.method != "POST":
+        return redirect("my_assignments")
+    token = CalendarFeedToken.objects.filter(parish=parish, user=request.user).first()
+    if token:
+        token.token = uuid4().hex
+        token.rotated_at = timezone.now()
+        token.save(update_fields=["token", "rotated_at", "updated_at"])
+        messages.success(request, "Link do calendario atualizado.")
+    else:
+        CalendarFeedToken.objects.create(parish=parish, user=request.user, token=uuid4().hex)
+        messages.success(request, "Link do calendario criado.")
+    return redirect("my_assignments")
+
+
+def _ics_escape(value):
+    return (
+        value.replace("\\", "\\\\")
+        .replace(";", "\\;")
+        .replace(",", "\\,")
+        .replace("\n", "\\n")
+    )
+
+
+def calendar_feed(request):
+    token = request.GET.get("token")
+    if not token:
+        return HttpResponseNotFound("Token invalido.")
+    feed = CalendarFeedToken.objects.select_related("parish", "user").filter(token=token).first()
+    if not feed:
+        return HttpResponseNotFound("Token invalido.")
+    if not feed.user.is_system_admin:
+        membership = ParishMembership.objects.filter(user=feed.user, parish=feed.parish, active=True).exists()
+        if not membership:
+            return HttpResponseNotFound("Token invalido.")
+
+    assignments = (
+        Assignment.objects.filter(
+            parish=feed.parish,
+            acolyte__user=feed.user,
+            is_active=True,
+            assignment_state__in=["published", "locked"],
+            slot__mass_instance__status="scheduled",
+        )
+        .select_related("slot__mass_instance__community", "slot__position_type")
+        .order_by("slot__mass_instance__starts_at")
+    )
+
+    tz_name = feed.parish.timezone or "America/Sao_Paulo"
+    now_stamp = timezone.now()
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Acoli//EN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+        f"X-WR-CALNAME:Acoli - {_ics_escape(feed.parish.name)}",
+        f"X-WR-TIMEZONE:{tz_name}",
+    ]
+    base_url = getattr(settings, "APP_BASE_URL", "").rstrip("/")
+    for assignment in assignments:
+        mass = assignment.slot.mass_instance
+        starts_at = timezone.localtime(mass.starts_at)
+        ends_at = starts_at + timedelta(minutes=feed.parish.default_mass_duration_minutes)
+        summary = f"{mass.community.code} - {assignment.slot.position_type.name}"
+        url_path = reverse("mass_detail", args=[mass.id])
+        full_url = f"{base_url}{url_path}" if base_url else url_path
+        lines.extend(
+            [
+                "BEGIN:VEVENT",
+                f"UID:{assignment.id}@acoli",
+                f"DTSTAMP:{timezone.localtime(now_stamp).strftime('%Y%m%dT%H%M%S')}",
+                f"DTSTART;TZID={tz_name}:{starts_at.strftime('%Y%m%dT%H%M%S')}",
+                f"DTEND;TZID={tz_name}:{ends_at.strftime('%Y%m%dT%H%M%S')}",
+                f"SUMMARY:{_ics_escape(summary)}",
+                f"DESCRIPTION:{_ics_escape(full_url)}",
+                "END:VEVENT",
+            ]
+        )
+    lines.append("END:VCALENDAR")
+    content = "\r\n".join(lines)
+    return HttpResponse(content, content_type="text/calendar; charset=utf-8")
 
 
 @login_required
@@ -1119,6 +1538,79 @@ def my_preferences(request):
     preferences = acolyte.acolytepreference_set.select_related(
         "target_community", "target_position", "target_function", "target_template", "target_acolyte"
     )
+
+    diagnostics = None
+    diagnostics_reasons = []
+    window_end = timezone.localdate() + timedelta(days=30)
+    upcoming = (
+        MassInstance.objects.filter(
+            parish=parish,
+            status="scheduled",
+            starts_at__date__gte=timezone.localdate(),
+            starts_at__date__lte=window_end,
+        )
+        .select_related("event_series", "requirement_profile")
+        .prefetch_related("requirement_profile__positions__position_type")
+    )
+    total_upcoming = upcoming.count()
+    if total_upcoming:
+        qualifications = set(
+            AcolyteQualification.objects.filter(parish=parish, acolyte=acolyte, qualified=True).values_list(
+                "position_type_id", flat=True
+            )
+        )
+        rules = list(AcolyteAvailabilityRule.objects.filter(parish=parish, acolyte=acolyte))
+        interested_series = set(
+            EventInterest.objects.filter(parish=parish, acolyte=acolyte, interested=True).values_list(
+                "event_series_id", flat=True
+            )
+        )
+
+        blocked_interest = 0
+        blocked_qualification = 0
+        blocked_availability = 0
+        eligible_by_qualification = 0
+        eligible_opportunities = 0
+
+        for instance in upcoming:
+            if instance.event_series and instance.event_series.candidate_pool == "interested_only":
+                if instance.event_series_id not in interested_series:
+                    blocked_interest += 1
+                    continue
+            profile = instance.requirement_profile
+            if not profile:
+                blocked_qualification += 1
+                continue
+            position_ids = [pos.position_type_id for pos in profile.positions.all()]
+            if not qualifications.intersection(position_ids):
+                blocked_qualification += 1
+                continue
+            eligible_by_qualification += 1
+            if not is_acolyte_available_with_rules(rules, instance):
+                blocked_availability += 1
+                continue
+            eligible_opportunities += 1
+
+        if not qualifications:
+            diagnostics_reasons.append("Sem qualificacoes definidas para este periodo.")
+        if blocked_interest == total_upcoming and total_upcoming:
+            diagnostics_reasons.append("Eventos marcados como interessados apenas estao fora da sua lista.")
+        if eligible_by_qualification == 0 and qualifications:
+            diagnostics_reasons.append("Nenhuma missa combina com suas qualificacoes.")
+        if eligible_by_qualification and blocked_availability == eligible_by_qualification:
+            diagnostics_reasons.append("Sua disponibilidade atual bloqueia todas as missas no periodo.")
+        if not diagnostics_reasons and eligible_opportunities == 0:
+            diagnostics_reasons.append("Sem oportunidades elegiveis neste periodo.")
+
+        diagnostics = {
+            "total": total_upcoming,
+            "qualified_positions": len(qualifications),
+            "eligible_by_qualification": eligible_by_qualification,
+            "eligible_opportunities": eligible_opportunities,
+            "blocked_interest": blocked_interest,
+            "blocked_availability": blocked_availability,
+            "reasons": diagnostics_reasons,
+        }
 
     weekly_form = WeeklyAvailabilityForm(acolyte=acolyte)
     date_absence_form = DateAbsenceForm()
@@ -1212,6 +1704,7 @@ def my_preferences(request):
             "date_absence_form": date_absence_form,
             "preference_form": preference_form,
             "weekday_choices": WEEKDAY_CHOICES,
+            "diagnostics": diagnostics,
         },
     )
 
