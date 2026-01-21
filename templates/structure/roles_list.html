@@ -3,7 +3,14 @@
 {% block content %}
 <div class="card">
   <div class="flex items-center justify-between mb-4">
-    <h2 class="font-serif text-xl">Funcoes na escala</h2>
+    <div>
+      <h2 class="font-serif text-xl">Funcoes na escala</h2>
+      {% if inactive_count %}
+        <a class="text-xs text-slate hover:text-ink" href="{% if show_inactive %}{% url 'structure_roles_list' %}{% else %}?show_inactive=1{% endif %}">
+          {% if show_inactive %}Ocultar inativas{% else %}Mostrar inativas ({{ inactive_count }}){% endif %}
+        </a>
+      {% endif %}
+    </div>
     <a class="btn-primary" href="{% url 'structure_role_create' %}">Adicionar funcao</a>
   </div>
   <div class="overflow-x-auto">
@@ -42,6 +49,10 @@
                   <button class="btn-secondary" type="submit">
                     {% if role.active %}Desativar{% else %}Ativar{% endif %}
                   </button>
+                </form>
+                <form method="post" action="{% url 'structure_role_delete' role.id %}" onsubmit="return confirm('Excluir esta funcao? Essa acao nao pode ser desfeita.');">
+                  {% csrf_token %}
+                  <button class="text-xs font-medium text-red-600 hover:text-red-700" type="submit">Excluir</button>
                 </form>
               </div>
             </td>

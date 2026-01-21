@@ -770,12 +770,25 @@ def structure_community_toggle(request, community_id):
 @require_parish_roles(ADMIN_ROLE_CODES)
 def structure_roles_list(request):
     parish = request.active_parish
+    show_inactive = request.GET.get("show_inactive") == "1"
+    roles_qs = PositionType.objects.filter(parish=parish)
+    if not show_inactive:
+        roles_qs = roles_qs.filter(active=True)
     roles = (
-        PositionType.objects.filter(parish=parish)
+        roles_qs
         .prefetch_related("functions")
         .order_by("code")
     )
-    return render(request, "structure/roles_list.html", {"roles": roles})
+    inactive_count = PositionType.objects.filter(parish=parish, active=False).count()
+    return render(
+        request,
+        "structure/roles_list.html",
+        {
+            "roles": roles,
+            "show_inactive": show_inactive,
+            "inactive_count": inactive_count,
+        },
+    )
 
 
 def _save_role_from_form(parish, form, position=None):
@@ -866,6 +879,26 @@ def structure_role_toggle(request, role_id):
         role.active = not role.active
         role.save(update_fields=["active", "updated_at"])
         log_audit(parish, request.user, "PositionType", role.id, "update", {"active": role.active})
+    return redirect("structure_roles_list")
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def structure_role_delete(request, role_id):
+    parish = request.active_parish
+    role = get_object_or_404(PositionType, parish=parish, id=role_id)
+    if request.method == "POST":
+        if AssignmentSlot.objects.filter(position_type=role).exists():
+            messages.error(
+                request,
+                "Nao e possivel excluir esta funcao porque existem escalas historicas. Desative a funcao se nao for mais usada.",
+            )
+            return redirect("structure_roles_list")
+        role_id = role.id
+        role.delete()
+        log_audit(parish, request.user, "PositionType", role_id, "delete", {"code": role.code})
+        messages.success(request, "Funcao excluida com sucesso.")
     return redirect("structure_roles_list")
 
 

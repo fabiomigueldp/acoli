@@ -663,13 +663,20 @@ class RoleForm(forms.Form):
         self.parish = kwargs.pop("parish", None)
         self.position_type = kwargs.pop("position_type", None)
         super().__init__(*args, **kwargs)
+        primary = None
+        if self.position_type:
+            primary = FunctionType.objects.filter(
+                parish=self.position_type.parish, code=self.position_type.code
+            ).first()
         if self.parish:
-            self.fields["extra_functions"].queryset = FunctionType.objects.filter(parish=self.parish, active=True)
+            qs = FunctionType.objects.filter(parish=self.parish, active=True)
+            if primary:
+                qs = qs.exclude(id=primary.id)
+            self.fields["extra_functions"].queryset = qs
         if self.position_type:
             self.fields["name"].initial = self.position_type.name
             self.fields["code"].initial = self.position_type.code
             self.fields["active"].initial = self.position_type.active
-            primary = FunctionType.objects.filter(parish=self.position_type.parish, code=self.position_type.code).first()
             extras = self.position_type.functions.exclude(id=primary.id) if primary else self.position_type.functions.all()
             self.fields["extra_functions"].initial = extras
 

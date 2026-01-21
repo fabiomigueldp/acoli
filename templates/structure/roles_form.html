@@ -13,6 +13,7 @@
       <div>
         <label class="label">Nome</label>
         {{ form.name }}
+        <p class="text-xs text-slate mt-1">Nome exibido na escala e nos perfis.</p>
       </div>
       <div>
         <label class="label">Codigo (opcional)</label>
@@ -26,7 +27,7 @@
     </div>
     <details class="mt-2 rounded-xl border border-black/5 bg-white/70 px-4 py-3">
       <summary class="cursor-pointer text-sm font-medium text-ink">Composicao avancada</summary>
-      <p class="text-xs text-slate mt-1">Use apenas quando esta vaga combinar mais de uma funcao.</p>
+      <p class="text-xs text-slate mt-1">As funcoes indicam as habilidades exigidas para esta vaga.</p>
       <div class="mt-4">
         <label class="label">Funcoes adicionais</label>
         {% if form.extra_functions.errors %}

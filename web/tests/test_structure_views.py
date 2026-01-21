@@ -2,9 +2,11 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from core.models import (
+    AssignmentSlot,
     Community,
     FunctionType,
     MembershipRole,
+    MassInstance,
     Parish,
     ParishMembership,
     PositionType,
@@ -12,6 +14,7 @@ from core.models import (
     RequirementProfile,
     RequirementProfilePosition,
 )
+from django.utils import timezone
 
 
 class StructureViewsTests(TestCase):
@@ -82,3 +85,24 @@ class StructureViewsTests(TestCase):
 
         response = self.client.get("/structure/communities/")
         self.assertEqual(response.status_code, 403)
+
+    def test_role_delete_blocked_when_has_assignments(self):
+        role = PositionType.objects.create(parish=self.parish, code="LIB", name="Libriferario", active=True)
+        community = Community.objects.create(parish=self.parish, code="MAT", name="Matriz", active=True)
+        instance = MassInstance.objects.create(parish=self.parish, community=community, starts_at=timezone.now())
+        AssignmentSlot.objects.create(
+            parish=self.parish,
+            mass_instance=instance,
+            position_type=role,
+            slot_index=1,
+        )
+        response = self.client.post(f"/structure/roles/{role.id}/delete/", follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(PositionType.objects.filter(id=role.id).exists())
+        self.assertContains(response, "Nao e possivel excluir esta funcao")
+
+    def test_role_delete_unused(self):
+        role = PositionType.objects.create(parish=self.parish, code="LIB", name="Libriferario", active=True)
+        response = self.client.post(f"/structure/roles/{role.id}/delete/")
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(PositionType.objects.filter(id=role.id).exists())

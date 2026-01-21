@@ -23,6 +23,7 @@ urlpatterns = [
     path("structure/roles/new/", views.structure_role_create, name="structure_role_create"),
     path("structure/roles/<int:role_id>/edit/", views.structure_role_edit, name="structure_role_edit"),
     path("structure/roles/<int:role_id>/toggle/", views.structure_role_toggle, name="structure_role_toggle"),
+    path("structure/roles/<int:role_id>/delete/", views.structure_role_delete, name="structure_role_delete"),
     path(
         "structure/requirement-profiles/",
         views.structure_requirement_profiles_list,
