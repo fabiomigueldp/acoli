@@ -81,11 +81,11 @@
                   <div class="font-medium">{% if active %}{{ active.acolyte.display_name }}{% else %}Vaga aberta{% endif %}</div>
                 {% endwith %}
               {% endif %}
-              {% if slot.all_assignments and slot.all_assignments|length > 1 %}
+              {% if slot.recent_assignments and slot.recent_assignments|length > 1 %}
                 <div class="text-xs text-slate mt-2">
                   <div class="uppercase tracking-wide text-slate">Historico recente</div>
                   <div class="space-y-1">
-                    {% for past in slot.all_assignments %}
+                    {% for past in slot.recent_assignments %}
                       {% if not past.is_active %}
                         <div>{{ past.acolyte.display_name }}{% if past.end_reason %} ({{ past.end_reason }}){% endif %}</div>
                       {% endif %}
@@ -99,7 +99,7 @@
           {% if can_manage_parish and slot.required and not slot.externally_covered %}
             {% with active=slot.active_assignment %}
               <div class="flex flex-wrap items-center gap-2">
-                {% for candidate in slot_suggestions|get_item:slot.id %}
+                {% for candidate in slot_suggestions|get_list_item:slot.id %}
                   <form method="post" action="{% if active %}{% url 'slot_replace' instance.id slot.id %}{% else %}{% url 'slot_assign' instance.id slot.id %}{% endif %}"{% if slot.is_locked %} onsubmit="return confirm('Esta missa esta consolidada. Deseja continuar?')"{% endif %}>
                     {% csrf_token %}
                     <input type="hidden" name="acolyte_id" value="{{ candidate.id }}" />

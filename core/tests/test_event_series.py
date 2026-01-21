@@ -87,6 +87,23 @@ class EventSeriesConflictTests(TestCase):
         )
         self.assertEqual(MassInstance.objects.filter(parish=self.parish).count(), 0)
 
+    def test_blank_label_defaults_to_series_title(self):
+        apply_event_occurrences(
+            self.series,
+            [
+                {
+                    "date": date.today(),
+                    "time": time(19, 0),
+                    "community_id": self.community.id,
+                    "requirement_profile_id": self.profile.id,
+                    "label": "",
+                    "conflict_action": "keep",
+                }
+            ],
+        )
+        instance = MassInstance.objects.get(parish=self.parish)
+        self.assertEqual(instance.liturgy_label, self.series.title)
+
     def test_move_existing_creates_new_and_moves_original(self):
         starts_at = timezone.make_aware(datetime.combine(date.today(), time(19, 0)))
         move_to_date = date.today()

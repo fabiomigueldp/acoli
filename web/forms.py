@@ -59,13 +59,25 @@ class MassTemplateForm(forms.ModelForm):
 
 
 class EventSeriesBasicsForm(forms.Form):
-    series_type = forms.CharField(max_length=40)
+    SERIES_TYPE_CHOICES = [
+        ("Solenidade", "Solenidade"),
+        ("Festa", "Festa"),
+        ("Memoria", "Memoria"),
+        ("Triduo", "Triduo"),
+        ("Novena", "Novena"),
+        ("Oitava", "Oitava"),
+        ("Missa especial", "Missa especial"),
+        ("Outro", "Outro"),
+    ]
+
+    series_type = forms.ChoiceField(choices=SERIES_TYPE_CHOICES)
+    series_type_other = forms.CharField(max_length=40, required=False)
     title = forms.CharField(max_length=200)
     start_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     end_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     default_time = forms.TimeField(widget=forms.TimeInput(attrs={"type": "time"}))
     candidate_pool = forms.ChoiceField(
-        choices=[("all", "Todos os acolitos"), ("interested_only", "Somente interessados")]
+        choices=[("all", "Todos os acolitos"), ("interested_only", "Somente interessados (opt-in)")]
     )
     default_community = forms.ModelChoiceField(queryset=Community.objects.none(), required=False)
     default_requirement_profile = forms.ModelChoiceField(queryset=RequirementProfile.objects.none(), required=False)
@@ -91,6 +103,12 @@ class EventSeriesBasicsForm(forms.Form):
         end_date = cleaned.get("end_date")
         if start_date and end_date and end_date < start_date:
             self.add_error("end_date", "Data final deve ser maior ou igual a data inicial.")
+        if cleaned.get("series_type") == "Outro":
+            other = (cleaned.get("series_type_other") or "").strip()
+            if not other:
+                self.add_error("series_type_other", "Informe o tipo da celebracao.")
+            else:
+                cleaned["series_type"] = other
         return cleaned
 
 
@@ -128,6 +146,20 @@ class EventOccurrenceForm(forms.Form):
             self.add_error("move_to_community", "Selecione uma comunidade valida para esta paroquia.")
         if profile and profile.parish_id != self.parish.id:
             self.add_error("requirement_profile", "Selecione um perfil valido para esta paroquia.")
+        conflict_action = cleaned.get("conflict_action")
+        move_to_date = cleaned.get("move_to_date")
+        move_to_time = cleaned.get("move_to_time")
+        if conflict_action == "move_existing":
+            if not move_to_date:
+                self.add_error("move_to_date", "Informe a data para mover a missa.")
+            if not move_to_time:
+                self.add_error("move_to_time", "Informe o horario para mover a missa.")
+            if not move_to_community:
+                self.add_error("move_to_community", "Informe a comunidade para mover a missa.")
+        else:
+            cleaned["move_to_date"] = None
+            cleaned["move_to_time"] = None
+            cleaned["move_to_community"] = None
         return cleaned
 
 

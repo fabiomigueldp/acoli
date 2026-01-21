@@ -1,18 +1,23 @@
 {% extends 'base.html' %}
-{% block title %}Novo evento{% endblock %}
+{% block title %}{{ page_title|default:"Nova celebracao" }}{% endblock %}
 {% block content %}
 <div class="card max-w-3xl">
-  <h2 class="font-serif text-xl mb-4">Criar serie de eventos</h2>
+  <h2 class="font-serif text-xl mb-2">{{ heading|default:"Agendar celebracao" }}</h2>
+  <p class="text-sm text-slate mb-4">Defina o tipo liturgico e o periodo. Voce ajusta cada dia na etapa seguinte.</p>
   <form method="post" class="space-y-4">
     {% csrf_token %}
     {{ form.non_field_errors }}
     <div class="grid sm:grid-cols-2 gap-4">
       <div>
-        <label class="label">Tipo</label>
+        <label class="label">Tipo liturgico</label>
         {{ form.series_type }}
+        <div id="series_type_other_field" class="mt-2 hidden">
+          <label class="label">Outro tipo</label>
+          {{ form.series_type_other }}
+        </div>
       </div>
       <div>
-        <label class="label">Titulo</label>
+        <label class="label">Titulo da celebracao</label>
         {{ form.title }}
       </div>
       <div>
@@ -41,9 +46,25 @@
       </div>
     </div>
     <div class="flex items-center gap-3">
-      <button class="btn-primary">Avancar</button>
-      <a class="btn-secondary" href="{% url 'event_series_list' %}">Cancelar</a>
+      <button class="btn-primary">{{ submit_label|default:"Avancar" }}</button>
+      <a class="btn-secondary" href="{{ cancel_url|default:default_cancel_url }}">Cancelar</a>
     </div>
   </form>
 </div>
+<script>
+  (function () {
+    const typeField = document.getElementById("id_series_type");
+    const otherWrap = document.getElementById("series_type_other_field");
+    const otherInput = document.getElementById("id_series_type_other");
+    if (!typeField || !otherWrap || !otherInput) return;
+    const toggleOther = () => {
+      const show = typeField.value === "Outro";
+      otherWrap.classList.toggle("hidden", !show);
+      otherInput.disabled = !show;
+      if (!show) otherInput.value = "";
+    };
+    typeField.addEventListener("change", toggleOther);
+    toggleOther();
+  })();
+</script>
 {% endblock %}

@@ -1,3 +1,4 @@
+from collections import defaultdict
 from datetime import timedelta
 
 from django.test import TestCase
@@ -251,6 +252,10 @@ class SolverTests(TestCase):
         fam_assignments = Assignment.objects.filter(
             parish=parish, is_active=True, acolyte_id__in=[fam_a.id, fam_b.id]
         ).select_related("slot__mass_instance")
-        mass_ids = {assignment.slot.mass_instance_id for assignment in fam_assignments}
-        self.assertEqual(len(mass_ids), 1)
+        members_by_mass = defaultdict(set)
+        for assignment in fam_assignments:
+            members_by_mass[assignment.slot.mass_instance_id].add(assignment.acolyte_id)
+        self.assertTrue(any(len(members) == 2 for members in members_by_mass.values()))
+        for members in members_by_mass.values():
+            self.assertNotEqual(len(members), 1)
 

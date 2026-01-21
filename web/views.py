@@ -1,5 +1,6 @@
 import calendar as cal
-from datetime import date, datetime, time, timedelta
+from collections import defaultdict
+from datetime import date, datetime, time, timedelta, timezone as dt_timezone
 from uuid import uuid4
 
 from django.contrib import messages
@@ -32,6 +33,7 @@ from core.models import (
     MassOverride,
     MembershipRole,
     ParishMembership,
+    RequirementProfile,
     ReplacementRequest,
     SwapRequest,
 )
@@ -160,11 +162,59 @@ def _parse_date(value, fallback):
         return fallback
 
 
+def _ensure_roster_slots(instances):
+    instance_ids = [instance.id for instance in instances if instance.requirement_profile_id]
+    if not instance_ids:
+        return
+    existing_keys = set(
+        AssignmentSlot.objects.filter(mass_instance_id__in=instance_ids).values_list(
+            "mass_instance_id",
+            "position_type_id",
+            "slot_index",
+        )
+    )
+    to_create = []
+    for instance in instances:
+        if not instance.requirement_profile_id:
+            continue
+        for position in instance.requirement_profile.positions.all():
+            for idx in range(1, position.quantity + 1):
+                key = (instance.id, position.position_type_id, idx)
+                if key in existing_keys:
+                    continue
+                to_create.append(
+                    AssignmentSlot(
+                        parish=instance.parish,
+                        mass_instance=instance,
+                        position_type=position.position_type,
+                        slot_index=idx,
+                        required=True,
+                        status="open",
+                    )
+                )
+                existing_keys.add(key)
+    if to_create:
+        AssignmentSlot.objects.bulk_create(to_create, ignore_conflicts=True)
+
+
 def _build_roster_context(parish, start_date, end_date, community_id=None, kind=None):
-    instances = (
+    base_qs = (
         MassInstance.objects.filter(parish=parish, starts_at__date__range=(start_date, end_date))
         .select_related("community", "template", "event_series", "requirement_profile")
-        .prefetch_related(
+        .prefetch_related("requirement_profile__positions__position_type")
+        .order_by("starts_at")
+    )
+    if community_id:
+        base_qs = base_qs.filter(community_id=community_id)
+    if kind == "event":
+        base_qs = base_qs.exclude(event_series=None)
+    elif kind == "template":
+        base_qs = base_qs.exclude(template=None)
+
+    instances = list(base_qs)
+    _ensure_roster_slots(instances)
+    instances = list(
+        base_qs.prefetch_related(
             Prefetch(
                 "slots",
                 queryset=AssignmentSlot.objects.select_related("position_type").prefetch_related(
@@ -176,14 +226,7 @@ def _build_roster_context(parish, start_date, end_date, community_id=None, kind=
                 ),
             )
         )
-        .order_by("starts_at")
     )
-    if community_id:
-        instances = instances.filter(community_id=community_id)
-    if kind == "event":
-        instances = instances.exclude(event_series=None)
-    elif kind == "template":
-        instances = instances.exclude(template=None)
 
     column_keys = {}
     column_max_index = {}
@@ -393,13 +436,19 @@ def mass_detail(request, instance_id):
                 queryset=Assignment.objects.filter(is_active=True).select_related("acolyte"),
                 to_attr="active_assignments",
             ),
-            Prefetch(
-                "assignments",
-                queryset=Assignment.objects.select_related("acolyte").order_by("-created_at")[:5],
-                to_attr="all_assignments",
-            ),
         )
     )
+    recent_assignments = (
+        Assignment.objects.filter(slot__mass_instance=instance)
+        .select_related("acolyte", "slot")
+        .order_by("slot_id", "-created_at")
+    )
+    recent_by_slot = defaultdict(list)
+    for assignment in recent_assignments:
+        if len(recent_by_slot[assignment.slot_id]) < 5:
+            recent_by_slot[assignment.slot_id].append(assignment)
+    for slot in slots:
+        slot.recent_assignments = recent_by_slot.get(slot.id, [])
     position_ids = {slot.position_type_id for slot in slots}
     quick_fill_cache = build_quick_fill_cache(parish, position_type_ids=position_ids)
     update_form = MassInstanceUpdateForm(instance=instance, parish=parish)
@@ -644,7 +693,14 @@ def generate_instances(request):
 @require_parish_roles(ADMIN_ROLE_CODES)
 def event_series_list(request):
     parish = request.active_parish
-    series = EventSeries.objects.filter(parish=parish)
+    series = (
+        EventSeries.objects.filter(parish=parish, is_active=True)
+        .annotate(
+            occurrence_count=Count("occurrences", distinct=True),
+            mass_count=Count("massinstance", distinct=True),
+        )
+        .order_by("start_date")
+    )
     return render(request, "events/list.html", {"series": series})
 
 
@@ -653,7 +709,7 @@ def event_series_list(request):
 def event_interest(request):
     parish = request.active_parish
     acolyte = parish.acolytes.filter(user=request.user).first()
-    series = EventSeries.objects.filter(parish=parish).order_by("start_date")
+    series = EventSeries.objects.filter(parish=parish, is_active=True).order_by("start_date")
     interests = {
         interest.event_series_id: interest
         for interest in EventInterest.objects.filter(parish=parish, acolyte=acolyte)
@@ -698,7 +754,11 @@ def event_series_create(request):
             return redirect("event_series_days")
     else:
         form = EventSeriesBasicsForm(parish=parish)
-    return render(request, "events/basics.html", {"form": form})
+    return render(
+        request,
+        "events/basics.html",
+        {"form": form, "default_cancel_url": reverse("event_series_list")},
+    )
 
 
 @login_required
@@ -723,6 +783,7 @@ def event_series_days(request):
         current += timedelta(days=1)
 
     OccurrenceFormSet = formset_factory(EventOccurrenceForm, extra=0)
+    default_label = draft["title"] if start_date == end_date else ""
     if request.method == "POST":
         formset = OccurrenceFormSet(request.POST, form_kwargs={"parish": parish})
         if formset.is_valid():
@@ -734,13 +795,19 @@ def event_series_days(request):
                 end_date=end_date,
                 default_community_id=default_community,
                 candidate_pool=draft.get("candidate_pool", "all"),
-                ruleset_json={},
+                ruleset_json={
+                    "default_time": draft["default_time"],
+                    "default_requirement_profile_id": draft.get("default_requirement_profile_id"),
+                },
                 created_by=request.user,
                 updated_by=request.user,
+                is_active=True,
             )
+            log_audit(parish, request.user, "EventSeries", series.id, "create", {"title": series.title})
             occurrences = []
             for form in formset:
                 data = form.cleaned_data
+                label = data.get("label") or draft["title"]
                 occurrence = EventOccurrence.objects.create(
                     parish=parish,
                     event_series=series,
@@ -748,7 +815,7 @@ def event_series_days(request):
                     time=data["time"],
                     community=data["community"],
                     requirement_profile=data["requirement_profile"],
-                    label=data.get("label", ""),
+                    label=label,
                     conflict_action=data["conflict_action"],
                     move_to_date=data.get("move_to_date"),
                     move_to_time=data.get("move_to_time"),
@@ -791,6 +858,7 @@ def event_series_days(request):
                     "community": default_community,
                     "requirement_profile": default_profile,
                     "conflict_action": "keep",
+                    "label": default_label,
                 }
             )
         formset = OccurrenceFormSet(initial=initial, form_kwargs={"parish": parish})
@@ -814,8 +882,252 @@ def event_series_days(request):
             "formset": formset,
             "conflicts": conflicts,
             "draft": draft,
+            "series": None,
+            "default_label": default_label,
+            "default_time": draft.get("default_time"),
         },
     )
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def event_series_detail(request, series_id):
+    parish = request.active_parish
+    series = get_object_or_404(EventSeries, parish=parish, id=series_id)
+    occurrences = (
+        series.occurrences.select_related("community", "requirement_profile")
+        .order_by("date", "time")
+    )
+    masses = (
+        MassInstance.objects.filter(parish=parish, event_series=series)
+        .select_related("community", "requirement_profile")
+        .order_by("starts_at")
+    )
+    default_profile_id = (series.ruleset_json or {}).get("default_requirement_profile_id")
+    default_profile = None
+    if default_profile_id:
+        default_profile = RequirementProfile.objects.filter(parish=parish, id=default_profile_id).first()
+    default_time = (series.ruleset_json or {}).get("default_time")
+    return render(
+        request,
+        "events/detail.html",
+        {
+            "series": series,
+            "occurrences": occurrences,
+            "masses": masses,
+            "default_time": default_time,
+            "default_profile": default_profile,
+        },
+    )
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def event_series_edit(request, series_id):
+    parish = request.active_parish
+    series = get_object_or_404(EventSeries, parish=parish, id=series_id)
+    type_values = {choice[0] for choice in EventSeriesBasicsForm.SERIES_TYPE_CHOICES}
+    initial = {
+        "title": series.title,
+        "start_date": series.start_date,
+        "end_date": series.end_date,
+        "default_community": series.default_community_id,
+        "candidate_pool": series.candidate_pool,
+    }
+    default_time = (series.ruleset_json or {}).get("default_time")
+    if default_time:
+        initial["default_time"] = datetime.strptime(default_time, "%H:%M").time()
+    default_profile_id = (series.ruleset_json or {}).get("default_requirement_profile_id")
+    if default_profile_id:
+        initial["default_requirement_profile"] = default_profile_id
+
+    if series.series_type in type_values:
+        initial["series_type"] = series.series_type
+    else:
+        initial["series_type"] = "Outro"
+        initial["series_type_other"] = series.series_type
+
+    if request.method == "POST":
+        form = EventSeriesBasicsForm(request.POST, parish=parish)
+        if form.is_valid():
+            cleaned = form.cleaned_data
+            series.series_type = cleaned["series_type"]
+            series.title = cleaned["title"]
+            series.start_date = cleaned["start_date"]
+            series.end_date = cleaned["end_date"]
+            series.default_community = cleaned.get("default_community")
+            series.candidate_pool = cleaned["candidate_pool"]
+            ruleset = series.ruleset_json or {}
+            ruleset["default_time"] = cleaned["default_time"].strftime("%H:%M")
+            ruleset["default_requirement_profile_id"] = (
+                cleaned["default_requirement_profile"].id if cleaned.get("default_requirement_profile") else None
+            )
+            series.ruleset_json = ruleset
+            series.updated_by = request.user
+            series.save()
+            log_audit(parish, request.user, "EventSeries", series.id, "update", {"title": series.title})
+            messages.success(request, "Serie atualizada com sucesso.")
+            return redirect("event_series_detail", series_id=series.id)
+    else:
+        form = EventSeriesBasicsForm(initial=initial, parish=parish)
+    return render(
+        request,
+        "events/basics.html",
+        {
+            "form": form,
+            "page_title": "Editar celebracao",
+            "heading": "Editar celebracao",
+            "submit_label": "Salvar",
+            "cancel_url": reverse("event_series_detail", args=[series.id]),
+            "default_cancel_url": reverse("event_series_list"),
+        },
+    )
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def event_series_occurrences(request, series_id):
+    parish = request.active_parish
+    series = get_object_or_404(EventSeries, parish=parish, id=series_id)
+    default_time = (series.ruleset_json or {}).get("default_time")
+    default_time_value = datetime.strptime(default_time, "%H:%M").time() if default_time else time(19, 0)
+    default_profile_id = (series.ruleset_json or {}).get("default_requirement_profile_id")
+
+    dates = []
+    current = series.start_date
+    while current <= series.end_date:
+        dates.append(current)
+        current += timedelta(days=1)
+
+    occurrence_map = {occ.date: occ for occ in series.occurrences.all()}
+    OccurrenceFormSet = formset_factory(EventOccurrenceForm, extra=0)
+    if request.method == "POST":
+        formset = OccurrenceFormSet(request.POST, form_kwargs={"parish": parish})
+        if formset.is_valid():
+            occurrences = []
+            for form in formset:
+                data = form.cleaned_data
+                label = data.get("label") or series.title
+                existing = occurrence_map.get(data["date"])
+                if existing:
+                    existing.time = data["time"]
+                    existing.community = data["community"]
+                    existing.requirement_profile = data["requirement_profile"]
+                    existing.label = label
+                    existing.conflict_action = data["conflict_action"]
+                    existing.move_to_date = data.get("move_to_date")
+                    existing.move_to_time = data.get("move_to_time")
+                    existing.move_to_community = data.get("move_to_community")
+                    existing.save()
+                    occurrences.append(existing)
+                else:
+                    occurrences.append(
+                        EventOccurrence.objects.create(
+                            parish=parish,
+                            event_series=series,
+                            date=data["date"],
+                            time=data["time"],
+                            community=data["community"],
+                            requirement_profile=data["requirement_profile"],
+                            label=label,
+                            conflict_action=data["conflict_action"],
+                            move_to_date=data.get("move_to_date"),
+                            move_to_time=data.get("move_to_time"),
+                            move_to_community=data.get("move_to_community"),
+                        )
+                    )
+            try:
+                apply_event_occurrences(series, occurrences, actor=request.user)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+                conflicts = []
+                for form in formset:
+                    data = form.cleaned_data
+                    conflict = MassInstance.objects.filter(
+                        parish=parish,
+                        community=data.get("community"),
+                        starts_at__date=data.get("date"),
+                        starts_at__time=data.get("time"),
+                        status="scheduled",
+                    ).first()
+                    conflicts.append(conflict)
+                return render(
+                    request,
+                    "events/days.html",
+                    {
+                        "formset": formset,
+                        "conflicts": conflicts,
+                        "draft": None,
+                        "series": series,
+                        "default_label": series.title,
+                        "default_time": default_time_value.strftime("%H:%M"),
+                    },
+                )
+            log_audit(parish, request.user, "EventSeries", series.id, "update", {"occurrences": len(occurrences)})
+            messages.success(request, "Ocorrencias atualizadas.")
+            return redirect("event_series_detail", series_id=series.id)
+    else:
+        initial = []
+        for date_value in dates:
+            existing = occurrence_map.get(date_value)
+            initial.append(
+                {
+                    "date": date_value,
+                    "time": existing.time if existing else default_time_value,
+                    "community": existing.community_id if existing else series.default_community_id,
+                    "requirement_profile": existing.requirement_profile_id if existing else default_profile_id,
+                    "label": existing.label if existing else series.title,
+                    "conflict_action": existing.conflict_action if existing else "keep",
+                    "move_to_date": existing.move_to_date if existing else None,
+                    "move_to_time": existing.move_to_time if existing else None,
+                    "move_to_community": existing.move_to_community_id if existing else None,
+                }
+            )
+        formset = OccurrenceFormSet(initial=initial, form_kwargs={"parish": parish})
+
+    conflicts = []
+    for form in formset:
+        data = form.initial
+        conflict = MassInstance.objects.filter(
+            parish=parish,
+            community_id=data.get("community"),
+            starts_at__date=data.get("date"),
+            starts_at__time=data.get("time"),
+            status="scheduled",
+        ).first()
+        conflicts.append(conflict)
+
+    return render(
+        request,
+        "events/days.html",
+        {
+            "formset": formset,
+            "conflicts": conflicts,
+            "draft": None,
+            "series": series,
+            "default_label": series.title,
+            "default_time": default_time_value.strftime("%H:%M"),
+        },
+    )
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def event_series_archive(request, series_id):
+    parish = request.active_parish
+    series = get_object_or_404(EventSeries, parish=parish, id=series_id)
+    if request.method != "POST":
+        return redirect("event_series_detail", series_id=series.id)
+    series.is_active = False
+    series.updated_by = request.user
+    series.save(update_fields=["is_active", "updated_by", "updated_at"])
+    log_audit(parish, request.user, "EventSeries", series.id, "archive", {"title": series.title})
+    messages.success(request, "Serie arquivada. As missas geradas permanecem no historico.")
+    return redirect("event_series_list")
 
 
 @login_required
@@ -1482,7 +1794,8 @@ def calendar_feed(request):
     )
 
     tz_name = feed.parish.timezone or "America/Sao_Paulo"
-    now_stamp = timezone.now()
+    now_stamp = timezone.now().astimezone(dt_timezone.utc)
+    dtstamp = now_stamp.strftime("%Y%m%dT%H%M%SZ")
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
@@ -1493,6 +1806,20 @@ def calendar_feed(request):
         f"X-WR-TIMEZONE:{tz_name}",
     ]
     base_url = getattr(settings, "APP_BASE_URL", "").rstrip("/")
+    mass_ids = list(assignments.values_list("slot__mass_instance_id", flat=True))
+    team_map = defaultdict(list)
+    if mass_ids:
+        teammates = (
+            Assignment.objects.filter(
+                parish=feed.parish,
+                is_active=True,
+                slot__mass_instance_id__in=mass_ids,
+            )
+            .select_related("acolyte")
+            .order_by("slot__mass_instance_id", "slot__position_type__name")
+        )
+        for item in teammates:
+            team_map[item.slot.mass_instance_id].append(item.acolyte.display_name)
     for assignment in assignments:
         mass = assignment.slot.mass_instance
         starts_at = timezone.localtime(mass.starts_at)
@@ -1500,15 +1827,20 @@ def calendar_feed(request):
         summary = f"{mass.community.code} - {assignment.slot.position_type.name}"
         url_path = reverse("mass_detail", args=[mass.id])
         full_url = f"{base_url}{url_path}" if base_url else url_path
+        team_names = ", ".join(team_map.get(mass.id, []))
+        description_parts = [full_url]
+        if team_names:
+            description_parts.append(f"Equipe: {team_names}")
+        uid = f"acoli-{feed.parish_id}-{mass.id}-{assignment.slot.position_type_id}-{assignment.slot.slot_index}"
         lines.extend(
             [
                 "BEGIN:VEVENT",
-                f"UID:{assignment.id}@acoli",
-                f"DTSTAMP:{timezone.localtime(now_stamp).strftime('%Y%m%dT%H%M%S')}",
+                f"UID:{uid}@acoli",
+                f"DTSTAMP:{dtstamp}",
                 f"DTSTART;TZID={tz_name}:{starts_at.strftime('%Y%m%dT%H%M%S')}",
                 f"DTEND;TZID={tz_name}:{ends_at.strftime('%Y%m%dT%H%M%S')}",
                 f"SUMMARY:{_ics_escape(summary)}",
-                f"DESCRIPTION:{_ics_escape(full_url)}",
+                f"DESCRIPTION:{_ics_escape(' | '.join(description_parts))}",
                 "END:VEVENT",
             ]
         )

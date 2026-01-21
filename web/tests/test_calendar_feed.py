@@ -27,15 +27,15 @@ class CalendarFeedTests(TestCase):
         ParishMembership.objects.create(parish=self.parish, user=self.user, active=True)
         self.acolyte = AcolyteProfile.objects.create(parish=self.parish, user=self.user, display_name="Acolito")
 
-        instance = MassInstance.objects.create(
+        self.instance = MassInstance.objects.create(
             parish=self.parish,
             community=self.community,
             starts_at=timezone.now() + timedelta(days=3),
             status="scheduled",
         )
-        slot = AssignmentSlot.objects.create(
+        self.slot = AssignmentSlot.objects.create(
             parish=self.parish,
-            mass_instance=instance,
+            mass_instance=self.instance,
             position_type=self.position,
             slot_index=1,
             required=True,
@@ -43,7 +43,7 @@ class CalendarFeedTests(TestCase):
         )
         Assignment.objects.create(
             parish=self.parish,
-            slot=slot,
+            slot=self.slot,
             acolyte=self.acolyte,
             assignment_state="published",
         )
@@ -57,7 +57,12 @@ class CalendarFeedTests(TestCase):
         response = self.client.get(f"/calendar/my.ics?token={token.token}")
         self.assertEqual(response.status_code, 200)
         self.assertIn("text/calendar", response["Content-Type"])
-        self.assertIn("BEGIN:VEVENT", response.content.decode("utf-8"))
+        body = response.content.decode("utf-8")
+        self.assertIn("BEGIN:VEVENT", body)
+        expected_uid = f"UID:acoli-{self.parish.id}-{self.instance.id}-{self.position.id}-{self.slot.slot_index}@acoli"
+        self.assertIn(expected_uid, body)
+        self.assertIn("DTSTAMP:", body)
+        self.assertIn("Z", body)
 
     def test_calendar_feed_token_creation(self):
         self.client.login(email="user@example.com", password="pass")

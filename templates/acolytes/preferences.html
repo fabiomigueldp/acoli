@@ -59,7 +59,7 @@
               {% for day, label in weekday_choices %}
                 <div class="border border-black/5 rounded-lg p-3">
                   <div class="text-xs uppercase tracking-wide text-slate mb-2">{{ label }}</div>
-                  {% with rules=weekly_by_day|get_item:day %}
+                  {% with rules=weekly_by_day|get_list_item:day %}
                     {% if rules %}
                       <div class="space-y-2">
                         {% for rule in rules %}

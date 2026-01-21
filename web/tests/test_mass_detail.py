@@ -63,3 +63,38 @@ class MassDetailHistoryTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Acolito A")
         self.assertContains(response, "Acolito B")
+
+    def test_mass_detail_limits_recent_history_per_slot(self):
+        position = PositionType.objects.create(parish=self.parish, code="LIB", name="Libriferario")
+        acolyte = AcolyteProfile.objects.create(parish=self.parish, display_name="Acolito A")
+        AcolyteQualification.objects.create(parish=self.parish, acolyte=acolyte, position_type=position, qualified=True)
+
+        instance = MassInstance.objects.create(
+            parish=self.parish,
+            community=self.community,
+            starts_at=timezone.now() + timedelta(days=2),
+            status="scheduled",
+        )
+        slot = AssignmentSlot.objects.create(
+            parish=self.parish,
+            mass_instance=instance,
+            position_type=position,
+            slot_index=1,
+            required=True,
+            status="assigned",
+        )
+        for idx in range(7):
+            Assignment.objects.create(
+                parish=self.parish,
+                slot=slot,
+                acolyte=acolyte,
+                assignment_state="published",
+                is_active=False,
+            )
+        Assignment.objects.create(parish=self.parish, slot=slot, acolyte=acolyte, assignment_state="published")
+
+        response = self.client.get(f"/calendar/{instance.id}/")
+        self.assertEqual(response.status_code, 200)
+        slots = response.context["slots"]
+        target = next(item for item in slots if item.id == slot.id)
+        self.assertLessEqual(len(target.recent_assignments), 5)

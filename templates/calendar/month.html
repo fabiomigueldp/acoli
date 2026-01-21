@@ -82,7 +82,7 @@
           <div class="bg-white min-h-[120px] p-2 {% if day.month != month %}opacity-50{% endif %}">
             <div class="text-xs text-slate">{{ day|date:"d" }}</div>
             <div class="mt-2 space-y-2">
-              {% for instance in instances_by_day|get_item:day %}
+              {% for instance in instances_by_day|get_list_item:day %}
                 <a class="block text-xs rounded-lg border border-black/5 px-2 py-1 hover:bg-sand" href="{% url 'mass_detail' instance.id %}">
                   <div class="font-medium">{{ instance.starts_at|date:"H:i" }} {{ instance.community.code }}</div>
                   <div class="text-slate">{{ instance.liturgy_label|default:"Missa" }}</div>

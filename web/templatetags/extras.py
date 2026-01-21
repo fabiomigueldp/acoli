@@ -14,6 +14,13 @@ def index(sequence, idx):
 @register.filter
 def get_item(mapping, key):
     if not mapping:
+        return None
+    return mapping.get(key)
+
+
+@register.filter
+def get_list_item(mapping, key):
+    if not mapping:
         return []
     return mapping.get(key, [])
 

@@ -35,6 +35,8 @@ def apply_event_occurrences(event_series, occurrences, actor=None):
             move_to_time = occ.get("move_to_time")
             move_to_community_id = occ.get("move_to_community_id")
 
+        if not label:
+            label = event_series.title
         starts_at = _build_datetime(date_value, time_value)
         if conflict_action == "skip":
             continue

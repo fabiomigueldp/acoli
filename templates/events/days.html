@@ -1,12 +1,49 @@
 {% extends 'base.html' %}
 {% load extras %}
-{% block title %}Dias do evento{% endblock %}
+{% block title %}Dias da celebracao{% endblock %}
 {% block content %}
 <div class="grid gap-6">
   <div class="card">
-    <h2 class="font-serif text-xl mb-2">Dias do evento</h2>
-    <p class="text-sm text-slate">Revise cada dia e resolva conflitos antes de gerar.</p>
+    <h2 class="font-serif text-xl mb-2">Dias da celebracao</h2>
+    {% if series %}
+      <div class="text-sm text-slate">{{ series.title }} · {{ series.series_type }}</div>
+    {% endif %}
+    <p class="text-sm text-slate mt-2">Revise cada dia e resolva conflitos antes de gerar.</p>
   </div>
+  <details class="card">
+    <summary class="cursor-pointer font-medium">Acoes em lote</summary>
+    <div class="mt-3 space-y-3 text-sm text-slate">
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div>
+          <label class="label">Horario padrao</label>
+          <input id="bulk_time" type="time" class="input" value="{{ draft.default_time|default:default_time|default:'' }}">
+        </div>
+        <div>
+          <label class="label">Comunidade padrao</label>
+          <select id="bulk_community" class="input">
+            <option value="">--</option>
+            {% for option in formset.0.community %}
+              {{ option }}
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="label">Perfil padrao</label>
+          <select id="bulk_profile" class="input">
+            <option value="">--</option>
+            {% for option in formset.0.requirement_profile %}
+              {{ option }}
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="label">Rotulo padrao</label>
+          <input id="bulk_label" type="text" class="input" value="{{ default_label|default:'' }}">
+        </div>
+      </div>
+      <button type="button" class="btn-secondary" id="apply_defaults">Aplicar padroes a todos os dias</button>
+    </div>
+  </details>
   <form method="post" class="card space-y-4">
     {% csrf_token %}
     {{ formset.management_form }}
@@ -19,6 +56,13 @@
               <span class="badge">Conflito</span>
             {% endif %}
           </div>
+          {% if conflicts|index:forloop.counter0 %}
+            {% with conflict=conflicts|index:forloop.counter0 %}
+              <div class="text-xs text-slate mt-1">
+                Ja existe: {{ conflict.starts_at|date:"H:i" }} · {{ conflict.community.code }} · {{ conflict.liturgy_label|default:"-" }}{% if conflict.status == "canceled" %} (Cancelada){% endif %}
+              </div>
+            {% endwith %}
+          {% endif %}
           <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
             {{ form.date }}
             <div>
@@ -36,13 +80,17 @@
             <div>
               <label class="label">Conflito</label>
               {{ form.conflict_action }}
+              <p class="text-xs text-slate mt-1">
+                Manter: usa a missa existente · Cancelar: remove a missa existente · Mover: transfere a missa existente · Pular: ignora este dia
+              </p>
             </div>
             <div class="sm:col-span-2">
               <label class="label">Rotulo</label>
               {{ form.label }}
+              <p class="text-xs text-slate mt-1">Se vazio, usamos o titulo da celebracao.</p>
             </div>
           </div>
-          <div class="grid sm:grid-cols-3 gap-3 mt-3">
+          <div class="grid sm:grid-cols-3 gap-3 mt-3 hidden" data-move-fields>
             <div>
               <label class="label">Mover para (data)</label>
               {{ form.move_to_date }}
@@ -61,9 +109,53 @@
       {% endfor %}
     </div>
     <div class="flex items-center gap-3">
-      <button class="btn-primary">Gerar eventos</button>
-      <a class="btn-secondary" href="{% url 'event_series_create' %}">Voltar</a>
+      <button class="btn-primary">{% if series %}Salvar ocorrencias{% else %}Gerar celebracoes{% endif %}</button>
+      <a class="btn-secondary" href="{% if series %}{% url 'event_series_detail' series.id %}{% else %}{% url 'event_series_create' %}{% endif %}">Voltar</a>
     </div>
   </form>
 </div>
+<script>
+  (function () {
+    const applyDefaults = document.getElementById("apply_defaults");
+    if (applyDefaults) {
+      applyDefaults.addEventListener("click", () => {
+        const defaultTime = document.getElementById("bulk_time")?.value || "";
+        const defaultCommunity = document.getElementById("bulk_community")?.value || "";
+        const defaultProfile = document.getElementById("bulk_profile")?.value || "";
+        const defaultLabel = document.getElementById("bulk_label")?.value || "";
+        document.querySelectorAll("input[name$='-time']").forEach((input) => {
+          if (defaultTime) input.value = defaultTime;
+        });
+        document.querySelectorAll("select[name$='-community']").forEach((select) => {
+          if (defaultCommunity) select.value = defaultCommunity;
+        });
+        document.querySelectorAll("select[name$='-requirement_profile']").forEach((select) => {
+          if (defaultProfile || defaultProfile === "") select.value = defaultProfile;
+        });
+        document.querySelectorAll("input[name$='-label']").forEach((input) => {
+          if (defaultLabel) input.value = defaultLabel;
+        });
+      });
+    }
+
+    const forms = document.querySelectorAll("select[name$='-conflict_action']");
+    forms.forEach((select) => {
+      const container = select.closest(".border");
+      if (!container) return;
+      const moveFields = container.querySelector("[data-move-fields]");
+      const update = () => {
+        const show = select.value === "move_existing";
+        if (moveFields) {
+          moveFields.classList.toggle("hidden", !show);
+          moveFields.querySelectorAll("input, select").forEach((input) => {
+            input.disabled = !show;
+            if (!show) input.value = "";
+          });
+        }
+      };
+      select.addEventListener("change", update);
+      update();
+    });
+  })();
+</script>
 {% endblock %}

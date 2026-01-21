@@ -13,6 +13,8 @@ from core.models import (
     Parish,
     ParishMembership,
     PositionType,
+    RequirementProfile,
+    RequirementProfilePosition,
 )
 
 
@@ -76,6 +78,25 @@ class RosterViewTests(TestCase):
         self.assertContains(response, "ABERTO")
         self.assertContains(response, "Externo")
         self.assertContains(response, "N/A")
+
+    def test_roster_creates_missing_slots_from_profile(self):
+        position = PositionType.objects.create(parish=self.parish, code="LIB", name="Libriferario")
+        profile = RequirementProfile.objects.create(parish=self.parish, name="Dominical")
+        RequirementProfilePosition.objects.create(profile=profile, position_type=position, quantity=1)
+
+        instance = MassInstance.objects.create(
+            parish=self.parish,
+            community=self.community,
+            starts_at=timezone.now() + timedelta(days=1),
+            status="scheduled",
+            requirement_profile=profile,
+        )
+
+        start = timezone.localdate()
+        end = start + timedelta(days=2)
+        response = self.client.get(f"/roster/?start={start.isoformat()}&end={end.isoformat()}")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "ABERTO")
 
     def test_roster_requires_admin(self):
         User = get_user_model()
