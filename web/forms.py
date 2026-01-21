@@ -651,7 +651,12 @@ class RoleForm(forms.Form):
     extra_functions = forms.ModelMultipleChoiceField(
         queryset=FunctionType.objects.none(),
         required=False,
-        help_text="Adicione funcoes extras para composicao.",
+        widget=forms.CheckboxSelectMultiple(
+            attrs={
+                "class": "peer h-4 w-4 shrink-0 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 p-0 mt-0.5",
+            }
+        ),
+        help_text="Marque as funcoes secundarias necessarias para esta vaga.",
     )
 
     def __init__(self, *args, **kwargs):
