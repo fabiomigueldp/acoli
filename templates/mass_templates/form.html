@@ -1,8 +1,8 @@
 {% extends 'base.html' %}
-{% block title %}Novo modelo{% endblock %}
+{% block title %}Novo horario{% endblock %}
 {% block content %}
 <div class="card max-w-2xl">
-  <h2 class="font-serif text-xl mb-4">Criar modelo</h2>
+  <h2 class="font-serif text-xl mb-4">Criar horario fixo</h2>
   <form method="post" class="space-y-4">
     {% csrf_token %}
     {{ form.non_field_errors }}
@@ -28,8 +28,16 @@
         {{ form.rrule_text }}
       </div>
       <div class="sm:col-span-2">
-        <label class="label">Perfil de requisitos</label>
+        <div class="flex items-center justify-between">
+          <label class="label">Perfil de requisitos</label>
+          <a class="text-xs text-slate hover:text-ink" href="{{ profile_create_url }}">+ Criar perfil</a>
+        </div>
         {{ form.default_requirement_profile }}
+        {% if not profiles_exist %}
+          <div class="mt-2 rounded-lg border border-black/10 bg-white px-3 py-2 text-xs text-slate">
+            Nenhum perfil cadastrado. Crie um perfil para definir quantas funcoes cada missa exige.
+          </div>
+        {% endif %}
       </div>
       <div class="sm:col-span-2">
         <label class="label">Notas</label>

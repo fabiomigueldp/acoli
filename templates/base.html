@@ -78,13 +78,17 @@
           <div class="pt-3 text-xs uppercase tracking-widest text-slate">Admin</div>
           <a class="nav-link" href="{% url 'acolyte_list' %}">Acolitos</a>
           <a class="nav-link" href="{% url 'acolyte_link' %}">Vincular usuarios</a>
-          <a class="nav-link" href="{% url 'template_list' %}">Modelos</a>
+          <a class="nav-link" href="{% url 'template_list' %}">Horarios fixos</a>
           <a class="nav-link" href="{% url 'event_series_list' %}">Programacao liturgica</a>
           <a class="nav-link" href="{% url 'roster_view' %}">Escala geral</a>
           <a class="nav-link" href="{% url 'scheduling_dashboard' %}">Escalonar</a>
           <a class="nav-link" href="{% url 'replacement_center' %}">Substituicoes</a>
           <a class="nav-link" href="{% url 'reports_frequency' %}">Relatorios</a>
           <a class="nav-link" href="{% url 'audit_log' %}">Auditoria</a>
+          <div class="pt-3 text-xs uppercase tracking-widest text-slate">Estrutura liturgica</div>
+          <a class="nav-link" href="{% url 'structure_communities_list' %}">Comunidades</a>
+          <a class="nav-link" href="{% url 'structure_roles_list' %}">Funcoes na escala</a>
+          <a class="nav-link" href="{% url 'structure_requirement_profiles_list' %}">Perfis de requisitos</a>
           <a class="nav-link" href="{% url 'parish_settings' %}">Configuracoes</a>
         {% endif %}
       </nav>

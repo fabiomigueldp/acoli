@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% block title %}{% if profile %}Editar perfil{% else %}Novo perfil{% endif %}{% endblock %}
+{% block content %}
+<div class="card max-w-4xl">
+  <h2 class="font-serif text-xl mb-4">{% if profile %}Editar perfil{% else %}Criar perfil{% endif %}</h2>
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    {{ formset.non_form_errors }}
+    {% if next_url %}
+      <input type="hidden" name="next" value="{{ next_url }}">
+    {% endif %}
+    <div class="grid sm:grid-cols-2 gap-4">
+      <div>
+        <label class="label">Nome</label>
+        {{ form.name }}
+      </div>
+      <div>
+        <label class="label">Minimo de senior por missa</label>
+        {{ form.min_senior_per_mass }}
+      </div>
+      <div class="sm:col-span-2">
+        <label class="label">Notas</label>
+        {{ form.notes }}
+      </div>
+      <div class="sm:col-span-2">
+        <label class="label">Ativo</label>
+        {{ form.active }}
+      </div>
+    </div>
+
+    <div class="border border-black/5 rounded-xl p-4 space-y-3">
+      <div class="font-medium">Composicao do perfil</div>
+      {{ formset.management_form }}
+      <div class="space-y-3" id="profile-rows">
+        {% for form in formset %}
+          <div class="grid sm:grid-cols-[1fr_120px_auto] gap-3 items-end profile-row">
+            <div>
+              <label class="label">Funcao na escala</label>
+              {{ form.position_type }}
+            </div>
+            <div>
+              <label class="label">Quantidade</label>
+              {{ form.quantity }}
+            </div>
+            <div class="flex items-center gap-2">
+              {% if form.DELETE %}
+                <label class="text-xs text-slate">
+                  {{ form.DELETE }} Remover
+                </label>
+              {% endif %}
+            </div>
+            {{ form.id }}
+          </div>
+        {% endfor %}
+      </div>
+      <button type="button" class="btn-secondary" id="add-role-row">Adicionar funcao</button>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <button class="btn-primary">Salvar</button>
+      <a class="btn-secondary" href="{% url 'structure_requirement_profiles_list' %}">Voltar</a>
+    </div>
+  </form>
+</div>
+
+<template id="empty-form-template">
+  <div class="grid sm:grid-cols-[1fr_120px_auto] gap-3 items-end profile-row">
+    <div>
+      <label class="label">Funcao na escala</label>
+      {{ formset.empty_form.position_type }}
+    </div>
+    <div>
+      <label class="label">Quantidade</label>
+      {{ formset.empty_form.quantity }}
+    </div>
+    <div class="flex items-center gap-2">
+      <label class="text-xs text-slate">
+        {{ formset.empty_form.DELETE }} Remover
+      </label>
+    </div>
+    {{ formset.empty_form.id }}
+  </div>
+</template>
+
+<script>
+  (function () {
+    const addButton = document.getElementById("add-role-row");
+    const container = document.getElementById("profile-rows");
+    const totalInput = document.getElementById("id_positions-TOTAL_FORMS");
+    const template = document.getElementById("empty-form-template");
+    if (!addButton || !container || !totalInput || !template) return;
+    addButton.addEventListener("click", () => {
+      const index = parseInt(totalInput.value, 10);
+      const clone = template.innerHTML.replace(/__prefix__/g, index);
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = clone;
+      container.appendChild(wrapper.firstElementChild);
+      totalInput.value = index + 1;
+    });
+  })();
+</script>
+{% endblock %}

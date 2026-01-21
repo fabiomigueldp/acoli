@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block title %}Perfis de requisitos{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="font-serif text-xl">Perfis de requisitos</h2>
+    <a class="btn-primary" href="{% url 'requirement_profile_create' %}">Criar perfil</a>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-sm">
+      <thead>
+        <tr class="text-left text-slate">
+          <th class="py-2 pr-4">Nome</th>
+          <th class="py-2 pr-4">Funcoes</th>
+          <th class="py-2 pr-4">Min. senior</th>
+          <th class="py-2 pr-4">Status</th>
+          <th class="py-2">Acoes</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-black/5">
+        {% for profile in profiles %}
+          <tr>
+            <td class="py-2 pr-4">
+              <a class="text-ink hover:underline" href="{% url 'structure_requirement_profile_edit' profile.id %}">
+                {{ profile.name }}
+              </a>
+            </td>
+            <td class="py-2 pr-4">{{ profile.position_count }}</td>
+            <td class="py-2 pr-4">{{ profile.min_senior_per_mass }}</td>
+            <td class="py-2 pr-4">{{ profile.active|yesno:"ativo,inativo" }}</td>
+            <td class="py-2">
+              <div class="flex items-center gap-2">
+                <a class="btn-secondary" href="{% url 'structure_requirement_profile_edit' profile.id %}">Editar</a>
+                <form method="post" action="{% url 'structure_requirement_profile_toggle' profile.id %}">
+                  {% csrf_token %}
+                  <button class="btn-secondary" type="submit">
+                    {% if profile.active %}Desativar{% else %}Ativar{% endif %}
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td class="py-2 text-slate" colspan="5">Nenhum perfil cadastrado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

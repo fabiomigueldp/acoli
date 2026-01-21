@@ -2,6 +2,7 @@ import calendar as cal
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone as dt_timezone
 from uuid import uuid4
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.conf import settings
@@ -13,6 +14,7 @@ from django.forms import formset_factory
 from django.http import HttpResponse, HttpResponseNotFound
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
 
 from core.models import (
@@ -23,17 +25,22 @@ from core.models import (
     Assignment,
     AssignmentSlot,
     CalendarFeedToken,
+    Community,
     Confirmation,
     EventOccurrence,
     EventSeries,
     EventInterest,
     FamilyGroup,
+    FunctionType,
     MassInstance,
     MassTemplate,
     MassOverride,
     MembershipRole,
     ParishMembership,
+    PositionType,
+    PositionTypeFunction,
     RequirementProfile,
+    RequirementProfilePosition,
     ReplacementRequest,
     SwapRequest,
 )
@@ -64,6 +71,7 @@ from web.forms import (
     AcolyteAvailabilityRuleForm,
     AcolyteLinkForm,
     AcolytePreferenceForm,
+    CommunityForm,
     DateAbsenceForm,
     EventOccurrenceForm,
     EventSeriesBasicsForm,
@@ -72,11 +80,15 @@ from web.forms import (
     MassInstanceUpdateForm,
     MassTemplateForm,
     ParishSettingsForm,
+    RequirementProfileForm,
+    RequirementProfilePositionFormSet,
     ReplacementResolveForm,
+    RoleForm,
     WEEKDAY_CHOICES,
     WeeklyAvailabilityForm,
     SwapAssignForm,
     SwapRequestForm,
+    generate_unique_code,
 )
 
 
@@ -160,6 +172,13 @@ def _parse_date(value, fallback):
         return date.fromisoformat(value)
     except (TypeError, ValueError):
         return fallback
+
+
+def _safe_next_url(request, fallback):
+    next_url = request.GET.get("next") or request.POST.get("next")
+    if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+        return next_url
+    return fallback
 
 
 def _ensure_roster_slots(instances):
@@ -663,6 +682,8 @@ def template_list(request):
 @require_parish_roles(ADMIN_ROLE_CODES)
 def template_create(request):
     parish = request.active_parish
+    profiles_exist = RequirementProfile.objects.filter(parish=parish, active=True).exists()
+    profile_create_url = f"{reverse('requirement_profile_create')}?{urlencode({'next': request.get_full_path()})}"
     if request.method == "POST":
         form = MassTemplateForm(request.POST, parish=parish)
         if form.is_valid():
@@ -672,7 +693,266 @@ def template_create(request):
             return redirect("template_list")
     else:
         form = MassTemplateForm(parish=parish)
-    return render(request, "mass_templates/form.html", {"form": form})
+    return render(
+        request,
+        "mass_templates/form.html",
+        {"form": form, "profiles_exist": profiles_exist, "profile_create_url": profile_create_url},
+    )
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def structure_communities_list(request):
+    parish = request.active_parish
+    communities = Community.objects.filter(parish=parish).order_by("code")
+    return render(request, "structure/communities_list.html", {"communities": communities})
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def structure_community_create(request):
+    parish = request.active_parish
+    if request.method == "POST":
+        form = CommunityForm(request.POST, parish=parish)
+        if form.is_valid():
+            community = form.save(commit=False)
+            community.parish = parish
+            community.save()
+            log_audit(parish, request.user, "Community", community.id, "create", {"code": community.code})
+            return redirect(_safe_next_url(request, reverse("structure_communities_list")))
+    else:
+        form = CommunityForm(parish=parish)
+    return render(
+        request,
+        "structure/communities_form.html",
+        {"form": form, "next_url": _safe_next_url(request, "")},
+    )
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def structure_community_edit(request, community_id):
+    parish = request.active_parish
+    community = get_object_or_404(Community, parish=parish, id=community_id)
+    if request.method == "POST":
+        form = CommunityForm(request.POST, instance=community, parish=parish)
+        if form.is_valid():
+            form.save()
+            log_audit(parish, request.user, "Community", community.id, "update", {"code": community.code})
+            return redirect(_safe_next_url(request, reverse("structure_communities_list")))
+    else:
+        form = CommunityForm(instance=community, parish=parish)
+    return render(
+        request,
+        "structure/communities_form.html",
+        {"form": form, "community": community, "next_url": _safe_next_url(request, "")},
+    )
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def structure_community_toggle(request, community_id):
+    parish = request.active_parish
+    community = get_object_or_404(Community, parish=parish, id=community_id)
+    if request.method == "POST":
+        community.active = not community.active
+        community.save(update_fields=["active", "updated_at"])
+        log_audit(parish, request.user, "Community", community.id, "update", {"active": community.active})
+    return redirect("structure_communities_list")
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def structure_roles_list(request):
+    parish = request.active_parish
+    roles = (
+        PositionType.objects.filter(parish=parish)
+        .prefetch_related("functions")
+        .order_by("code")
+    )
+    return render(request, "structure/roles_list.html", {"roles": roles})
+
+
+def _save_role_from_form(parish, form, position=None):
+    name = form.cleaned_data["name"]
+    code = form.cleaned_data.get("code") or generate_unique_code(
+        parish, name, PositionType, max_len=10, exclude_id=position.id if position else None
+    )
+    active = bool(form.cleaned_data.get("active"))
+    if position is None:
+        position = PositionType.objects.create(parish=parish, code=code, name=name, active=active)
+    else:
+        position.code = code
+        position.name = name
+        position.active = active
+        position.save(update_fields=["code", "name", "active", "updated_at"])
+
+    primary, _ = FunctionType.objects.get_or_create(
+        parish=parish,
+        code=code,
+        defaults={"name": name, "active": active},
+    )
+    update_fields = []
+    if primary.name != name:
+        primary.name = name
+        update_fields.append("name")
+    if primary.active != active:
+        primary.active = active
+        update_fields.append("active")
+    if update_fields:
+        primary.save(update_fields=update_fields + ["updated_at"])
+
+    extra_ids = list(form.cleaned_data.get("extra_functions").values_list("id", flat=True))
+    function_ids = list({primary.id, *extra_ids})
+    PositionTypeFunction.objects.filter(position_type=position).exclude(function_type_id__in=function_ids).delete()
+    for func_id in function_ids:
+        PositionTypeFunction.objects.get_or_create(position_type=position, function_type_id=func_id)
+    return position
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def structure_role_create(request):
+    parish = request.active_parish
+    if request.method == "POST":
+        form = RoleForm(request.POST, parish=parish)
+        if form.is_valid():
+            role = _save_role_from_form(parish, form)
+            log_audit(parish, request.user, "PositionType", role.id, "create", {"code": role.code})
+            return redirect(_safe_next_url(request, reverse("structure_roles_list")))
+    else:
+        form = RoleForm(parish=parish)
+    return render(
+        request,
+        "structure/roles_form.html",
+        {"form": form, "next_url": _safe_next_url(request, "")},
+    )
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def structure_role_edit(request, role_id):
+    parish = request.active_parish
+    role = get_object_or_404(PositionType, parish=parish, id=role_id)
+    if request.method == "POST":
+        form = RoleForm(request.POST, parish=parish, position_type=role)
+        if form.is_valid():
+            role = _save_role_from_form(parish, form, position=role)
+            log_audit(parish, request.user, "PositionType", role.id, "update", {"code": role.code})
+            return redirect(_safe_next_url(request, reverse("structure_roles_list")))
+    else:
+        form = RoleForm(parish=parish, position_type=role)
+    return render(
+        request,
+        "structure/roles_form.html",
+        {"form": form, "role": role, "next_url": _safe_next_url(request, "")},
+    )
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def structure_role_toggle(request, role_id):
+    parish = request.active_parish
+    role = get_object_or_404(PositionType, parish=parish, id=role_id)
+    if request.method == "POST":
+        role.active = not role.active
+        role.save(update_fields=["active", "updated_at"])
+        log_audit(parish, request.user, "PositionType", role.id, "update", {"active": role.active})
+    return redirect("structure_roles_list")
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def structure_requirement_profiles_list(request):
+    parish = request.active_parish
+    profiles = (
+        RequirementProfile.objects.filter(parish=parish)
+        .annotate(position_count=Count("positions"))
+        .order_by("name")
+    )
+    return render(request, "structure/requirement_profiles_list.html", {"profiles": profiles})
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def structure_requirement_profile_create(request):
+    parish = request.active_parish
+    profile = RequirementProfile(parish=parish)
+    if request.method == "POST":
+        form = RequirementProfileForm(request.POST, instance=profile)
+        formset = RequirementProfilePositionFormSet(request.POST, instance=profile, parish=parish)
+        if form.is_valid() and formset.is_valid():
+            saved = form.save(commit=False)
+            saved.parish = parish
+            saved.save()
+            formset.instance = saved
+            formset.save()
+            log_audit(parish, request.user, "RequirementProfile", saved.id, "create", {"name": saved.name})
+            return redirect(_safe_next_url(request, reverse("structure_requirement_profiles_list")))
+    else:
+        form = RequirementProfileForm(instance=profile)
+        formset = RequirementProfilePositionFormSet(instance=profile, parish=parish)
+    return render(
+        request,
+        "structure/requirement_profiles_form.html",
+        {
+            "form": form,
+            "formset": formset,
+            "next_url": _safe_next_url(request, ""),
+        },
+    )
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def structure_requirement_profile_edit(request, profile_id):
+    parish = request.active_parish
+    profile = get_object_or_404(RequirementProfile, parish=parish, id=profile_id)
+    if request.method == "POST":
+        form = RequirementProfileForm(request.POST, instance=profile)
+        formset = RequirementProfilePositionFormSet(request.POST, instance=profile, parish=parish)
+        if form.is_valid() and formset.is_valid():
+            saved = form.save()
+            formset.save()
+            log_audit(parish, request.user, "RequirementProfile", saved.id, "update", {"name": saved.name})
+            return redirect(_safe_next_url(request, reverse("structure_requirement_profiles_list")))
+    else:
+        form = RequirementProfileForm(instance=profile)
+        formset = RequirementProfilePositionFormSet(instance=profile, parish=parish)
+    return render(
+        request,
+        "structure/requirement_profiles_form.html",
+        {
+            "form": form,
+            "formset": formset,
+            "profile": profile,
+            "next_url": _safe_next_url(request, ""),
+        },
+    )
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def structure_requirement_profile_toggle(request, profile_id):
+    parish = request.active_parish
+    profile = get_object_or_404(RequirementProfile, parish=parish, id=profile_id)
+    if request.method == "POST":
+        profile.active = not profile.active
+        profile.save(update_fields=["active", "updated_at"])
+        log_audit(parish, request.user, "RequirementProfile", profile.id, "update", {"active": profile.active})
+    return redirect("structure_requirement_profiles_list")
 
 
 @login_required
@@ -737,6 +1017,8 @@ def event_interest(request):
 @require_parish_roles(ADMIN_ROLE_CODES)
 def event_series_create(request):
     parish = request.active_parish
+    profiles_exist = RequirementProfile.objects.filter(parish=parish, active=True).exists()
+    profile_create_url = f"{reverse('requirement_profile_create')}?{urlencode({'next': request.get_full_path()})}"
     if request.method == "POST":
         form = EventSeriesBasicsForm(request.POST, parish=parish)
         if form.is_valid():
@@ -757,7 +1039,12 @@ def event_series_create(request):
     return render(
         request,
         "events/basics.html",
-        {"form": form, "default_cancel_url": reverse("event_series_list")},
+        {
+            "form": form,
+            "default_cancel_url": reverse("event_series_list"),
+            "profiles_exist": profiles_exist,
+            "profile_create_url": profile_create_url,
+        },
     )
 
 

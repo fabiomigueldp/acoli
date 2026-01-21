@@ -1,6 +1,9 @@
 from datetime import time as dt_time
+import re
 
 from django import forms
+from django.forms import inlineformset_factory
+from django.forms.models import BaseInlineFormSet
 from django.db.models import Q
 from django.contrib.auth import get_user_model
 
@@ -12,10 +15,13 @@ from core.models import (
     Community,
     EventOccurrence,
     EventSeries,
+    FunctionType,
     MassTemplate,
     MassInstance,
     MembershipRole,
     RequirementProfile,
+    RequirementProfilePosition,
+    PositionType,
 )
 
 import json
@@ -29,6 +35,29 @@ WEEKDAY_CHOICES = [
     (5, "Sab"),
     (6, "Dom"),
 ]
+
+
+def normalize_code(value):
+    if not value:
+        return ""
+    value = value.strip().upper().replace(" ", "_")
+    value = re.sub(r"[^A-Z0-9_]", "", value)
+    return value
+
+
+def generate_unique_code(parish, name, model, max_len, exclude_id=None):
+    base = normalize_code(name) or "ROLE"
+    base = base[:max_len]
+    code = base
+    suffix = 1
+    qs = model.objects.filter(parish=parish)
+    if exclude_id:
+        qs = qs.exclude(id=exclude_id)
+    while qs.filter(code=code).exists():
+        tail = str(suffix)
+        code = f"{base[: max_len - len(tail)]}{tail}"
+        suffix += 1
+    return code
 
 
 class MassTemplateForm(forms.ModelForm):
@@ -591,6 +620,122 @@ class ParishSettingsForm(forms.Form):
             ]
         )
         return parish
+
+
+class CommunityForm(forms.ModelForm):
+    class Meta:
+        model = Community
+        fields = ["code", "name", "address", "active"]
+
+    def __init__(self, *args, **kwargs):
+        self.parish = kwargs.pop("parish", None)
+        super().__init__(*args, **kwargs)
+
+    def clean_code(self):
+        value = normalize_code(self.cleaned_data.get("code"))
+        if not value:
+            raise forms.ValidationError("Informe um codigo.")
+        if self.parish:
+            qs = Community.objects.filter(parish=self.parish, code=value)
+            if self.instance and self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise forms.ValidationError("Codigo ja utilizado nesta paroquia.")
+        return value
+
+
+class RoleForm(forms.Form):
+    name = forms.CharField(max_length=100)
+    code = forms.CharField(max_length=20, required=False)
+    active = forms.BooleanField(required=False, initial=True)
+    extra_functions = forms.ModelMultipleChoiceField(
+        queryset=FunctionType.objects.none(),
+        required=False,
+        help_text="Adicione funcoes extras para composicao.",
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.parish = kwargs.pop("parish", None)
+        self.position_type = kwargs.pop("position_type", None)
+        super().__init__(*args, **kwargs)
+        if self.parish:
+            self.fields["extra_functions"].queryset = FunctionType.objects.filter(parish=self.parish, active=True)
+        if self.position_type:
+            self.fields["name"].initial = self.position_type.name
+            self.fields["code"].initial = self.position_type.code
+            self.fields["active"].initial = self.position_type.active
+            primary = FunctionType.objects.filter(parish=self.position_type.parish, code=self.position_type.code).first()
+            extras = self.position_type.functions.exclude(id=primary.id) if primary else self.position_type.functions.all()
+            self.fields["extra_functions"].initial = extras
+
+    def clean_code(self):
+        value = normalize_code(self.cleaned_data.get("code"))
+        if not value:
+            return value
+        if len(value) > 10:
+            raise forms.ValidationError("Use ate 10 caracteres.")
+        if self.parish:
+            qs = PositionType.objects.filter(parish=self.parish, code=value)
+            if self.position_type:
+                qs = qs.exclude(pk=self.position_type.pk)
+            if qs.exists():
+                raise forms.ValidationError("Codigo ja utilizado por outra funcao na escala.")
+        return value
+
+
+class RequirementProfileForm(forms.ModelForm):
+    class Meta:
+        model = RequirementProfile
+        fields = ["name", "notes", "min_senior_per_mass", "active"]
+
+
+class RequirementProfilePositionForm(forms.ModelForm):
+    class Meta:
+        model = RequirementProfilePosition
+        fields = ["position_type", "quantity"]
+
+    def __init__(self, *args, **kwargs):
+        parish = kwargs.pop("parish", None)
+        super().__init__(*args, **kwargs)
+        self.fields["quantity"].min_value = 1
+        if parish:
+            self.fields["position_type"].queryset = PositionType.objects.filter(parish=parish, active=True)
+
+
+class BaseRequirementProfilePositionFormSet(BaseInlineFormSet):
+    def __init__(self, *args, **kwargs):
+        self.parish = kwargs.pop("parish", None)
+        super().__init__(*args, **kwargs)
+
+    def _construct_form(self, i, **kwargs):
+        if self.parish:
+            kwargs["parish"] = self.parish
+        return super()._construct_form(i, **kwargs)
+
+    def clean(self):
+        super().clean()
+        seen = set()
+        for form in self.forms:
+            if not hasattr(form, "cleaned_data"):
+                continue
+            if form.cleaned_data.get("DELETE"):
+                continue
+            position = form.cleaned_data.get("position_type")
+            if not position:
+                continue
+            if position.id in seen:
+                raise forms.ValidationError("Nao repita a mesma funcao no perfil.")
+            seen.add(position.id)
+
+
+RequirementProfilePositionFormSet = inlineformset_factory(
+    RequirementProfile,
+    RequirementProfilePosition,
+    form=RequirementProfilePositionForm,
+    formset=BaseRequirementProfilePositionFormSet,
+    extra=1,
+    can_delete=True,
+)
 
 
 class AcolyteLinkForm(forms.Form):

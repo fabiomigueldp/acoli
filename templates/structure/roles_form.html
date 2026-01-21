@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block title %}{% if role %}Editar funcao{% else %}Nova funcao{% endif %}{% endblock %}
+{% block content %}
+<div class="card max-w-3xl">
+  <h2 class="font-serif text-xl mb-4">{% if role %}Editar funcao{% else %}Nova funcao{% endif %}</h2>
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    {% if next_url %}
+      <input type="hidden" name="next" value="{{ next_url }}">
+    {% endif %}
+    <div class="grid sm:grid-cols-2 gap-4">
+      <div>
+        <label class="label">Nome</label>
+        {{ form.name }}
+      </div>
+      <div>
+        <label class="label">Codigo (opcional)</label>
+        {{ form.code }}
+        <p class="text-xs text-slate mt-1">Se vazio, geramos automaticamente. Use ate 10 caracteres.</p>
+      </div>
+      <div class="sm:col-span-2">
+        <label class="label">Ativa</label>
+        {{ form.active }}
+      </div>
+    </div>
+    <details class="mt-2">
+      <summary class="cursor-pointer text-sm font-medium">Composicao avancada</summary>
+      <div class="mt-3">
+        <label class="label">Funcoes adicionais</label>
+        {{ form.extra_functions }}
+        <p class="text-xs text-slate mt-1">Use para compor uma funcao na escala com responsabilidades extras.</p>
+      </div>
+    </details>
+    <div class="flex items-center gap-3">
+      <button class="btn-primary">Salvar</button>
+      <a class="btn-secondary" href="{% url 'structure_roles_list' %}">Voltar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

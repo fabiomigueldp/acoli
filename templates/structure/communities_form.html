@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}{% if community %}Editar comunidade{% else %}Nova comunidade{% endif %}{% endblock %}
+{% block content %}
+<div class="card max-w-2xl">
+  <h2 class="font-serif text-xl mb-4">{% if community %}Editar comunidade{% else %}Nova comunidade{% endif %}</h2>
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    {% if next_url %}
+      <input type="hidden" name="next" value="{{ next_url }}">
+    {% endif %}
+    <div class="grid sm:grid-cols-2 gap-4">
+      <div>
+        <label class="label">Codigo</label>
+        {{ form.code }}
+        <p class="text-xs text-slate mt-1">Use um codigo curto para aparecer na agenda (ex.: MAT).</p>
+      </div>
+      <div>
+        <label class="label">Nome</label>
+        {{ form.name }}
+      </div>
+      <div class="sm:col-span-2">
+        <label class="label">Endereco</label>
+        {{ form.address }}
+      </div>
+      <div class="sm:col-span-2">
+        <label class="label">Ativa</label>
+        {{ form.active }}
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <button class="btn-primary">Salvar</button>
+      <a class="btn-secondary" href="{% url 'structure_communities_list' %}">Voltar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
