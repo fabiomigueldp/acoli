@@ -16,6 +16,25 @@ class NotificationService:
     def __init__(self):
         self.whatsapp_provider = WhatsAppProvider()
 
+    def claim_pending_ids(self, limit=100, now=None):
+        now = now or timezone.now()
+        pending_ids = list(
+            Notification.objects.filter(status="pending")
+            .order_by("created_at")
+            .values_list("id", flat=True)[:limit]
+        )
+        if not pending_ids:
+            return []
+        Notification.objects.filter(id__in=pending_ids, status="pending").update(
+            status="processing",
+            last_attempt_at=now,
+        )
+        return list(
+            Notification.objects.filter(id__in=pending_ids, status="processing", last_attempt_at=now).values_list(
+                "id", flat=True
+            )
+        )
+
     def deliver(self, notification):
         if notification.channel == "email":
             subject = notification.payload.get("subject", "Acoli notification")
@@ -27,16 +46,23 @@ class NotificationService:
         return False
 
     def send_pending(self):
-        pending = Notification.objects.filter(status="pending")
-        for notification in pending:
+        claimed_ids = self.claim_pending_ids()
+        if not claimed_ids:
+            return
+        processing = Notification.objects.filter(id__in=claimed_ids, status="processing")
+        for notification in processing:
             try:
                 delivered = self.deliver(notification)
-                notification.status = "sent" if delivered else "failed"
-                notification.sent_at = timezone.now()
+                if delivered:
+                    notification.status = "sent"
+                    notification.sent_at = timezone.now()
+                else:
+                    notification.status = "failed"
+                    notification.error_message = "delivery_failed"
             except Exception as exc:
                 notification.status = "failed"
                 notification.error_message = str(exc)
-            notification.save(update_fields=["status", "sent_at", "error_message"])
+            notification.save(update_fields=["status", "sent_at", "error_message", "last_attempt_at"])
 
 
 def _format_datetime(value):

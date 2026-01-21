@@ -4,6 +4,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from core.models import (
+    AcolyteAvailabilityRule,
     AcolyteProfile,
     AcolyteQualification,
     Assignment,
@@ -140,4 +141,41 @@ class SolverTests(TestCase):
         scheduled_slot.refresh_from_db()
         self.assertIsNone(canceled_slot.get_active_assignment())
         self.assertIsNotNone(scheduled_slot.get_active_assignment())
+
+    def test_solver_limits_candidates_per_slot(self):
+        parish = Parish.objects.create(name="Parish")
+        community = Community.objects.create(parish=parish, code="MAT", name="Matriz")
+        position = PositionType.objects.create(parish=parish, code="LIB", name="Libriferario")
+        acolyte_a = AcolyteProfile.objects.create(parish=parish, display_name="Acolito A")
+        acolyte_b = AcolyteProfile.objects.create(parish=parish, display_name="Acolito B")
+        AcolyteQualification.objects.create(parish=parish, acolyte=acolyte_a, position_type=position, qualified=True)
+        AcolyteQualification.objects.create(parish=parish, acolyte=acolyte_b, position_type=position, qualified=True)
+
+        instance = MassInstance.objects.create(
+            parish=parish,
+            community=community,
+            starts_at=timezone.now() + timedelta(days=3),
+            status="scheduled",
+        )
+        slot = AssignmentSlot.objects.create(
+            parish=parish, mass_instance=instance, position_type=position, required=True, slot_index=1
+        )
+        AcolyteAvailabilityRule.objects.create(
+            parish=parish,
+            acolyte=acolyte_b,
+            rule_type="unavailable",
+            day_of_week=None,
+        )
+
+        result = solve_schedule(
+            parish,
+            [instance],
+            parish.consolidation_days,
+            {"max_candidates_per_slot": 1},
+            allow_changes=True,
+        )
+
+        slot.refresh_from_db()
+        self.assertEqual(result.coverage, 1)
+        self.assertEqual(slot.get_active_assignment().acolyte_id, acolyte_a.id)
 

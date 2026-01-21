@@ -7,6 +7,7 @@ from ortools.sat.python import cp_model
 from django.db.models import F, Prefetch, Q
 
 from core.models import (
+    AcolyteAvailabilityRule,
     AcolyteIntent,
     AcolytePreference,
     AcolyteQualification,
@@ -16,8 +17,10 @@ from core.models import (
     EventInterest,
 )
 from core.services.audit import log_audit
-from core.services.assignments import assign_acolyte_to_slot, deactivate_assignment
-from core.services.availability import is_acolyte_available
+from django.db import transaction
+
+from core.services.assignments import _assign_acolyte_to_slot_locked, _lock_slot, ConcurrentUpdateError, deactivate_assignment
+from core.services.availability import group_rules_by_acolyte, is_acolyte_available_with_rules
 from core.services.preferences import preference_score
 
 
@@ -118,6 +121,10 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
     preferences = AcolytePreference.objects.filter(parish=parish)
     intents = {intent.acolyte_id: intent for intent in AcolyteIntent.objects.filter(parish=parish)}
     stats = {stat.acolyte_id: stat for stat in AcolyteStats.objects.filter(parish=parish)}
+    availability_rules = AcolyteAvailabilityRule.objects.filter(
+        parish=parish, acolyte_id__in=[acolyte.id for acolyte in acolytes]
+    )
+    rules_by_acolyte = group_rules_by_acolyte(availability_rules)
 
     pref_by_acolyte = defaultdict(list)
     for pref in preferences:
@@ -127,6 +134,30 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
     for interest in EventInterest.objects.filter(parish=parish, interested=True):
         interest_map[interest.event_series_id].add(interest.acolyte_id)
     candidates = _build_candidate_map(decision_slots, acolytes, qualifications, interest_map=interest_map)
+    max_candidates = weights.get("max_candidates_per_slot")
+    try:
+        max_candidates = int(max_candidates) if max_candidates else None
+    except (TypeError, ValueError):
+        max_candidates = None
+    for slot in decision_slots:
+        slot_candidates = []
+        for acolyte in candidates.get(slot.id, []):
+            rules = rules_by_acolyte.get(acolyte.id, [])
+            if is_acolyte_available_with_rules(rules, slot.mass_instance):
+                slot_candidates.append(acolyte)
+        if max_candidates:
+            scored = []
+            for acolyte in slot_candidates:
+                score = preference_score(
+                    acolyte,
+                    slot.mass_instance,
+                    slot,
+                    pref_by_acolyte.get(acolyte.id, []),
+                )
+                scored.append((score, acolyte))
+            scored.sort(key=lambda item: item[0], reverse=True)
+            slot_candidates = [acolyte for _score, acolyte in scored[: int(max_candidates)]]
+        candidates[slot.id] = slot_candidates
     unfilled_details = []
     for slot in decision_slots:
         if not candidates.get(slot.id):
@@ -175,17 +206,22 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
 
     mass_duration = int(getattr(parish, "default_mass_duration_minutes", 60))
     rest_minutes = int(getattr(parish, "min_rest_minutes_between_masses", 0))
+    min_gap = (mass_duration + rest_minutes) * 60
+    sorted_slots = sorted(decision_slots, key=lambda slot: slot.mass_instance.starts_at)
+    conflict_pairs = []
+    for idx, slot_a in enumerate(sorted_slots):
+        a_start = slot_a.mass_instance.starts_at
+        for slot_b in sorted_slots[idx + 1 :]:
+            if slot_a.mass_instance_id == slot_b.mass_instance_id:
+                continue
+            b_start = slot_b.mass_instance.starts_at
+            if (b_start - a_start).total_seconds() >= min_gap:
+                break
+            conflict_pairs.append((slot_a, slot_b))
     for acolyte in acolytes:
-        for i, slot_a in enumerate(decision_slots):
-            for slot_b in decision_slots[i + 1 :]:
-                if slot_a.mass_instance_id == slot_b.mass_instance_id:
-                    continue
-                a_start = slot_a.mass_instance.starts_at
-                b_start = slot_b.mass_instance.starts_at
-                min_gap = (mass_duration + rest_minutes) * 60
-                if abs((a_start - b_start).total_seconds()) < min_gap:
-                    if (slot_a.id, acolyte.id) in x and (slot_b.id, acolyte.id) in x:
-                        model.Add(x[(slot_a.id, acolyte.id)] + x[(slot_b.id, acolyte.id)] <= 1)
+        for slot_a, slot_b in conflict_pairs:
+            if (slot_a.id, acolyte.id) in x and (slot_b.id, acolyte.id) in x:
+                model.Add(x[(slot_a.id, acolyte.id)] + x[(slot_b.id, acolyte.id)] <= 1)
 
     max_services_per_week = weights.get("max_services_per_week")
     if max_services_per_week:
@@ -229,11 +265,6 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
                     vars_in_window = [weekend_vars[acolyte.id].get(key) for key in window if key in weekend_vars[acolyte.id]]
                     if vars_in_window:
                         model.Add(sum(vars_in_window) <= int(max_consecutive_weekends))
-
-    for slot in decision_slots:
-        for acolyte in candidates.get(slot.id, []):
-            if not is_acolyte_available(acolyte, slot.mass_instance):
-                model.Add(x[(slot.id, acolyte.id)] == 0)
 
     consolidation_limit = timezone.now() + timedelta(days=consolidation_days)
     locked_slots = []
@@ -403,19 +434,34 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
                 break
         if assigned_acolyte:
             coverage += 1
-            existing = slot.get_active_assignment()
-            desired_state = existing.assignment_state if existing else "proposed"
-            if not existing:
-                assign_acolyte_to_slot(slot, assigned_acolyte, assignment_state=desired_state, end_reason="replaced_by_solver")
-                slot.status = "finalized" if slot.is_locked else "assigned"
-                slot.save(update_fields=["status", "updated_at"])
-                changes += 1
-            elif existing.acolyte_id != assigned_acolyte.id:
-                deactivate_assignment(existing, "replaced_by_solver", actor=None)
-                assign_acolyte_to_slot(slot, assigned_acolyte, assignment_state=desired_state, end_reason="replaced_by_solver")
-                slot.status = "finalized" if slot.is_locked else "assigned"
-                slot.save(update_fields=["status", "updated_at"])
-                changes += 1
+            try:
+                with transaction.atomic():
+                    locked_slot = _lock_slot(slot.id)
+                    existing = locked_slot.get_active_assignment()
+                    desired_state = existing.assignment_state if existing else "proposed"
+                    if not existing:
+                        _assign_acolyte_to_slot_locked(
+                            locked_slot,
+                            assigned_acolyte,
+                            assignment_state=desired_state,
+                            end_reason="replaced_by_solver",
+                        )
+                        locked_slot.status = "finalized" if locked_slot.is_locked else "assigned"
+                        locked_slot.save(update_fields=["status", "updated_at"])
+                        changes += 1
+                    elif existing.acolyte_id != assigned_acolyte.id:
+                        deactivate_assignment(existing, "replaced_by_solver", actor=None)
+                        _assign_acolyte_to_slot_locked(
+                            locked_slot,
+                            assigned_acolyte,
+                            assignment_state=desired_state,
+                            end_reason="replaced_by_solver",
+                        )
+                        locked_slot.status = "finalized" if locked_slot.is_locked else "assigned"
+                        locked_slot.save(update_fields=["status", "updated_at"])
+                        changes += 1
+            except (ConcurrentUpdateError, ValueError):
+                continue
 
     for acolyte in acolytes:
         count = 0

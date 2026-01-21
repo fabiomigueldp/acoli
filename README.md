@@ -49,6 +49,10 @@ python manage.py runserver
 - `DEFAULT_FROM_EMAIL`
 - `APP_BASE_URL` (usado para links absolutos em emails)
 
+## API (DRF)
+- Para clientes sem sessao, envie `X-Parish-ID` (ou `?parish_id=`) nas requisicoes `/api/*`.
+- O usuario precisa ter membership ativa na paroquia (ou ser SYSTEM_ADMIN).
+
 ## Comandos de manutencao
 - `python manage.py generate_mass_instances --days 60`
 - `python manage.py sync_slots --days 60`

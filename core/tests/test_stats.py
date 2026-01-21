@@ -26,7 +26,8 @@ class StatsRecomputeTests(TestCase):
         community_b = Community.objects.create(parish=parish_b, code="STM", name="Comunidade")
         position_a = PositionType.objects.create(parish=parish_a, code="LIB", name="Libriferario")
         position_b = PositionType.objects.create(parish=parish_b, code="LIB", name="Libriferario")
-        acolyte = AcolyteProfile.objects.create(parish=parish_a, display_name="Acolito A")
+        acolyte_a = AcolyteProfile.objects.create(parish=parish_a, display_name="Acolito A")
+        acolyte_b = AcolyteProfile.objects.create(parish=parish_b, display_name="Acolito B")
 
         instance_a = MassInstance.objects.create(
             parish=parish_a,
@@ -45,7 +46,7 @@ class StatsRecomputeTests(TestCase):
         assignment_a = Assignment.objects.create(
             parish=parish_a,
             slot=slot_a,
-            acolyte=acolyte,
+            acolyte=acolyte_a,
             assignment_state="published",
         )
         Confirmation.objects.create(parish=parish_a, assignment=assignment_a, status="confirmed")
@@ -67,14 +68,14 @@ class StatsRecomputeTests(TestCase):
         assignment_b = Assignment.objects.create(
             parish=parish_b,
             slot=slot_b,
-            acolyte=acolyte,
+            acolyte=acolyte_b,
             assignment_state="published",
         )
         Confirmation.objects.create(parish=parish_b, assignment=assignment_b, status="declined")
 
         recompute_stats(parish_a)
 
-        stats = AcolyteStats.objects.get(parish=parish_a, acolyte=acolyte)
+        stats = AcolyteStats.objects.get(parish=parish_a, acolyte=acolyte_a)
         self.assertEqual(stats.confirmation_rate, 1.0)
         self.assertEqual(stats.cancellations_rate, 0.0)
 
@@ -83,7 +84,8 @@ class StatsRecomputeTests(TestCase):
         parish_b = Parish.objects.create(name="Parish B")
         community_a = Community.objects.create(parish=parish_a, code="MAT", name="Matriz")
         position_a = PositionType.objects.create(parish=parish_a, code="LIB", name="Libriferario")
-        acolyte = AcolyteProfile.objects.create(parish=parish_a, display_name="Acolito A")
+        acolyte_a = AcolyteProfile.objects.create(parish=parish_a, display_name="Acolito A")
+        acolyte_b = AcolyteProfile.objects.create(parish=parish_b, display_name="Acolito B")
 
         instance_a = MassInstance.objects.create(
             parish=parish_a,
@@ -102,24 +104,24 @@ class StatsRecomputeTests(TestCase):
         Assignment.objects.create(
             parish=parish_a,
             slot=slot_a,
-            acolyte=acolyte,
+            acolyte=acolyte_a,
             assignment_state="published",
         )
 
         AcolyteCreditLedger.objects.create(
             parish=parish_a,
-            acolyte=acolyte,
+            acolyte=acolyte_a,
             delta=5,
             reason_code="served_unpopular_slot",
         )
         AcolyteCreditLedger.objects.create(
             parish=parish_b,
-            acolyte=acolyte,
+            acolyte=acolyte_b,
             delta=100,
             reason_code="served_unpopular_slot",
         )
 
         recompute_stats(parish_a)
 
-        stats = AcolyteStats.objects.get(parish=parish_a, acolyte=acolyte)
+        stats = AcolyteStats.objects.get(parish=parish_a, acolyte=acolyte_a)
         self.assertEqual(stats.credit_balance, 5)

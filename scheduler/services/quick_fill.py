@@ -1,5 +1,5 @@
-from core.models import AcolytePreference, AcolyteQualification, AcolyteStats
-from core.services.availability import is_acolyte_available
+from core.models import AcolyteAvailabilityRule, AcolytePreference, AcolyteQualification, AcolyteStats
+from core.services.availability import group_rules_by_acolyte, is_acolyte_available_with_rules
 from core.services.preferences import preference_score
 
 
@@ -23,11 +23,14 @@ def build_quick_fill_cache(parish, position_type_ids=None):
         pref_by_acolyte.setdefault(pref.acolyte_id, []).append(pref)
 
     stats_map = {stat.acolyte_id: stat for stat in AcolyteStats.objects.filter(parish=parish)}
+    availability_rules = AcolyteAvailabilityRule.objects.filter(parish=parish, acolyte_id__in=qualified_ids)
+    rules_by_acolyte = group_rules_by_acolyte(availability_rules)
     return {
         "acolytes": acolytes,
         "qualified_by_position": qualified_by_position,
         "pref_by_acolyte": pref_by_acolyte,
         "stats_map": stats_map,
+        "rules_by_acolyte": rules_by_acolyte,
     }
 
 
@@ -37,6 +40,7 @@ def quick_fill_slot(slot, parish, max_candidates=3, cache=None):
         qualified_ids = cache.get("qualified_by_position", {}).get(slot.position_type_id, set())
         pref_by_acolyte = cache.get("pref_by_acolyte", {})
         stats_map = cache.get("stats_map", {})
+        rules_by_acolyte = cache.get("rules_by_acolyte", {})
     else:
         acolytes = list(parish.acolytes.filter(active=True))
         qualifications = AcolyteQualification.objects.filter(
@@ -48,12 +52,14 @@ def quick_fill_slot(slot, parish, max_candidates=3, cache=None):
         for pref in preferences:
             pref_by_acolyte.setdefault(pref.acolyte_id, []).append(pref)
         stats_map = {stat.acolyte_id: stat for stat in AcolyteStats.objects.filter(parish=parish)}
+        availability_rules = AcolyteAvailabilityRule.objects.filter(parish=parish, acolyte_id__in=qualified_ids)
+        rules_by_acolyte = group_rules_by_acolyte(availability_rules)
 
     scores = []
     for acolyte in acolytes:
         if acolyte.id not in qualified_ids:
             continue
-        if not is_acolyte_available(acolyte, slot.mass_instance):
+        if not is_acolyte_available_with_rules(rules_by_acolyte.get(acolyte.id, []), slot.mass_instance):
             continue
         score = preference_score(acolyte, slot.mass_instance, slot, pref_by_acolyte.get(acolyte.id, []))
         stats = stats_map.get(acolyte.id)

@@ -1,4 +1,7 @@
+from datetime import time as dt_time
+
 from django import forms
+from django.db.models import Q
 from django.contrib.auth import get_user_model
 
 from core.models import (
@@ -33,6 +36,27 @@ class MassTemplateForm(forms.ModelForm):
         model = MassTemplate
         fields = ["title", "community", "weekday", "time", "rrule_text", "default_requirement_profile", "notes", "active"]
 
+    def __init__(self, *args, **kwargs):
+        self.parish = kwargs.pop("parish", None)
+        super().__init__(*args, **kwargs)
+        if self.parish:
+            self.fields["community"].queryset = Community.objects.filter(parish=self.parish, active=True)
+            self.fields["default_requirement_profile"].queryset = RequirementProfile.objects.filter(
+                parish=self.parish, active=True
+            )
+
+    def clean(self):
+        cleaned = super().clean()
+        if not self.parish:
+            return cleaned
+        community = cleaned.get("community")
+        profile = cleaned.get("default_requirement_profile")
+        if community and community.parish_id != self.parish.id:
+            self.add_error("community", "Selecione uma comunidade valida para esta paroquia.")
+        if profile and profile.parish_id != self.parish.id:
+            self.add_error("default_requirement_profile", "Selecione um perfil valido para esta paroquia.")
+        return cleaned
+
 
 class EventSeriesBasicsForm(forms.Form):
     series_type = forms.CharField(max_length=40)
@@ -49,12 +73,20 @@ class EventSeriesBasicsForm(forms.Form):
     def __init__(self, *args, **kwargs):
         parish = kwargs.pop("parish", None)
         super().__init__(*args, **kwargs)
+        self.parish = parish
         if parish:
             self.fields["default_community"].queryset = Community.objects.filter(parish=parish, active=True)
             self.fields["default_requirement_profile"].queryset = RequirementProfile.objects.filter(parish=parish, active=True)
 
     def clean(self):
         cleaned = super().clean()
+        if self.parish:
+            community = cleaned.get("default_community")
+            profile = cleaned.get("default_requirement_profile")
+            if community and community.parish_id != self.parish.id:
+                self.add_error("default_community", "Selecione uma comunidade valida para esta paroquia.")
+            if profile and profile.parish_id != self.parish.id:
+                self.add_error("default_requirement_profile", "Selecione um perfil valido para esta paroquia.")
         start_date = cleaned.get("start_date")
         end_date = cleaned.get("end_date")
         if start_date and end_date and end_date < start_date:
@@ -76,17 +108,39 @@ class EventOccurrenceForm(forms.Form):
     def __init__(self, *args, **kwargs):
         parish = kwargs.pop("parish", None)
         super().__init__(*args, **kwargs)
+        self.parish = parish
         if parish:
             community_qs = Community.objects.filter(parish=parish, active=True)
             self.fields["community"].queryset = community_qs
             self.fields["move_to_community"].queryset = community_qs
             self.fields["requirement_profile"].queryset = RequirementProfile.objects.filter(parish=parish, active=True)
 
+    def clean(self):
+        cleaned = super().clean()
+        if not self.parish:
+            return cleaned
+        community = cleaned.get("community")
+        move_to_community = cleaned.get("move_to_community")
+        profile = cleaned.get("requirement_profile")
+        if community and community.parish_id != self.parish.id:
+            self.add_error("community", "Selecione uma comunidade valida para esta paroquia.")
+        if move_to_community and move_to_community.parish_id != self.parish.id:
+            self.add_error("move_to_community", "Selecione uma comunidade valida para esta paroquia.")
+        if profile and profile.parish_id != self.parish.id:
+            self.add_error("requirement_profile", "Selecione um perfil valido para esta paroquia.")
+        return cleaned
+
 
 class MassInstanceUpdateForm(forms.ModelForm):
     class Meta:
         model = MassInstance
         fields = ["liturgy_label", "requirement_profile"]
+
+    def __init__(self, *args, **kwargs):
+        parish = kwargs.pop("parish", None)
+        super().__init__(*args, **kwargs)
+        if parish:
+            self.fields["requirement_profile"].queryset = RequirementProfile.objects.filter(parish=parish, active=True)
 
 
 class MassInstanceMoveForm(forms.Form):
@@ -128,14 +182,132 @@ class AcolyteAvailabilityRuleForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        self.parish = kwargs.pop("parish", None)
         super().__init__(*args, **kwargs)
         self.fields["day_of_week"].choices = [("", "Qualquer dia")] + WEEKDAY_CHOICES
+        if self.parish:
+            self.fields["community"].queryset = Community.objects.filter(parish=self.parish, active=True)
 
     def clean_day_of_week(self):
         value = self.cleaned_data.get("day_of_week")
         if value in ("", None):
             return None
         return value
+
+    def clean(self):
+        cleaned = super().clean()
+        if self.parish:
+            community = cleaned.get("community")
+            if community and community.parish_id != self.parish.id:
+                self.add_error("community", "Selecione uma comunidade valida para esta paroquia.")
+        return cleaned
+
+
+class WeeklyAvailabilityForm(forms.ModelForm):
+    class Meta:
+        model = AcolyteAvailabilityRule
+        fields = ["rule_type", "day_of_week", "start_time", "end_time", "community", "notes"]
+        widgets = {
+            "start_time": forms.TimeInput(attrs={"type": "time"}),
+            "end_time": forms.TimeInput(attrs={"type": "time"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.acolyte = kwargs.pop("acolyte", None)
+        super().__init__(*args, **kwargs)
+        self.fields["day_of_week"].choices = [("", "Qualquer dia")] + WEEKDAY_CHOICES
+        self.fields["day_of_week"].required = False
+        self.fields["rule_type"].choices = [
+            ("unavailable", "Indisponivel"),
+            ("available_only", "Disponivel apenas"),
+        ]
+        if self.acolyte:
+            self.fields["community"].queryset = Community.objects.filter(parish=self.acolyte.parish, active=True)
+
+    def clean(self):
+        cleaned = super().clean()
+        day_of_week = cleaned.get("day_of_week")
+        start_time = cleaned.get("start_time")
+        end_time = cleaned.get("end_time")
+        if day_of_week in ("", None):
+            cleaned["day_of_week"] = None
+        if start_time and end_time and start_time >= end_time:
+            self.add_error("end_time", "Horario final deve ser depois do inicio.")
+        if self.acolyte and not self.errors:
+            community = cleaned.get("community")
+            if community and community.parish_id != self.acolyte.parish_id:
+                self.add_error("community", "Selecione uma comunidade valida para esta paroquia.")
+                return cleaned
+            base_filters = {
+                "parish": self.acolyte.parish,
+                "acolyte": self.acolyte,
+                "rule_type": cleaned.get("rule_type"),
+                "community": cleaned.get("community"),
+            }
+            day_value = cleaned.get("day_of_week")
+            if day_value is None:
+                day_filter = Q()
+                duplicate_filter = Q(day_of_week__isnull=True)
+            else:
+                day_filter = Q(day_of_week=day_value) | Q(day_of_week__isnull=True)
+                duplicate_filter = Q(day_of_week=day_value)
+
+            duplicates = AcolyteAvailabilityRule.objects.filter(
+                parish=self.acolyte.parish,
+                acolyte=self.acolyte,
+                rule_type=cleaned.get("rule_type"),
+                community=cleaned.get("community"),
+                start_time=cleaned.get("start_time"),
+                end_time=cleaned.get("end_time"),
+            ).filter(duplicate_filter)
+            if self.instance and self.instance.pk:
+                duplicates = duplicates.exclude(pk=self.instance.pk)
+            if duplicates.exists():
+                self.add_error(None, "Voce ja possui uma regra igual.")
+                return cleaned
+
+            qs = AcolyteAvailabilityRule.objects.filter(**base_filters).filter(day_filter)
+            if self.instance and self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            new_start = cleaned.get("start_time") or dt_time.min
+            new_end = cleaned.get("end_time") or dt_time.max
+            for rule in qs:
+                existing_start = rule.start_time or dt_time.min
+                existing_end = rule.end_time or dt_time.max
+                if rule.start_time and rule.end_time and rule.start_time >= rule.end_time:
+                    continue
+                if existing_start < new_end and new_start < existing_end:
+                    self.add_error(None, "Ja existe uma regra semelhante nesse dia/horario.")
+                    break
+        return cleaned
+
+
+class DateAbsenceForm(forms.ModelForm):
+    class Meta:
+        model = AcolyteAvailabilityRule
+        fields = ["start_date", "end_date", "notes"]
+        widgets = {
+            "start_date": forms.DateInput(attrs={"type": "date"}),
+            "end_date": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["start_date"].required = True
+
+    def clean(self):
+        cleaned = super().clean()
+        start_date = cleaned.get("start_date")
+        end_date = cleaned.get("end_date")
+        if not start_date:
+            self.add_error("start_date", "Informe a data de inicio.")
+            return cleaned
+        if not end_date:
+            cleaned["end_date"] = start_date
+            end_date = start_date
+        if end_date and start_date and end_date < start_date:
+            self.add_error("end_date", "Data final deve ser maior ou igual a data inicial.")
+        return cleaned
 
 
 class AcolytePreferenceForm(forms.ModelForm):
@@ -159,14 +331,104 @@ class AcolytePreferenceForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        self.parish = kwargs.pop("parish", None)
         super().__init__(*args, **kwargs)
         self.fields["weekday"].choices = [("", "Qualquer dia")] + WEEKDAY_CHOICES
+        self.fields["preference_type"].choices = [
+            ("preferred_community", "Preferir comunidade"),
+            ("avoid_community", "Evitar comunidade"),
+            ("preferred_timeslot", "Preferir horario"),
+            ("preferred_mass_template", "Preferir modelo"),
+            ("preferred_position", "Preferir posicao"),
+            ("avoid_position", "Evitar posicao"),
+            ("preferred_function", "Preferir funcao"),
+            ("avoid_function", "Evitar funcao"),
+            ("preferred_partner", "Preferir parceiro"),
+            ("avoid_partner", "Evitar parceiro"),
+        ]
+        if self.parish:
+            self.fields["target_community"].queryset = Community.objects.filter(parish=self.parish, active=True)
+            self.fields["target_position"].queryset = self.parish.positiontype_set.filter(active=True)
+            self.fields["target_function"].queryset = self.parish.functiontype_set.filter(active=True)
+            self.fields["target_template"].queryset = self.parish.masstemplate_set.filter(active=True)
+            self.fields["target_acolyte"].queryset = self.parish.acolytes.filter(active=True)
 
     def clean_weekday(self):
         value = self.cleaned_data.get("weekday")
         if value in ("", None):
             return None
         return value
+
+    def clean(self):
+        cleaned = super().clean()
+        pref_type = cleaned.get("preference_type")
+        if not pref_type:
+            return cleaned
+
+        weight = cleaned.get("weight")
+        if weight in (None, ""):
+            cleaned["weight"] = 50
+
+        target_fields = {
+            "target_community",
+            "target_position",
+            "target_function",
+            "target_template",
+            "target_acolyte",
+        }
+        required_target = {
+            "preferred_community": "target_community",
+            "avoid_community": "target_community",
+            "preferred_position": "target_position",
+            "avoid_position": "target_position",
+            "preferred_function": "target_function",
+            "avoid_function": "target_function",
+            "preferred_mass_template": "target_template",
+            "preferred_partner": "target_acolyte",
+            "avoid_partner": "target_acolyte",
+        }
+        allowed_targets = set()
+        if pref_type in required_target:
+            allowed_targets.add(required_target[pref_type])
+
+        for field in target_fields - allowed_targets:
+            cleaned[field] = None
+
+        if pref_type == "preferred_timeslot":
+            weekday = cleaned.get("weekday")
+            start_time = cleaned.get("start_time")
+            end_time = cleaned.get("end_time")
+            if not weekday and not start_time and not end_time:
+                self.add_error(None, "Informe dia ou horario.")
+            if start_time and end_time and start_time >= end_time:
+                self.add_error("end_time", "Horario final deve ser depois do inicio.")
+        else:
+            cleaned["weekday"] = None
+            cleaned["start_time"] = None
+            cleaned["end_time"] = None
+
+        required_field = required_target.get(pref_type)
+        if required_field and not cleaned.get(required_field):
+            self.add_error(required_field, "Campo obrigatorio.")
+
+        if self.parish:
+            target_community = cleaned.get("target_community")
+            target_position = cleaned.get("target_position")
+            target_function = cleaned.get("target_function")
+            target_template = cleaned.get("target_template")
+            target_acolyte = cleaned.get("target_acolyte")
+            if target_community and target_community.parish_id != self.parish.id:
+                self.add_error("target_community", "Selecione uma comunidade valida para esta paroquia.")
+            if target_position and target_position.parish_id != self.parish.id:
+                self.add_error("target_position", "Selecione uma posicao valida para esta paroquia.")
+            if target_function and target_function.parish_id != self.parish.id:
+                self.add_error("target_function", "Selecione uma funcao valida para esta paroquia.")
+            if target_template and target_template.parish_id != self.parish.id:
+                self.add_error("target_template", "Selecione um modelo valido para esta paroquia.")
+            if target_acolyte and target_acolyte.parish_id != self.parish.id:
+                self.add_error("target_acolyte", "Selecione um acolito valido para esta paroquia.")
+
+        return cleaned
 
 
 class SwapRequestForm(forms.Form):

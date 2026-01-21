@@ -1,6 +1,8 @@
+from datetime import timedelta
+import base64
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from datetime import timedelta
 
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -39,4 +41,19 @@ class ParishIsolationTests(TestCase):
         response = client.get("/api/masses/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()), 1)
+
+    def test_api_parish_header_scopes_results(self):
+        client = APIClient()
+        credentials = base64.b64encode(b"user@example.com:pass").decode("utf-8")
+        client.credentials(HTTP_AUTHORIZATION=f"Basic {credentials}", HTTP_X_PARISH_ID=str(self.parish1.id))
+        response = client.get("/api/masses/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()), 1)
+
+    def test_api_parish_header_blocks_other_parish(self):
+        client = APIClient()
+        credentials = base64.b64encode(b"user@example.com:pass").decode("utf-8")
+        client.credentials(HTTP_AUTHORIZATION=f"Basic {credentials}", HTTP_X_PARISH_ID=str(self.parish2.id))
+        response = client.get("/api/masses/")
+        self.assertEqual(response.status_code, 403)
 

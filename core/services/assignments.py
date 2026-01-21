@@ -1,7 +1,50 @@
+from django.db import IntegrityError, connection, transaction
 from django.utils import timezone
 
-from core.models import Assignment, Confirmation
+from core.models import Assignment, AssignmentSlot, Confirmation
 from core.services.audit import log_audit
+
+
+class ConcurrentUpdateError(RuntimeError):
+    pass
+
+
+def _ensure_same_parish(slot, acolyte):
+    if slot.parish_id != acolyte.parish_id:
+        raise ValueError("Paroquia invalida para atribuicao.")
+
+
+def _lock_slot(slot_id):
+    qs = AssignmentSlot.objects
+    if connection.features.has_select_for_update:
+        qs = qs.select_for_update()
+    return qs.select_related("mass_instance").get(id=slot_id)
+
+
+def _assign_acolyte_to_slot_locked(
+    slot,
+    acolyte,
+    actor=None,
+    assignment_state="proposed",
+    end_reason="replaced",
+    create_confirmation=False,
+):
+    _ensure_same_parish(slot, acolyte)
+    current = slot.get_active_assignment()
+    if current and current.acolyte_id == acolyte.id:
+        return current
+    if current:
+        deactivate_assignment(current, end_reason, actor=actor)
+    try:
+        assignment = create_assignment(slot, acolyte, actor=actor, assignment_state=assignment_state)
+    except IntegrityError:
+        existing = Assignment.objects.filter(slot=slot, is_active=True).first()
+        if existing and existing.acolyte_id == acolyte.id:
+            return existing
+        raise ConcurrentUpdateError("Slot atualizado por outra acao.")
+    if create_confirmation:
+        Confirmation.objects.get_or_create(parish=slot.parish, assignment=assignment)
+    return assignment
 
 
 def deactivate_assignment(assignment, reason, actor=None):
@@ -49,35 +92,38 @@ def assign_acolyte_to_slot(
     end_reason="replaced",
     create_confirmation=False,
 ):
-    current = slot.get_active_assignment()
-    if current and current.acolyte_id == acolyte.id:
-        return current
-    if current:
-        deactivate_assignment(current, end_reason, actor=actor)
-    assignment = create_assignment(slot, acolyte, actor=actor, assignment_state=assignment_state)
-    if create_confirmation:
-        Confirmation.objects.get_or_create(parish=slot.parish, assignment=assignment)
-    return assignment
+    with transaction.atomic():
+        locked_slot = _lock_slot(slot.id)
+        return _assign_acolyte_to_slot_locked(
+            locked_slot,
+            acolyte,
+            actor=actor,
+            assignment_state=assignment_state,
+            end_reason=end_reason,
+            create_confirmation=create_confirmation,
+        )
 
 
 def assign_manual(slot, acolyte, actor=None):
-    assignment_state = "locked" if slot.is_locked else "published"
-    assignment = assign_acolyte_to_slot(
-        slot,
-        acolyte,
-        actor=actor,
-        assignment_state=assignment_state,
-        end_reason="manual_unassign",
-        create_confirmation=True,
-    )
-    slot.status = "finalized" if slot.is_locked else "assigned"
-    slot.save(update_fields=["status", "updated_at"])
-    log_audit(
-        slot.parish,
-        actor,
-        "Assignment",
-        assignment.id,
-        "manual_assign",
-        {"slot_id": slot.id, "acolyte_id": acolyte.id},
-    )
-    return assignment
+    with transaction.atomic():
+        locked_slot = _lock_slot(slot.id)
+        assignment_state = "locked" if locked_slot.is_locked else "published"
+        assignment = _assign_acolyte_to_slot_locked(
+            locked_slot,
+            acolyte,
+            actor=actor,
+            assignment_state=assignment_state,
+            end_reason="manual_unassign",
+            create_confirmation=True,
+        )
+        locked_slot.status = "finalized" if locked_slot.is_locked else "assigned"
+        locked_slot.save(update_fields=["status", "updated_at"])
+        log_audit(
+            locked_slot.parish,
+            actor,
+            "Assignment",
+            assignment.id,
+            "manual_assign",
+            {"slot_id": locked_slot.id, "acolyte_id": acolyte.id},
+        )
+        return assignment

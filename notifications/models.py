@@ -22,6 +22,7 @@ class Notification(models.Model):
     ]
     STATUS_CHOICES = [
         ("pending", "Pending"),
+        ("processing", "Processing"),
         ("sent", "Sent"),
         ("failed", "Failed"),
         ("skipped", "Skipped"),
@@ -35,6 +36,7 @@ class Notification(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     error_message = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    last_attempt_at = models.DateTimeField(null=True, blank=True)
     sent_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:

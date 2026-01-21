@@ -45,6 +45,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
     "core.middleware.ActiveParishMiddleware",
+    "core.middleware.ApiParishHeaderMiddleware",
 ]
 
 ROOT_URLCONF = "acoli.urls"

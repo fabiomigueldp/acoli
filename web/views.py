@@ -5,12 +5,13 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
 from django.forms import formset_factory
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from core.models import (
+    AcolyteAvailabilityRule,
     AcolyteQualification,
     AuditEvent,
     Assignment,
@@ -30,7 +31,7 @@ from core.models import (
 from core.services.audit import log_audit
 from core.services.calendar_generation import generate_instances_for_parish
 from core.services.event_series import apply_event_occurrences
-from core.services.assignments import assign_manual, deactivate_assignment
+from core.services.assignments import ConcurrentUpdateError, assign_manual, deactivate_assignment
 from core.services.publishing import publish_assignments
 from core.services.slots import sync_slots_for_instance
 from core.services.permissions import (
@@ -41,7 +42,7 @@ from core.services.permissions import (
     users_with_roles,
 )
 from core.services.replacements import (
-    assign_replacement,
+    assign_replacement_request,
     cancel_mass_and_resolve_dependents,
     create_replacement_request,
 )
@@ -54,6 +55,7 @@ from web.forms import (
     AcolyteAvailabilityRuleForm,
     AcolyteLinkForm,
     AcolytePreferenceForm,
+    DateAbsenceForm,
     EventOccurrenceForm,
     EventSeriesBasicsForm,
     MassInstanceCancelForm,
@@ -62,6 +64,8 @@ from web.forms import (
     MassTemplateForm,
     ParishSettingsForm,
     ReplacementResolveForm,
+    WEEKDAY_CHOICES,
+    WeeklyAvailabilityForm,
     SwapAssignForm,
     SwapRequestForm,
 )
@@ -153,7 +157,7 @@ def mass_detail(request, instance_id):
     ))
     position_ids = {slot.position_type_id for slot in slots}
     quick_fill_cache = build_quick_fill_cache(parish, position_type_ids=position_ids)
-    update_form = MassInstanceUpdateForm(instance=instance)
+    update_form = MassInstanceUpdateForm(instance=instance, parish=parish)
     move_form = MassInstanceMoveForm(
         parish=parish,
         initial={
@@ -208,7 +212,11 @@ def _handle_slot_assign(request, instance_id, slot_id, action_label):
         if not is_acolyte_available(acolyte, slot.mass_instance):
             messages.error(request, "Este acolito nao esta disponivel para este horario.")
             return redirect("mass_detail", instance_id=instance.id)
-        assignment = assign_manual(slot, acolyte, actor=request.user)
+        try:
+            assignment = assign_manual(slot, acolyte, actor=request.user)
+        except (ConcurrentUpdateError, ValueError):
+            messages.error(request, "Esta vaga foi atualizada por outra acao. Recarregue a pagina e tente novamente.")
+            return redirect("mass_detail", instance_id=instance.id)
         if assignment.acolyte.user:
             enqueue_notification(
                 parish,
@@ -256,7 +264,7 @@ def mass_update(request, instance_id):
     parish = request.active_parish
     instance = get_object_or_404(MassInstance, parish=parish, id=instance_id)
     if request.method == "POST":
-        form = MassInstanceUpdateForm(request.POST, instance=instance)
+        form = MassInstanceUpdateForm(request.POST, instance=instance, parish=parish)
         if form.is_valid():
             old_label = instance.liturgy_label
             old_profile = instance.requirement_profile_id
@@ -362,14 +370,14 @@ def template_list(request):
 def template_create(request):
     parish = request.active_parish
     if request.method == "POST":
-        form = MassTemplateForm(request.POST)
+        form = MassTemplateForm(request.POST, parish=parish)
         if form.is_valid():
             template = form.save(commit=False)
             template.parish = parish
             template.save()
             return redirect("template_list")
     else:
-        form = MassTemplateForm()
+        form = MassTemplateForm(parish=parish)
     return render(request, "mass_templates/form.html", {"form": form})
 
 
@@ -897,7 +905,11 @@ def replacement_assign(request, request_id):
     if request.method == "POST":
         acolyte_id = request.POST.get("acolyte_id")
         acolyte = get_object_or_404(parish.acolytes, id=acolyte_id, active=True)
-        assignment = assign_replacement(parish, replacement.slot, acolyte, actor=request.user)
+        try:
+            assignment = assign_replacement_request(parish, replacement.id, acolyte, actor=request.user)
+        except (ConcurrentUpdateError, ValueError):
+            messages.error(request, "Esta vaga foi atualizada por outra acao. Recarregue a pagina e tente novamente.")
+            return redirect("replacement_center")
         if assignment:
             if assignment.acolyte.user:
                 enqueue_notification(
@@ -955,10 +967,19 @@ def replacement_resolve(request, request_id):
                     update_fields=["required", "externally_covered", "external_coverage_notes", "status", "updated_at"]
                 )
             else:
+                slot.required = True
                 slot.externally_covered = False
                 slot.external_coverage_notes = ""
                 slot.status = "open"
-                slot.save(update_fields=["externally_covered", "external_coverage_notes", "status", "updated_at"])
+                slot.save(
+                    update_fields=[
+                        "required",
+                        "externally_covered",
+                        "external_coverage_notes",
+                        "status",
+                        "updated_at",
+                    ]
+                )
 
             replacement.status = "resolved"
             replacement.resolved_reason = reason
@@ -1086,52 +1107,111 @@ def my_preferences(request):
         return render(request, "acolytes/preferences.html", {"acolyte": None})
 
     availability = acolyte.acolyteavailabilityrule_set.select_related("community")
+    weekly_rules = availability.filter(start_date__isnull=True, end_date__isnull=True).order_by("day_of_week", "start_time")
+    weekly_by_day = {day: [] for day, _label in WEEKDAY_CHOICES}
+    any_day_rules = []
+    for rule in weekly_rules:
+        if rule.day_of_week is None:
+            any_day_rules.append(rule)
+        else:
+            weekly_by_day[rule.day_of_week].append(rule)
+    date_absences = availability.filter(Q(start_date__isnull=False) | Q(end_date__isnull=False)).order_by("start_date")
     preferences = acolyte.acolytepreference_set.select_related(
         "target_community", "target_position", "target_function", "target_template", "target_acolyte"
     )
 
+    weekly_form = WeeklyAvailabilityForm(acolyte=acolyte)
+    date_absence_form = DateAbsenceForm()
+    preference_form = AcolytePreferenceForm(parish=parish)
+
     if request.method == "POST":
-        if request.POST.get("form_type") == "availability":
-            form = AcolyteAvailabilityRuleForm(request.POST)
-            form.fields["community"].queryset = parish.community_set.filter(active=True)
-            if form.is_valid():
-                rule = form.save(commit=False)
-                rule.parish = parish
-                rule.acolyte = acolyte
-                rule.save()
-                return redirect("my_preferences")
-        elif request.POST.get("form_type") == "preference":
-            form = AcolytePreferenceForm(request.POST)
-            form.fields["target_community"].queryset = parish.community_set.filter(active=True)
-            form.fields["target_position"].queryset = parish.positiontype_set.filter(active=True)
-            form.fields["target_function"].queryset = parish.functiontype_set.filter(active=True)
-            form.fields["target_template"].queryset = parish.masstemplate_set.filter(active=True)
-            form.fields["target_acolyte"].queryset = parish.acolytes.filter(active=True)
-            if form.is_valid():
-                pref = form.save(commit=False)
+        form_type = request.POST.get("form_type")
+        if form_type == "weekly_availability":
+            weekly_form = WeeklyAvailabilityForm(request.POST, acolyte=acolyte)
+            message_sent = False
+            if weekly_form.is_valid():
+                cleaned = weekly_form.cleaned_data
+                existing = AcolyteAvailabilityRule.objects.filter(
+                    parish=parish,
+                    acolyte=acolyte,
+                    rule_type=cleaned.get("rule_type"),
+                    day_of_week=cleaned.get("day_of_week"),
+                    start_time=cleaned.get("start_time"),
+                    end_time=cleaned.get("end_time"),
+                    community=cleaned.get("community"),
+                ).exists()
+                if existing:
+                    weekly_form.add_error(None, "Voce ja possui uma regra igual.")
+                    messages.info(request, "Voce ja possui uma regra igual.")
+                    message_sent = True
+                else:
+                    rule = weekly_form.save(commit=False)
+                    rule.parish = parish
+                    rule.acolyte = acolyte
+                    rule.start_date = None
+                    rule.end_date = None
+                    rule.save()
+                    return redirect("my_preferences")
+            if weekly_form.non_field_errors() and not message_sent:
+                messages.info(request, weekly_form.non_field_errors()[0])
+        elif form_type == "date_absence":
+            date_absence_form = DateAbsenceForm(request.POST)
+            message_sent = False
+            if date_absence_form.is_valid():
+                cleaned = date_absence_form.cleaned_data
+                start_date = cleaned.get("start_date")
+                end_date = cleaned.get("end_date") or start_date
+                existing = AcolyteAvailabilityRule.objects.filter(
+                    parish=parish,
+                    acolyte=acolyte,
+                    rule_type="unavailable",
+                    day_of_week__isnull=True,
+                    start_date=start_date,
+                    end_date=end_date,
+                    start_time__isnull=True,
+                    end_time__isnull=True,
+                ).exists()
+                if existing:
+                    date_absence_form.add_error(None, "Voce ja possui uma regra igual.")
+                    messages.info(request, "Voce ja possui uma regra igual.")
+                    message_sent = True
+                else:
+                    rule = date_absence_form.save(commit=False)
+                    rule.parish = parish
+                    rule.acolyte = acolyte
+                    rule.rule_type = "unavailable"
+                    rule.day_of_week = None
+                    rule.start_time = None
+                    rule.end_time = None
+                    rule.save()
+                    return redirect("my_preferences")
+            if date_absence_form.non_field_errors() and not message_sent:
+                messages.info(request, date_absence_form.non_field_errors()[0])
+        elif form_type == "preference":
+            preference_form = AcolytePreferenceForm(request.POST, parish=parish)
+            if preference_form.is_valid():
+                pref = preference_form.save(commit=False)
                 pref.parish = parish
                 pref.acolyte = acolyte
                 pref.save()
                 return redirect("my_preferences")
-
-    availability_form = AcolyteAvailabilityRuleForm()
-    availability_form.fields["community"].queryset = parish.community_set.filter(active=True)
-    preference_form = AcolytePreferenceForm()
-    preference_form.fields["target_community"].queryset = parish.community_set.filter(active=True)
-    preference_form.fields["target_position"].queryset = parish.positiontype_set.filter(active=True)
-    preference_form.fields["target_function"].queryset = parish.functiontype_set.filter(active=True)
-    preference_form.fields["target_template"].queryset = parish.masstemplate_set.filter(active=True)
-    preference_form.fields["target_acolyte"].queryset = parish.acolytes.filter(active=True)
+            if preference_form.non_field_errors():
+                messages.info(request, preference_form.non_field_errors()[0])
 
     return render(
         request,
         "acolytes/preferences.html",
         {
             "acolyte": acolyte,
-            "availability": availability,
+            "weekly_rules": weekly_rules,
+            "weekly_by_day": weekly_by_day,
+            "any_day_rules": any_day_rules,
+            "date_absences": date_absences,
             "preferences": preferences,
-            "availability_form": availability_form,
+            "weekly_form": weekly_form,
+            "date_absence_form": date_absence_form,
             "preference_form": preference_form,
+            "weekday_choices": WEEKDAY_CHOICES,
         },
     )
 
@@ -1257,7 +1337,12 @@ def swap_request_assign(request, swap_id):
         if form.is_valid():
             swap.target_acolyte = form.cleaned_data["target_acolyte"]
             swap.open_to_admin = False
-            if apply_swap_request(swap, actor=request.user):
+            try:
+                applied = apply_swap_request(swap, actor=request.user)
+            except ConcurrentUpdateError:
+                messages.error(request, "Esta vaga foi atualizada por outra acao. Recarregue e tente novamente.")
+                return redirect("swap_requests")
+            if applied:
                 swap.status = "accepted"
                 swap.save(update_fields=["target_acolyte", "open_to_admin", "status", "updated_at"])
                 if swap.requestor_acolyte.user:
@@ -1322,7 +1407,12 @@ def swap_request_accept(request, swap_id):
                 idempotency_key=f"swap:{swap.id}:awaiting",
             )
         return redirect("swap_requests")
-    if apply_swap_request(swap, actor=request.user):
+    try:
+        applied = apply_swap_request(swap, actor=request.user)
+    except ConcurrentUpdateError:
+        messages.error(request, "Esta vaga foi atualizada por outra acao. Recarregue e tente novamente.")
+        return redirect("swap_requests")
+    if applied:
         swap.status = "accepted"
         swap.save(update_fields=["status", "updated_at"])
         if swap.requestor_acolyte.user:
@@ -1375,7 +1465,12 @@ def swap_request_approve(request, swap_id):
     swap = get_object_or_404(SwapRequest, parish=parish, id=swap_id)
     if swap.status != "awaiting_approval":
         return redirect("swap_requests")
-    if apply_swap_request(swap, actor=request.user):
+    try:
+        applied = apply_swap_request(swap, actor=request.user)
+    except ConcurrentUpdateError:
+        messages.error(request, "Esta vaga foi atualizada por outra acao. Recarregue e tente novamente.")
+        return redirect("swap_requests")
+    if applied:
         swap.status = "accepted"
         swap.save(update_fields=["status", "updated_at"])
         if swap.requestor_acolyte.user:
@@ -1520,7 +1615,11 @@ def decline_assignment(request, assignment_id):
     if parish.auto_assign_on_decline:
         candidates = quick_fill_slot(slot, parish, max_candidates=1)
         if candidates:
-            new_assignment = assign_replacement(parish, slot, candidates[0], actor=request.user)
+            try:
+                new_assignment = assign_replacement_request(parish, replacement.id, candidates[0], actor=request.user)
+            except (ConcurrentUpdateError, ValueError):
+                messages.error(request, "Esta vaga foi atualizada por outra acao. Recarregue e tente novamente.")
+                return redirect("my_assignments")
             if new_assignment.acolyte.user:
                 enqueue_notification(
                     parish,

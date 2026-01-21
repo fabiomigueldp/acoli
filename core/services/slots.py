@@ -1,8 +1,27 @@
 from core.models import AssignmentSlot
+from core.services.assignments import deactivate_assignment
 
 
 def sync_slots_for_instance(instance):
     if not instance.requirement_profile:
+        slots = AssignmentSlot.objects.filter(mass_instance=instance)
+        for slot in slots:
+            assignment = slot.get_active_assignment()
+            if assignment:
+                deactivate_assignment(assignment, "manual_unassign")
+            slot.required = False
+            slot.externally_covered = False
+            slot.external_coverage_notes = ""
+            slot.status = "finalized"
+            slot.save(
+                update_fields=[
+                    "required",
+                    "externally_covered",
+                    "external_coverage_notes",
+                    "status",
+                    "updated_at",
+                ]
+            )
         return []
 
     desired = set()
@@ -20,14 +39,42 @@ def sync_slots_for_instance(instance):
             if was_created:
                 created.append(slot)
             elif not slot.required:
+                assignment = slot.get_active_assignment()
                 slot.required = True
-                slot.save(update_fields=["required", "updated_at"])
+                slot.externally_covered = False
+                slot.external_coverage_notes = ""
+                if assignment:
+                    slot.status = "finalized" if slot.is_locked else "assigned"
+                else:
+                    slot.status = "open"
+                slot.save(
+                    update_fields=[
+                        "required",
+                        "externally_covered",
+                        "external_coverage_notes",
+                        "status",
+                        "updated_at",
+                    ]
+                )
 
     for slot in AssignmentSlot.objects.filter(mass_instance=instance):
         if (slot.position_type_id, slot.slot_index) not in desired and slot.required:
+            assignment = slot.get_active_assignment()
+            if assignment:
+                deactivate_assignment(assignment, "manual_unassign")
             slot.required = False
+            slot.externally_covered = False
+            slot.external_coverage_notes = ""
             slot.status = "finalized"
-            slot.save(update_fields=["required", "status", "updated_at"])
+            slot.save(
+                update_fields=[
+                    "required",
+                    "externally_covered",
+                    "external_coverage_notes",
+                    "status",
+                    "updated_at",
+                ]
+            )
     return created
 
 

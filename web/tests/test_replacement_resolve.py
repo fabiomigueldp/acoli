@@ -148,3 +148,37 @@ class ReplacementResolveTests(TestCase):
         self.assertEqual(slot.status, "finalized")
         self.assertEqual(slot.external_coverage_notes, "Coberto pelo coral")
         self.assertEqual(replacement.status, "resolved")
+
+    def test_resolve_other_keeps_slot_open(self):
+        instance = MassInstance.objects.create(
+            parish=self.parish,
+            community=self.community,
+            starts_at=timezone.now() + timedelta(days=2),
+            status="scheduled",
+        )
+        slot = AssignmentSlot.objects.create(
+            parish=self.parish,
+            mass_instance=instance,
+            position_type=self.position,
+            slot_index=1,
+            required=False,
+            status="finalized",
+            externally_covered=True,
+            external_coverage_notes="Coberto",
+        )
+        replacement = ReplacementRequest.objects.create(parish=self.parish, slot=slot, status="pending")
+
+        self._login()
+        response = self.client.post(
+            f"/replacements/{replacement.id}/resolve/",
+            {"resolution_type": "other", "notes": "Outro motivo"},
+        )
+        self.assertEqual(response.status_code, 302)
+
+        slot.refresh_from_db()
+        replacement.refresh_from_db()
+        self.assertTrue(slot.required)
+        self.assertEqual(slot.status, "open")
+        self.assertFalse(slot.externally_covered)
+        self.assertEqual(slot.external_coverage_notes, "")
+        self.assertEqual(replacement.status, "resolved")

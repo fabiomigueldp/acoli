@@ -18,3 +18,9 @@
 - Solicite troca com outro acolito ou troca de funcao.
 - Atualize disponibilidade e preferencias.
 - Marque interesse em series de eventos para receber convites.
+
+### Disponibilidade e preferencias
+- "Disponivel apenas" restringe sua agenda: voce so sera escalado dentro dessas regras validas.
+- "Indisponivel" bloqueia datas/horarios e sempre tem prioridade.
+- Ausencias por data sempre bloqueiam, mesmo que exista rotina semanal.
+- Horario final nao inclui o horario exato (ex.: ate 10:00 significa antes de 10:00).

@@ -2,6 +2,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from scheduler.models import ScheduleJobRequest
+from scheduler.services.jobs import claim_job
 from scheduler.services.horizon import build_horizon_instances
 from scheduler.services.solver import solve_schedule
 
@@ -18,9 +19,9 @@ class Command(BaseCommand):
         if parish_id:
             jobs = jobs.filter(parish_id=parish_id)
         for job in jobs:
-            job.status = "running"
-            job.started_at = timezone.now()
-            job.save(update_fields=["status", "started_at"])
+            if not claim_job(job.id):
+                continue
+            job.refresh_from_db()
             try:
                 parish = job.parish
                 instances = build_horizon_instances(parish, job.horizon_days)

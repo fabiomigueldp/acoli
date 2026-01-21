@@ -25,7 +25,7 @@ def preference_score(acolyte, mass_instance, slot, preferences):
                 continue
             if pref.start_time and mass_instance.starts_at.time() < pref.start_time:
                 continue
-            if pref.end_time and mass_instance.starts_at.time() > pref.end_time:
+            if pref.end_time and mass_instance.starts_at.time() >= pref.end_time:
                 continue
             score += weight
     return score
