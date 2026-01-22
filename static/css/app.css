@@ -9,14 +9,7 @@ input:not([type="checkbox"]):not([type="radio"]), select, textarea { width: 100%
 input:not([type="checkbox"]):not([type="radio"]):hover, select:hover, textarea:hover { border-color: rgba(15, 94, 77, 0.3); }
 input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:focus { border-color: #0f5e4d; box-shadow: 0 0 0 3px rgba(15, 94, 77, 0.15), 0 4px 12px rgba(10, 24, 32, 0.08); transform: translateY(-1px); background: white; }
 
-select {
-  appearance: none;
-  cursor: pointer;
-  color: #0b1f26;
-  font-weight: 500;
-  position: relative;
-  padding-right: 2.5rem;
-}
+
 
 .select-wrapper {
   position: relative;

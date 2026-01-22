@@ -105,9 +105,18 @@ class EventSeriesBasicsForm(forms.Form):
     series_type = forms.ChoiceField(choices=SERIES_TYPE_CHOICES)
     series_type_other = forms.CharField(max_length=40, required=False)
     title = forms.CharField(max_length=200)
-    start_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
-    end_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
-    default_time = forms.TimeField(widget=forms.TimeInput(attrs={"type": "time"}))
+    start_date = forms.DateField(
+        widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+        input_formats=["%Y-%m-%d"],
+    )
+    end_date = forms.DateField(
+        widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+        input_formats=["%Y-%m-%d"],
+    )
+    default_time = forms.TimeField(
+        widget=forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
+        input_formats=["%H:%M"],
+    )
     candidate_pool = forms.ChoiceField(
         choices=[("all", "Todos os acolitos"), ("interested_only", "Somente interessados (opt-in)")]
     )

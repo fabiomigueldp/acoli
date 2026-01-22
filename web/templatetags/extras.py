@@ -111,13 +111,27 @@ def initials(value):
     return f"{parts[0][0]}{parts[-1][0]}".upper()
 
 
+def _normalize_choice(value):
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _map_choice_label(mapping, value):
+    key = _normalize_choice(value)
+    if not key:
+        return ""
+    key_lower = key.lower()
+    return mapping.get(key_lower, mapping.get(key, key))
+
+
 @register.filter
 def mass_status_label(value):
     mapping = {
         "scheduled": "Agendada",
         "canceled": "Cancelada",
     }
-    return mapping.get(value, value or "")
+    return _map_choice_label(mapping, value)
 
 
 @register.filter
@@ -127,7 +141,7 @@ def slot_status_label(value):
         "assigned": "Atribuida",
         "finalized": "Finalizada",
     }
-    return mapping.get(value, value or "")
+    return _map_choice_label(mapping, value)
 
 
 @register.filter
@@ -137,7 +151,7 @@ def assignment_state_label(value):
         "published": "Publicada",
         "locked": "Consolidada",
     }
-    return mapping.get(value, value or "")
+    return _map_choice_label(mapping, value)
 
 
 @register.filter
@@ -150,7 +164,7 @@ def confirmation_status_label(value):
         "replaced": "Substituida",
         "no_show": "Nao compareceu",
     }
-    return mapping.get(value, value or "")
+    return _map_choice_label(mapping, value)
 
 
 @register.filter
@@ -163,7 +177,7 @@ def assignment_end_reason_label(value):
         "manual_unassign": "Removido manualmente",
         "swap": "Trocado",
     }
-    return mapping.get(value, value or "")
+    return _map_choice_label(mapping, value)
 
 
 @register.filter
@@ -175,7 +189,7 @@ def swap_status_label(value):
         "rejected": "Recusada",
         "canceled": "Cancelada",
     }
-    return mapping.get(value, value or "")
+    return _map_choice_label(mapping, value)
 
 
 @register.filter
@@ -184,7 +198,7 @@ def swap_type_label(value):
         "acolyte_swap": "Troca de acolito",
         "role_swap": "Troca de funcao",
     }
-    return mapping.get(value, value or "")
+    return _map_choice_label(mapping, value)
 
 
 @register.filter
@@ -195,5 +209,5 @@ def job_status_label(value):
         "success": "Concluido",
         "failed": "Falhou",
     }
-    return mapping.get(value, value or "")
+    return _map_choice_label(mapping, value)
 

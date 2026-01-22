@@ -21,11 +21,11 @@ class Notification(models.Model):
         ("whatsapp", "WhatsApp"),
     ]
     STATUS_CHOICES = [
-        ("pending", "Pending"),
-        ("processing", "Processing"),
-        ("sent", "Sent"),
-        ("failed", "Failed"),
-        ("skipped", "Skipped"),
+        ("pending", "Pendente"),
+        ("processing", "Processando"),
+        ("sent", "Enviada"),
+        ("failed", "Falhou"),
+        ("skipped", "Ignorada"),
     ]
     parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)

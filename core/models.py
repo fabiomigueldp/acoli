@@ -80,8 +80,8 @@ class FamilyGroup(TimeStampedModel):
 
 class AcolyteProfile(TimeStampedModel):
     EXPERIENCE_CHOICES = [
-        ("beginner", "Beginner"),
-        ("intermediate", "Intermediate"),
+        ("beginner", "Iniciante"),
+        ("intermediate", "Intermediario"),
         ("senior", "Senior"),
     ]
     parish = models.ForeignKey(Parish, on_delete=models.CASCADE, related_name="acolytes")
@@ -108,9 +108,9 @@ class AcolyteProfile(TimeStampedModel):
 
 class AcolyteIntent(TimeStampedModel):
     WILLINGNESS_CHOICES = [
-        ("low", "Low"),
+        ("low", "Baixo"),
         ("normal", "Normal"),
-        ("high", "High"),
+        ("high", "Alto"),
     ]
     parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
     acolyte = models.OneToOneField(AcolyteProfile, on_delete=models.CASCADE)
@@ -120,8 +120,8 @@ class AcolyteIntent(TimeStampedModel):
 
 class AcolyteAvailabilityRule(TimeStampedModel):
     RULE_CHOICES = [
-        ("unavailable", "Unavailable"),
-        ("available_only", "Available only"),
+        ("unavailable", "Indisponivel"),
+        ("available_only", "Disponivel apenas"),
     ]
     parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
     acolyte = models.ForeignKey(AcolyteProfile, on_delete=models.CASCADE)
@@ -183,16 +183,16 @@ class AcolyteQualification(TimeStampedModel):
 
 class AcolytePreference(TimeStampedModel):
     PREFERENCE_CHOICES = [
-        ("preferred_community", "Preferred community"),
-        ("avoid_community", "Avoid community"),
-        ("preferred_timeslot", "Preferred timeslot"),
-        ("preferred_mass_template", "Preferred mass template"),
-        ("preferred_position", "Preferred position"),
-        ("avoid_position", "Avoid position"),
-        ("preferred_function", "Preferred function"),
-        ("avoid_function", "Avoid function"),
-        ("preferred_partner", "Preferred partner"),
-        ("avoid_partner", "Avoid partner"),
+        ("preferred_community", "Preferir comunidade"),
+        ("avoid_community", "Evitar comunidade"),
+        ("preferred_timeslot", "Preferir horario"),
+        ("preferred_mass_template", "Preferir modelo"),
+        ("preferred_position", "Preferir funcao"),
+        ("avoid_position", "Evitar funcao"),
+        ("preferred_function", "Preferir funcao base"),
+        ("avoid_function", "Evitar funcao base"),
+        ("preferred_partner", "Preferir parceiro"),
+        ("avoid_partner", "Evitar parceiro"),
     ]
     parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
     acolyte = models.ForeignKey(AcolyteProfile, on_delete=models.CASCADE)
@@ -254,8 +254,8 @@ class MassTemplate(TimeStampedModel):
 
 class EventSeries(TimeStampedModel):
     CANDIDATE_POOL_CHOICES = [
-        ("all", "All"),
-        ("interested_only", "Interested only"),
+        ("all", "Todos"),
+        ("interested_only", "Somente interessados"),
     ]
     parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
     series_type = models.CharField(max_length=40)
@@ -272,10 +272,10 @@ class EventSeries(TimeStampedModel):
 
 class EventOccurrence(TimeStampedModel):
     CONFLICT_CHOICES = [
-        ("keep", "Keep existing"),
-        ("cancel_existing", "Cancel existing"),
-        ("move_existing", "Move existing"),
-        ("skip", "Skip"),
+        ("keep", "Manter existente"),
+        ("cancel_existing", "Cancelar existente"),
+        ("move_existing", "Mover existente"),
+        ("skip", "Ignorar"),
     ]
     parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
     event_series = models.ForeignKey(EventSeries, on_delete=models.CASCADE, related_name="occurrences")
@@ -303,8 +303,8 @@ class EventInterest(TimeStampedModel):
 
 class MassInstance(TimeStampedModel):
     STATUS_CHOICES = [
-        ("scheduled", "Scheduled"),
-        ("canceled", "Canceled"),
+        ("scheduled", "Agendada"),
+        ("canceled", "Cancelada"),
     ]
     parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
     template = models.ForeignKey(MassTemplate, on_delete=models.SET_NULL, null=True, blank=True)
@@ -346,9 +346,9 @@ class MassOverride(TimeStampedModel):
 
 class AssignmentSlot(TimeStampedModel):
     STATUS_CHOICES = [
-        ("open", "Open"),
-        ("assigned", "Assigned"),
-        ("finalized", "Finalized"),
+        ("open", "Aberta"),
+        ("assigned", "Atribuida"),
+        ("finalized", "Finalizada"),
     ]
     parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
     mass_instance = models.ForeignKey(MassInstance, on_delete=models.CASCADE, related_name="slots")
@@ -376,17 +376,17 @@ class AssignmentSlot(TimeStampedModel):
 
 class Assignment(TimeStampedModel):
     END_REASON_CHOICES = [
-        ("declined", "Declined"),
-        ("canceled", "Canceled"),
-        ("replaced", "Replaced"),
-        ("replaced_by_solver", "Replaced by solver"),
-        ("manual_unassign", "Manual unassign"),
-        ("swap", "Swap"),
+        ("declined", "Recusado"),
+        ("canceled", "Cancelado"),
+        ("replaced", "Substituido"),
+        ("replaced_by_solver", "Substituido pelo sistema"),
+        ("manual_unassign", "Removido manualmente"),
+        ("swap", "Trocado"),
     ]
     STATE_CHOICES = [
-        ("proposed", "Proposed"),
-        ("published", "Published"),
-        ("locked", "Locked"),
+        ("proposed", "Proposta"),
+        ("published", "Publicada"),
+        ("locked", "Consolidada"),
     ]
     parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
     slot = models.ForeignKey(AssignmentSlot, on_delete=models.CASCADE, related_name="assignments")
@@ -411,12 +411,12 @@ class Assignment(TimeStampedModel):
 
 class Confirmation(TimeStampedModel):
     STATUS_CHOICES = [
-        ("pending", "Pending"),
-        ("confirmed", "Confirmed"),
-        ("declined", "Declined"),
-        ("canceled_by_acolyte", "Canceled"),
-        ("replaced", "Replaced"),
-        ("no_show", "No show"),
+        ("pending", "Pendente"),
+        ("confirmed", "Confirmada"),
+        ("declined", "Recusada"),
+        ("canceled_by_acolyte", "Cancelada"),
+        ("replaced", "Substituida"),
+        ("no_show", "Nao compareceu"),
     ]
     parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
     assignment = models.OneToOneField(Assignment, on_delete=models.CASCADE, related_name="confirmation")
@@ -428,11 +428,11 @@ class Confirmation(TimeStampedModel):
 
 class SwapRequest(TimeStampedModel):
     STATUS_CHOICES = [
-        ("pending", "Pending"),
-        ("awaiting_approval", "Awaiting approval"),
-        ("accepted", "Accepted"),
-        ("rejected", "Rejected"),
-        ("canceled", "Canceled"),
+        ("pending", "Pendente"),
+        ("awaiting_approval", "Aguardando aprovacao"),
+        ("accepted", "Aceita"),
+        ("rejected", "Recusada"),
+        ("canceled", "Cancelada"),
     ]
     TYPE_CHOICES = [
         ("acolyte_swap", "Acolyte swap"),
@@ -452,10 +452,10 @@ class SwapRequest(TimeStampedModel):
 
 class ReplacementRequest(TimeStampedModel):
     STATUS_CHOICES = [
-        ("pending", "Pending"),
-        ("assigned", "Assigned"),
-        ("canceled", "Canceled"),
-        ("resolved", "Resolved"),
+        ("pending", "Pendente"),
+        ("assigned", "Atribuida"),
+        ("canceled", "Cancelada"),
+        ("resolved", "Resolvida"),
     ]
     RESOLUTION_CHOICES = [
         ("mass_canceled", "Mass canceled"),
@@ -476,10 +476,10 @@ class ReplacementRequest(TimeStampedModel):
 
 class AcolyteCreditLedger(TimeStampedModel):
     REASON_CHOICES = [
-        ("served_unpopular_slot", "Served unpopular slot"),
-        ("accepted_last_minute_substitution", "Accepted last minute substitution"),
-        ("high_attendance_streak", "High attendance streak"),
-        ("received_high_demand_assignment", "Received high demand assignment"),
+        ("served_unpopular_slot", "Serviu em horario pouco procurado"),
+        ("accepted_last_minute_substitution", "Aceitou substituicao de ultima hora"),
+        ("high_attendance_streak", "Boa sequencia de presencas"),
+        ("received_high_demand_assignment", "Recebeu funcao disputada"),
     ]
     parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
     acolyte = models.ForeignKey(AcolyteProfile, on_delete=models.CASCADE)

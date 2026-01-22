@@ -1256,6 +1256,11 @@ def event_series_edit(request, series_id):
     parish = request.active_parish
     series = get_object_or_404(EventSeries, parish=parish, id=series_id)
     type_values = {choice[0] for choice in EventSeriesBasicsForm.SERIES_TYPE_CHOICES}
+
+    # Verificar se existem perfis de requisitos
+    profiles_exist = RequirementProfile.objects.filter(parish=parish, active=True).exists()
+    profile_create_url = f"{reverse('requirement_profile_create')}?{urlencode({'next': request.get_full_path()})}"
+
     initial = {
         "title": series.title,
         "start_date": series.start_date,
@@ -1309,6 +1314,8 @@ def event_series_edit(request, series_id):
             "submit_label": "Salvar",
             "cancel_url": reverse("event_series_detail", args=[series.id]),
             "default_cancel_url": reverse("event_series_list"),
+            "profiles_exist": profiles_exist,
+            "profile_create_url": profile_create_url,
         },
     )
 

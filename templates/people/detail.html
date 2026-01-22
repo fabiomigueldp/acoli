@@ -222,14 +222,50 @@
             {% csrf_token %}
             <input type="hidden" name="form_type" value="weekly_availability" />
             <div class="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label class="label">Tipo</label>
-                {{ weekly_form.rule_type }}
-              </div>
-              <div>
-                <label class="label">Dia</label>
-                {{ weekly_form.day_of_week }}
-              </div>
+               <div>
+                 <label class="label">Tipo</label>
+                 <div class="custom-select">
+                   <input type="hidden" name="rule_type" value="{{ weekly_form.rule_type.value }}">
+                   <button type="button" class="custom-select-button">
+                     <span class="selected-text">
+                       {% if weekly_form.rule_type.value %}
+                         {% for choice_value, choice_label in weekly_form.rule_type.field.choices %}
+                           {% if weekly_form.rule_type.value == choice_value %}{{ choice_label }}{% endif %}
+                         {% endfor %}
+                       {% else %}
+                         Selecionar...
+                       {% endif %}
+                     </span>
+                   </button>
+                   <div class="custom-select-options">
+                     {% for choice_value, choice_label in weekly_form.rule_type.field.choices %}
+                       <button type="button" class="custom-select-option {% if weekly_form.rule_type.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
+                     {% endfor %}
+                   </div>
+                 </div>
+               </div>
+               <div>
+                 <label class="label">Dia</label>
+                 <div class="custom-select">
+                   <input type="hidden" name="day_of_week" value="{{ weekly_form.day_of_week.value }}">
+                   <button type="button" class="custom-select-button">
+                     <span class="selected-text">
+                       {% if weekly_form.day_of_week.value %}
+                         {% for choice_value, choice_label in weekly_form.day_of_week.field.choices %}
+                           {% if weekly_form.day_of_week.value == choice_value %}{{ choice_label }}{% endif %}
+                         {% endfor %}
+                       {% else %}
+                         Selecionar...
+                       {% endif %}
+                     </span>
+                   </button>
+                   <div class="custom-select-options">
+                     {% for choice_value, choice_label in weekly_form.day_of_week.field.choices %}
+                       <button type="button" class="custom-select-option {% if weekly_form.day_of_week.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
+                     {% endfor %}
+                   </div>
+                 </div>
+               </div>
               <div>
                 <label class="label">Inicio</label>
                 {{ weekly_form.start_time }}
@@ -238,10 +274,28 @@
                 <label class="label">Fim</label>
                 {{ weekly_form.end_time }}
               </div>
-              <div>
-                <label class="label">Comunidade</label>
-                {{ weekly_form.community }}
-              </div>
+               <div>
+                 <label class="label">Comunidade</label>
+                 <div class="custom-select">
+                   <input type="hidden" name="community" value="{{ weekly_form.community.value }}">
+                   <button type="button" class="custom-select-button">
+                     <span class="selected-text">
+                       {% if weekly_form.community.value %}
+                         {% for choice_value, choice_label in weekly_form.community.field.choices %}
+                           {% if weekly_form.community.value == choice_value %}{{ choice_label|slice:":3" }}{% endif %}
+                         {% endfor %}
+                       {% else %}
+                         Selecionar...
+                       {% endif %}
+                     </span>
+                   </button>
+                   <div class="custom-select-options">
+                     {% for choice_value, choice_label in weekly_form.community.field.choices %}
+                       <button type="button" class="custom-select-option {% if weekly_form.community.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label|slice:":3" }}</button>
+                     {% endfor %}
+                   </div>
+                 </div>
+               </div>
               <div class="sm:col-span-2">
                 <label class="label">Observacao</label>
                 {{ weekly_form.notes }}
@@ -314,10 +368,28 @@
             {% csrf_token %}
             <input type="hidden" name="form_type" value="preference" />
             <div class="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label class="label">Tipo</label>
-                {{ preference_form.preference_type }}
-              </div>
+               <div>
+                 <label class="label">Tipo</label>
+                 <div class="custom-select">
+                   <input type="hidden" name="preference_type" value="{{ preference_form.preference_type.value }}">
+                   <button type="button" class="custom-select-button">
+                     <span class="selected-text">
+                       {% if preference_form.preference_type.value %}
+                         {% for choice_value, choice_label in preference_form.preference_type.field.choices %}
+                           {% if preference_form.preference_type.value == choice_value %}{{ choice_label }}{% endif %}
+                         {% endfor %}
+                       {% else %}
+                         Selecionar...
+                       {% endif %}
+                     </span>
+                   </button>
+                   <div class="custom-select-options">
+                     {% for choice_value, choice_label in preference_form.preference_type.field.choices %}
+                       <button type="button" class="custom-select-option {% if preference_form.preference_type.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
+                     {% endfor %}
+                   </div>
+                 </div>
+               </div>
               <div>
                 <label class="label">Prioridade</label>
                 <div class="flex gap-2" id="pref-priority">
@@ -327,10 +399,28 @@
                 </div>
                 {{ preference_form.weight }}
               </div>
-              <div data-field="community">
-                <label class="label">Comunidade</label>
-                {{ preference_form.target_community }}
-              </div>
+               <div data-field="community">
+                 <label class="label">Comunidade</label>
+                 <div class="custom-select">
+                   <input type="hidden" name="target_community" value="{{ preference_form.target_community.value }}">
+                   <button type="button" class="custom-select-button">
+                     <span class="selected-text">
+                       {% if preference_form.target_community.value %}
+                         {% for choice_value, choice_label in preference_form.target_community.field.choices %}
+                           {% if preference_form.target_community.value == choice_value %}{{ choice_label|slice:":3" }}{% endif %}
+                         {% endfor %}
+                       {% else %}
+                         Selecionar...
+                       {% endif %}
+                     </span>
+                   </button>
+                   <div class="custom-select-options">
+                     {% for choice_value, choice_label in preference_form.target_community.field.choices %}
+                       <button type="button" class="custom-select-option {% if preference_form.target_community.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label|slice:":3" }}</button>
+                     {% endfor %}
+                   </div>
+                 </div>
+               </div>
               <div data-field="position">
                 <label class="label">Funcao</label>
                 {{ preference_form.target_position }}

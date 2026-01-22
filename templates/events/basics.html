@@ -3,58 +3,163 @@
 {% block content %}
 <div class="card max-w-3xl">
   <h2 class="font-serif text-xl mb-2">{{ heading|default:"Agendar celebracao" }}</h2>
-  <p class="text-sm text-slate mb-4">Defina o tipo liturgico e o periodo. Voce ajusta cada dia na etapa seguinte.</p>
-  <form method="post" class="space-y-4">
+  <p class="text-sm text-slate mb-6">Defina o tipo liturgico e o periodo. Voce ajusta cada dia na etapa seguinte.</p>
+  <form method="post" class="space-y-5">
     {% csrf_token %}
-    {{ form.non_field_errors }}
-    <div class="grid sm:grid-cols-2 gap-4">
-      <div>
-        <label class="label">Tipo liturgico</label>
-        {{ form.series_type }}
-        <div id="series_type_other_field" class="mt-2 hidden">
-          <label class="label">Outro tipo</label>
+    {% if form.non_field_errors %}
+      <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+    <div class="grid sm:grid-cols-2 gap-5">
+       <div>
+         <label class="label" for="id_series_type">Tipo litúrgico</label>
+         <div class="custom-select">
+           <input type="hidden" name="series_type" value="{{ form.series_type.value }}">
+           <button type="button" class="custom-select-button">
+             <span class="selected-text">
+               {% if form.series_type.value %}
+                 {% for choice_value, choice_label in form.series_type.field.choices %}
+                   {% if form.series_type.value == choice_value %}{{ choice_label }}{% endif %}
+                 {% endfor %}
+               {% else %}
+                 Selecionar...
+               {% endif %}
+             </span>
+           </button>
+           <div class="custom-select-options">
+             {% for choice_value, choice_label in form.series_type.field.choices %}
+               <button type="button" class="custom-select-option {% if form.series_type.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
+             {% endfor %}
+           </div>
+         </div>
+         {% if form.series_type.errors %}
+           <div class="form-error">{{ form.series_type.errors.0 }}</div>
+         {% endif %}
+        <div id="series_type_other_field" class="mt-3 {% if form.series_type.value != 'Outro' %}hidden{% endif %}">
+          <label class="label" for="id_series_type_other">Outro tipo</label>
           {{ form.series_type_other }}
+          {% if form.series_type_other.errors %}
+            <p class="mt-1 text-xs text-red-600">{{ form.series_type_other.errors.0 }}</p>
+          {% endif %}
         </div>
       </div>
       <div>
-        <label class="label">Titulo da celebracao</label>
+        <label class="label" for="id_title">Titulo da celebracao</label>
         {{ form.title }}
+        {% if form.title.errors %}
+          <p class="mt-1 text-xs text-red-600">{{ form.title.errors.0 }}</p>
+        {% endif %}
       </div>
       <div>
-        <label class="label">Inicio</label>
+        <label class="label" for="id_start_date">Inicio</label>
         {{ form.start_date }}
+        {% if form.start_date.errors %}
+          <p class="mt-1 text-xs text-red-600">{{ form.start_date.errors.0 }}</p>
+        {% endif %}
       </div>
       <div>
-        <label class="label">Fim</label>
+        <label class="label" for="id_end_date">Fim</label>
         {{ form.end_date }}
+        {% if form.end_date.errors %}
+          <p class="mt-1 text-xs text-red-600">{{ form.end_date.errors.0 }}</p>
+        {% endif %}
       </div>
       <div>
-        <label class="label">Horario padrao</label>
+        <label class="label" for="id_default_time">Horario padrao</label>
         {{ form.default_time }}
+        {% if form.default_time.errors %}
+          <p class="mt-1 text-xs text-red-600">{{ form.default_time.errors.0 }}</p>
+        {% endif %}
       </div>
-      <div>
-        <label class="label">Comunidade padrao</label>
-        {{ form.default_community }}
-      </div>
+       <div>
+         <label class="label" for="id_default_community">Comunidade padrão</label>
+         <div class="custom-select">
+           <input type="hidden" name="default_community" value="{{ form.default_community.value }}">
+           <button type="button" class="custom-select-button">
+             <span class="selected-text">
+               {% if form.default_community.value %}
+                 {% for choice_value, choice_label in form.default_community.field.choices %}
+                   {% if form.default_community.value == choice_value %}{{ choice_label|slice:":3" }}{% endif %}
+                 {% endfor %}
+               {% else %}
+                 Selecionar...
+               {% endif %}
+             </span>
+           </button>
+           <div class="custom-select-options">
+             {% for choice_value, choice_label in form.default_community.field.choices %}
+               <button type="button" class="custom-select-option {% if form.default_community.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label|slice:":3" }}</button>
+             {% endfor %}
+           </div>
+         </div>
+         {% if form.default_community.errors %}
+           <div class="form-error">{{ form.default_community.errors.0 }}</div>
+         {% endif %}
+       </div>
       <div class="sm:col-span-2">
-        <div class="flex items-center justify-between">
-          <label class="label">Perfil de requisitos padrao</label>
-          <a class="text-xs text-slate hover:text-ink" href="{{ profile_create_url }}">+ Criar perfil</a>
+        <div class="flex items-center justify-between mb-1">
+          <label class="label mb-0" for="id_default_requirement_profile">Perfil de requisitos padrao</label>
+          {% if profile_create_url %}
+            <a class="text-xs text-moss hover:text-ink font-medium transition-colors" href="{{ profile_create_url }}">+ Criar perfil</a>
+          {% endif %}
         </div>
-        {{ form.default_requirement_profile }}
+        <div class="custom-select">
+          <input type="hidden" name="default_requirement_profile" value="{{ form.default_requirement_profile.value }}">
+          <button type="button" class="custom-select-button">
+            <span class="selected-text">
+              {% if form.default_requirement_profile.value %}
+                {% for choice_value, choice_label in form.default_requirement_profile.field.choices %}
+                  {% if form.default_requirement_profile.value == choice_value %}{{ choice_label }}{% endif %}
+                {% endfor %}
+              {% else %}
+                Selecionar...
+              {% endif %}
+            </span>
+          </button>
+          <div class="custom-select-options">
+            {% for choice_value, choice_label in form.default_requirement_profile.field.choices %}
+              <button type="button" class="custom-select-option {% if form.default_requirement_profile.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
+            {% endfor %}
+          </div>
+        </div>
+        {% if form.default_requirement_profile.errors %}
+          <div class="form-error">{{ form.default_requirement_profile.errors.0 }}</div>
+        {% endif %}
         {% if not profiles_exist %}
-          <div class="mt-2 rounded-lg border border-black/10 bg-white px-3 py-2 text-xs text-slate">
-            Nenhum perfil cadastrado. Crie um perfil para definir quantas funcoes cada celebracao exige.
+          <div class="mt-3 rounded-xl border border-sun/30 bg-sun/5 px-4 py-3 text-xs text-slate">
+            <span class="font-medium text-ink">Nenhum perfil cadastrado.</span> Crie um perfil para definir quantas funcoes cada celebracao exige.
           </div>
         {% endif %}
       </div>
-      <div class="sm:col-span-2">
-        <label class="label">Pool de candidatos</label>
-        {{ form.candidate_pool }}
-      </div>
+       <div class="sm:col-span-2">
+         <label class="label" for="id_candidate_pool">Pool de candidatos</label>
+         <div class="custom-select">
+           <input type="hidden" name="candidate_pool" value="{{ form.candidate_pool.value }}">
+           <button type="button" class="custom-select-button">
+             <span class="selected-text">
+               {% if form.candidate_pool.value %}
+                 {% for choice_value, choice_label in form.candidate_pool.field.choices %}
+                   {% if form.candidate_pool.value == choice_value %}{{ choice_label }}{% endif %}
+                 {% endfor %}
+               {% else %}
+                 Selecionar...
+               {% endif %}
+             </span>
+           </button>
+           <div class="custom-select-options">
+             {% for choice_value, choice_label in form.candidate_pool.field.choices %}
+               <button type="button" class="custom-select-option {% if form.candidate_pool.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
+             {% endfor %}
+           </div>
+         </div>
+         {% if form.candidate_pool.errors %}
+           <div class="form-error">{{ form.candidate_pool.errors.0 }}</div>
+         {% endif %}
+       </div>
     </div>
-    <div class="flex items-center gap-3">
-      <button class="btn-primary">{{ submit_label|default:"Avancar" }}</button>
+    <div class="flex items-center gap-3 pt-2">
+      <button type="submit" class="btn-primary">{{ submit_label|default:"Avancar" }}</button>
       <a class="btn-secondary" href="{{ cancel_url|default:default_cancel_url }}">Cancelar</a>
     </div>
   </form>
@@ -65,12 +170,20 @@
     const otherWrap = document.getElementById("series_type_other_field");
     const otherInput = document.getElementById("id_series_type_other");
     if (!typeField || !otherWrap || !otherInput) return;
+    
+    let isInitialLoad = true;
+    
     const toggleOther = () => {
       const show = typeField.value === "Outro";
       otherWrap.classList.toggle("hidden", !show);
       otherInput.disabled = !show;
-      if (!show) otherInput.value = "";
+      // Somente limpa o valor se o usuario mudou o select (nao na carga inicial)
+      if (!show && !isInitialLoad) {
+        otherInput.value = "";
+      }
+      isInitialLoad = false;
     };
+    
     typeField.addEventListener("change", toggleOther);
     toggleOther();
   })();

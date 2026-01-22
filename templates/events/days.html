@@ -91,17 +91,59 @@
               <label class="label">Horario</label>
               {{ form.time }}
             </div>
-            <div>
-              <label class="label">Comunidade</label>
-              {{ form.community }}
-            </div>
-            <div>
-              <label class="label">Perfil</label>
-              {{ form.requirement_profile }}
-            </div>
-            <div>
-              <label class="label">Conflito</label>
-              {{ form.conflict_action }}
+             <div>
+               <label class="label">Comunidade</label>
+               <div class="custom-select">
+                 <select class="hidden" name="{{ form.community.name }}">
+                   {% for option in form.community %}
+                     {{ option }}
+                   {% endfor %}
+                 </select>
+                 <button type="button" class="custom-select-button">
+                   <span class="selected-text">{{ form.community.value|default:"--" }}</span>
+                 </button>
+                 <div class="custom-select-options">
+                   {% for option in form.community %}
+                     <button type="button" class="custom-select-option" data-value="{{ option.data.value }}">{{ option.data.value|slice:":3" }}</button>
+                   {% endfor %}
+                 </div>
+               </div>
+             </div>
+             <div>
+               <label class="label">Perfil</label>
+               <div class="custom-select">
+                 <select class="hidden" name="{{ form.requirement_profile.name }}">
+                   {% for option in form.requirement_profile %}
+                     {{ option }}
+                   {% endfor %}
+                 </select>
+                 <button type="button" class="custom-select-button">
+                   <span class="selected-text">{{ form.requirement_profile.value|default:"--" }}</span>
+                 </button>
+                 <div class="custom-select-options">
+                   {% for option in form.requirement_profile %}
+                     <button type="button" class="custom-select-option" data-value="{{ option.data.value }}">{{ option.data.label }}</button>
+                   {% endfor %}
+                 </div>
+               </div>
+             </div>
+             <div>
+               <label class="label">Conflito</label>
+               <div class="custom-select">
+                 <select class="hidden" name="{{ form.conflict_action.name }}">
+                   {% for option in form.conflict_action %}
+                     {{ option }}
+                   {% endfor %}
+                 </select>
+                 <button type="button" class="custom-select-button">
+                   <span class="selected-text">{{ form.conflict_action.value|default:"--" }}</span>
+                 </button>
+                 <div class="custom-select-options">
+                   {% for option in form.conflict_action %}
+                     <button type="button" class="custom-select-option" data-value="{{ option.data.value }}">{{ option.data.label }}</button>
+                   {% endfor %}
+                 </div>
+               </div>
               <p class="text-xs text-slate mt-1">
                 Manter: usa a missa existente · Cancelar: remove a missa existente · Mover: transfere a missa existente · Pular: ignora este dia
               </p>

@@ -6,10 +6,10 @@ from core.models import Parish
 
 class ScheduleJobRequest(models.Model):
     STATUS_CHOICES = [
-        ("pending", "Pending"),
-        ("running", "Running"),
-        ("success", "Success"),
-        ("failed", "Failed"),
+        ("pending", "Pendente"),
+        ("running", "Executando"),
+        ("success", "Concluido"),
+        ("failed", "Falhou"),
     ]
     parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
     requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
