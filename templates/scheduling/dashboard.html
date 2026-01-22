@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load extras %}
 {% block title %}Escalonar{% endblock %}
 {% block content %}
 <div class="grid gap-6">
@@ -52,7 +53,7 @@
         <a class="border border-black/5 rounded-lg p-3 flex items-center justify-between hover:bg-sand" href="{% url 'schedule_job_detail' job.id %}">
           <div>
             <div class="text-sm text-slate">{{ job.created_at|date:"d/m H:i" }}</div>
-            <div class="font-medium">{{ job.get_status_display }}</div>
+            <div class="font-medium">{{ job.status|job_status_label }}</div>
           </div>
           <span class="badge">
             {{ job.summary_json.coverage|default:"-" }} coberturas

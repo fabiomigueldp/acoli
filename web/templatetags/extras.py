@@ -110,3 +110,90 @@ def initials(value):
         return parts[0][:2].upper()
     return f"{parts[0][0]}{parts[-1][0]}".upper()
 
+
+@register.filter
+def mass_status_label(value):
+    mapping = {
+        "scheduled": "Agendada",
+        "canceled": "Cancelada",
+    }
+    return mapping.get(value, value or "")
+
+
+@register.filter
+def slot_status_label(value):
+    mapping = {
+        "open": "Aberta",
+        "assigned": "Atribuida",
+        "finalized": "Finalizada",
+    }
+    return mapping.get(value, value or "")
+
+
+@register.filter
+def assignment_state_label(value):
+    mapping = {
+        "proposed": "Proposta",
+        "published": "Publicada",
+        "locked": "Consolidada",
+    }
+    return mapping.get(value, value or "")
+
+
+@register.filter
+def confirmation_status_label(value):
+    mapping = {
+        "pending": "Pendente",
+        "confirmed": "Confirmada",
+        "declined": "Recusada",
+        "canceled_by_acolyte": "Cancelada pelo acolito",
+        "replaced": "Substituida",
+        "no_show": "Nao compareceu",
+    }
+    return mapping.get(value, value or "")
+
+
+@register.filter
+def assignment_end_reason_label(value):
+    mapping = {
+        "declined": "Recusado",
+        "canceled": "Cancelado",
+        "replaced": "Substituido",
+        "replaced_by_solver": "Substituido pelo sistema",
+        "manual_unassign": "Removido manualmente",
+        "swap": "Trocado",
+    }
+    return mapping.get(value, value or "")
+
+
+@register.filter
+def swap_status_label(value):
+    mapping = {
+        "pending": "Pendente",
+        "awaiting_approval": "Aguardando aprovacao",
+        "accepted": "Aceita",
+        "rejected": "Recusada",
+        "canceled": "Cancelada",
+    }
+    return mapping.get(value, value or "")
+
+
+@register.filter
+def swap_type_label(value):
+    mapping = {
+        "acolyte_swap": "Troca de acolito",
+        "role_swap": "Troca de funcao",
+    }
+    return mapping.get(value, value or "")
+
+
+@register.filter
+def job_status_label(value):
+    mapping = {
+        "pending": "Pendente",
+        "running": "Executando",
+        "success": "Concluido",
+        "failed": "Falhou",
+    }
+    return mapping.get(value, value or "")
+

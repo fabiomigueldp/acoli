@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
+{% load extras %}
 {% block title %}Detalhes do job{% endblock %}
 {% block content %}
 <div class="grid gap-6">
   <div class="card">
     <h2 class="font-serif text-xl mb-2">Job {{ job.id }}</h2>
-    <div class="text-sm text-slate">Status: {{ job.get_status_display }}</div>
+    <div class="text-sm text-slate">Status: {{ job.status|job_status_label }}</div>
     <div class="text-sm text-slate">Criado: {{ job.created_at|date:"d/m H:i" }}</div>
     {% if job.started_at %}<div class="text-sm text-slate">Inicio: {{ job.started_at|date:"d/m H:i" }}</div>{% endif %}
     {% if job.finished_at %}<div class="text-sm text-slate">Fim: {{ job.finished_at|date:"d/m H:i" }}</div>{% endif %}

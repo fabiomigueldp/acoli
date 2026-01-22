@@ -106,7 +106,7 @@
               </div>
             </div>
             <div class="text-right">
-              <span class="badge">{{ instance.status }}</span>
+              <span class="badge">{{ instance.status|mass_status_label }}</span>
             </div>
           </div>
           <div class="text-sm text-slate ml-13">{{ instance.liturgy_label|default:"Missa" }}</div>

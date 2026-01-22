@@ -50,7 +50,7 @@
             </div>
             <div class="flex flex-wrap items-center gap-3">
               {% if assignment.confirmation %}
-                <span class="badge">{{ assignment.confirmation.status|title }}</span>
+              <span class="badge">{{ assignment.confirmation.status|confirmation_status_label }}</span>
                 {% if assignment.confirmation.status == "pending" %}
                   <div class="flex gap-2">
                     <form method="post" action="{% url 'confirm_assignment' assignment.id %}">
@@ -70,7 +70,7 @@
                 {% endif %}
                 <a class="btn-secondary text-sm px-4 py-2" href="{% url 'swap_request_create' assignment.id %}">Solicitar troca</a>
               {% else %}
-                <span class="badge">{{ assignment.assignment_state|title }}</span>
+              <span class="badge">{{ assignment.assignment_state|assignment_state_label }}</span>
                 <a class="btn-secondary text-sm px-4 py-2" href="{% url 'swap_request_create' assignment.id %}">Solicitar troca</a>
               {% endif %}
             </div>

@@ -8,7 +8,7 @@
     <h2 class="font-serif text-2xl">{{ instance.community.name }}</h2>
     <p class="text-slate">{{ instance.liturgy_label|default:"Missa" }}</p>
     <div class="mt-4 flex items-center gap-2">
-      <span class="badge">{{ instance.status }}</span>
+      <span class="badge">{{ instance.status|mass_status_label }}</span>
       {% if instance.event_series %}
         <span class="badge">Evento</span>
       {% endif %}
@@ -63,20 +63,20 @@
              <div class="custom-select">
                <input type="hidden" name="community" value="{{ move_form.community.value }}">
                <button type="button" class="custom-select-button">
-                 <span class="selected-text">
-                   {% if move_form.community.value %}
-                     {% for choice_value, choice_label in move_form.community.field.choices %}
-                       {% if move_form.community.value == choice_value %}{{ choice_value }}{% endif %}
-                     {% endfor %}
-                   {% else %}
-                     Selecionar...
-                   {% endif %}
-                 </span>
+                  <span class="selected-text">
+                    {% if move_form.community.value %}
+                      {% for choice_value, choice_label in move_form.community.field.choices %}
+                        {% if move_form.community.value == choice_value %}{{ choice_label|slice:":3" }}{% endif %}
+                      {% endfor %}
+                    {% else %}
+                      Selecionar...
+                    {% endif %}
+                  </span>
                </button>
                <div class="custom-select-options">
-                 {% for choice_value, choice_label in move_form.community.field.choices %}
-                   <button type="button" class="custom-select-option {% if move_form.community.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_value }}</button>
-                 {% endfor %}
+                  {% for choice_value, choice_label in move_form.community.field.choices %}
+                    <button type="button" class="custom-select-option {% if move_form.community.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label|slice:":3" }}</button>
+                  {% endfor %}
                </div>
              </div>
            </div>
@@ -123,14 +123,14 @@
                   <div class="space-y-1">
                     {% for past in slot.recent_assignments %}
                       {% if not past.is_active %}
-                        <div>{{ past.acolyte.display_name }}{% if past.end_reason %} ({{ past.end_reason }}){% endif %}</div>
+                        <div>{{ past.acolyte.display_name }}{% if past.end_reason %} ({{ past.end_reason|assignment_end_reason_label }}){% endif %}</div>
                       {% endif %}
                     {% endfor %}
                   </div>
                 </div>
               {% endif %}
             </div>
-            <span class="badge">{{ slot.status }}</span>
+            <span class="badge">{{ slot.status|slot_status_label }}</span>
           </div>
           {% if can_manage_parish and slot.required and not slot.externally_covered %}
             {% with active=slot.active_assignment %}

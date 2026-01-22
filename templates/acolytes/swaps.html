@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load extras %}
 {% block title %}Trocas{% endblock %}
 {% block content %}
 <div class="card">
@@ -9,8 +10,8 @@
         <div>
           <div class="font-medium">{{ swap.mass_instance.starts_at|date:"d/m H:i" }}</div>
           <div class="text-sm text-slate">
-            {{ swap.get_swap_type_display }} -
-            {% if swap.open_to_admin %}Aguardando coordenacao{% else %}{{ swap.get_status_display }}{% endif %}
+            {{ swap.swap_type|swap_type_label }} -
+            {% if swap.open_to_admin %}Aguardando coordenacao{% else %}{{ swap.status|swap_status_label }}{% endif %}
           </div>
         </div>
         <div class="flex items-center gap-2">
