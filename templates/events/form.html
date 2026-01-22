@@ -1,38 +1,89 @@
 {% extends 'base.html' %}
 {% block title %}Novo evento{% endblock %}
 {% block content %}
-<div class="card max-w-2xl">
-  <h2 class="font-serif text-xl mb-4">Criar serie de eventos</h2>
-  <form method="post" class="space-y-4">
-    {% csrf_token %}
-    {{ form.non_field_errors }}
-    <div class="grid sm:grid-cols-2 gap-4">
+<div class="card max-w-3xl">
+  <div class="mb-8">
+    <h2 class="font-serif text-2xl text-moss">Criar série de eventos</h2>
+    <p class="text-sm text-slate">Configure uma nova programação litúrgica recorrente</p>
+  </div>
       <div>
-        <label class="label">Tipo</label>
+        <label class="label">Tipo de série</label>
         {{ form.series_type }}
+        {% if form.series_type.errors %}
+      <div class="form-error">
+        <span class="font-medium">Erros no formulário</span>
+        <ul class="mt-1 space-y-1">
+          {% for error in form.non_field_errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
       </div>
-      <div>
-        <label class="label">Titulo</label>
+        {% endif %}
+      </div>
+  </div>
+  <form method="post" class="space-y-6">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div class="bg-red-50 border border-red-200 rounded-xl p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-red-600 font-medium">⚠️ Erros no formulário</span>
+        </div>
+        <ul class="text-sm text-red-700 space-y-1">
+          {% for error in form.non_field_errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+    <div class="grid sm:grid-cols-2 gap-6">
+      <div class="space-y-2">
+        <label class="label">Tipo de série</label>
+        {{ form.series_type }}
+        {% if form.series_type.errors %}
+          <p class="text-sm text-red-600">{{ form.series_type.errors.0 }}</p>
+        {% endif %}
+      </div>
+      <div class="space-y-2">
+        <label class="label">Título da série</label>
         {{ form.title }}
+        {% if form.title.errors %}
+          <p class="text-sm text-red-600">{{ form.title.errors.0 }}</p>
+        {% endif %}
       </div>
-      <div>
-        <label class="label">Inicio</label>
+      <div class="space-y-2">
+        <label class="label">Data de início</label>
         {{ form.start_date }}
+        {% if form.start_date.errors %}
+          <p class="text-sm text-red-600">{{ form.start_date.errors.0 }}</p>
+        {% endif %}
       </div>
-      <div>
-        <label class="label">Fim</label>
+      <div class="space-y-2">
+        <label class="label">Data de fim</label>
         {{ form.end_date }}
+        {% if form.end_date.errors %}
+          <p class="text-sm text-red-600">{{ form.end_date.errors.0 }}</p>
+        {% endif %}
       </div>
-      <div class="sm:col-span-2">
-        <label class="label">Comunidade padrao</label>
+      <div class="sm:col-span-2 space-y-2">
+        <label class="label">Comunidade padrão</label>
         {{ form.default_community }}
+        {% if form.default_community.errors %}
+          <p class="text-sm text-red-600">{{ form.default_community.errors.0 }}</p>
+        {% endif %}
       </div>
-      <div class="sm:col-span-2">
-        <label class="label">Regras (JSON)</label>
+      <div class="sm:col-span-2 space-y-2">
+        <label class="label">Regras de recorrência (JSON)</label>
         {{ form.ruleset_json }}
+        {% if form.ruleset_json.errors %}
+          <p class="text-sm text-red-600">{{ form.ruleset_json.errors.0 }}</p>
+        {% endif %}
+        <p class="text-xs text-slate mt-1">Configure as regras de recorrência em formato JSON. Exemplo: {"freq": "weekly", "byweekday": ["SU"]}</p>
       </div>
     </div>
-    <button class="btn-primary">Salvar e gerar</button>
+    <div class="flex gap-4 pt-6 border-t border-black/5">
+      <button class="btn-primary flex-1 justify-center">Salvar e gerar série</button>
+      <a href="{% url 'event_series_list' %}" class="btn-secondary">Cancelar</a>
+    </div>
   </form>
 </div>
 {% endblock %}

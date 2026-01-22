@@ -24,47 +24,69 @@
     {% endif %}
   </div>
 
-  <div class="card">
-    <h3 class="font-semibold mb-3">Proximas escalas</h3>
-    <div class="space-y-2">
+   <div class="card">
+    <div class="mb-6">
+      <h3 class="font-semibold text-xl text-ink">Próximas escalas</h3>
+      <p class="text-sm text-slate">Suas atribuições litúrgicas agendadas</p>
+    </div>
+    <div class="space-y-4">
       {% for assignment in assignments %}
-        <div class="border border-black/5 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div class="text-sm text-slate">{{ assignment.slot.mass_instance.starts_at|date:"d/m H:i" }}</div>
-            <div class="font-medium">{{ assignment.slot.mass_instance.community.code }} - {{ assignment.slot.position_type.name }}</div>
-            {% with team=team_names_map|get_item:assignment.slot.mass_instance_id %}
-              {% if team %}
-                <div class="text-xs text-slate mt-1">Equipe: {{ team }}</div>
+        <div class="border border-black/8 rounded-xl p-5 hover:bg-sand/20 hover:border-moss/20 transition-all duration-200 hover:shadow-sm group">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div class="flex items-start gap-4">
+              <div class="w-12 h-12 bg-gradient-to-br from-moss to-sun rounded-full flex items-center justify-center text-white font-serif text-sm font-bold flex-shrink-0">
+                {{ assignment.slot.mass_instance.community.code|slice:":1" }}
+              </div>
+              <div>
+                <div class="text-sm text-slate font-medium mb-1">{{ assignment.slot.mass_instance.starts_at|date:"l, d/m/Y" }}</div>
+                <div class="font-semibold text-lg text-ink group-hover:text-moss transition-colors">{{ assignment.slot.mass_instance.starts_at|date:"H:i" }} • {{ assignment.slot.mass_instance.community.code }}</div>
+                <div class="text-slate font-medium">{{ assignment.slot.position_type.name }}</div>
+                {% with team=team_names_map|get_item:assignment.slot.mass_instance_id %}
+                  {% if team %}
+                    <div class="text-xs text-slate mt-2 bg-sand/50 rounded-lg px-2 py-1 inline-block">Equipe: {{ team }}</div>
+                  {% endif %}
+                {% endwith %}
+              </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+              {% if assignment.confirmation %}
+                <span class="badge">{{ assignment.confirmation.status|title }}</span>
+                {% if assignment.confirmation.status == "pending" %}
+                  <div class="flex gap-2">
+                    <form method="post" action="{% url 'confirm_assignment' assignment.id %}">
+                      {% csrf_token %}
+                      <button class="btn-primary text-sm px-4 py-2" type="submit">Confirmar</button>
+                    </form>
+                    <form method="post" action="{% url 'decline_assignment' assignment.id %}" onsubmit="return confirm('Tem certeza que deseja recusar esta escala?');">
+                      {% csrf_token %}
+                      <button class="btn-secondary text-sm px-4 py-2" type="submit">Recusar</button>
+                    </form>
+                  </div>
+                {% elif assignment.confirmation.status == "confirmed" %}
+                  <form method="post" action="{% url 'cancel_assignment' assignment.id %}" onsubmit="return confirm('Tem certeza que deseja cancelar esta escala?');">
+                    {% csrf_token %}
+                    <button class="btn-secondary text-sm px-4 py-2" type="submit">Cancelar</button>
+                  </form>
+                {% endif %}
+                <a class="btn-secondary text-sm px-4 py-2" href="{% url 'swap_request_create' assignment.id %}">Solicitar troca</a>
+              {% else %}
+                <span class="badge">{{ assignment.assignment_state|title }}</span>
+                <a class="btn-secondary text-sm px-4 py-2" href="{% url 'swap_request_create' assignment.id %}">Solicitar troca</a>
               {% endif %}
-            {% endwith %}
-          </div>
-          <div class="flex flex-wrap items-center gap-2">
-            {% if assignment.confirmation %}
-              <span class="badge">{{ assignment.confirmation.status }}</span>
-              {% if assignment.confirmation.status == "pending" %}
-                <form method="post" action="{% url 'confirm_assignment' assignment.id %}">
-                  {% csrf_token %}
-                  <button class="btn-secondary" type="submit">Confirmar</button>
-                </form>
-                <form method="post" action="{% url 'decline_assignment' assignment.id %}" onsubmit="return confirm('Tem certeza que deseja recusar esta escala?');">
-                  {% csrf_token %}
-                  <button class="btn-secondary" type="submit">Recusar</button>
-                </form>
-              {% elif assignment.confirmation.status == "confirmed" %}
-                <form method="post" action="{% url 'cancel_assignment' assignment.id %}" onsubmit="return confirm('Tem certeza que deseja cancelar esta escala?');">
-                  {% csrf_token %}
-                  <button class="btn-secondary" type="submit">Cancelar</button>
-                </form>
-              {% endif %}
-              <a class="btn-secondary" href="{% url 'swap_request_create' assignment.id %}">Solicitar troca</a>
-            {% else %}
-              <span class="badge">{{ assignment.assignment_state }}</span>
-              <a class="btn-secondary" href="{% url 'swap_request_create' assignment.id %}">Solicitar troca</a>
-            {% endif %}
+            </div>
           </div>
         </div>
       {% empty %}
-        <p class="text-sm text-slate">Sem escalas atribuidas.</p>
+        <div class="text-center py-12">
+          <div class="w-16 h-16 bg-sand rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-slate" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+          </div>
+          <p class="text-slate font-medium text-lg">Nenhuma escala atribuída</p>
+          <p class="text-sm text-slate mt-2">Suas próximas atribuições aparecerão aqui quando forem agendadas.</p>
+          <a href="{% url 'my_preferences' %}" class="btn-secondary mt-4 inline-block">Atualizar preferências</a>
+        </div>
       {% endfor %}
     </div>
   </div>

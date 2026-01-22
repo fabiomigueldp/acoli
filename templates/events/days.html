@@ -19,22 +19,44 @@
           <input id="bulk_time" type="time" class="input" value="{{ draft.default_time|default:default_time|default:'' }}">
         </div>
         <div>
-          <label class="label">Comunidade padrao</label>
-          <select id="bulk_community" class="input">
-            <option value="">--</option>
-            {% for option in formset.0.community %}
-              {{ option }}
-            {% endfor %}
-          </select>
+          <label class="label">Comunidade padrão</label>
+          <div class="custom-select">
+            <select id="bulk_community" class="hidden">
+              <option value="">--</option>
+              {% for option in formset.0.community %}
+                {{ option }}
+              {% endfor %}
+            </select>
+            <button type="button" class="custom-select-button">
+              <span class="selected-text">--</span>
+            </button>
+            <div class="custom-select-options">
+              <button type="button" class="custom-select-option selected" data-value="">--</button>
+              {% for option in formset.0.community %}
+                <button type="button" class="custom-select-option" data-value="{{ option.data.value }}">{{ option.data.label }}</button>
+              {% endfor %}
+            </div>
+          </div>
         </div>
         <div>
-          <label class="label">Perfil padrao</label>
-          <select id="bulk_profile" class="input">
-            <option value="">--</option>
-            {% for option in formset.0.requirement_profile %}
-              {{ option }}
-            {% endfor %}
-          </select>
+          <label class="label">Perfil padrão</label>
+          <div class="custom-select">
+            <select id="bulk_profile" class="hidden">
+              <option value="">--</option>
+              {% for option in formset.0.requirement_profile %}
+                {{ option }}
+              {% endfor %}
+            </select>
+            <button type="button" class="custom-select-button">
+              <span class="selected-text">--</span>
+            </button>
+            <div class="custom-select-options">
+              <button type="button" class="custom-select-option selected" data-value="">--</button>
+              {% for option in formset.0.requirement_profile %}
+                <button type="button" class="custom-select-option" data-value="{{ option.data.value }}">{{ option.data.label }}</button>
+              {% endfor %}
+            </div>
+          </div>
         </div>
         <div>
           <label class="label">Rotulo padrao</label>

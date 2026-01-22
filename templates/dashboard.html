@@ -10,33 +10,60 @@
 {% elif missing_parish %}
   <div class="card">Nenhuma paroquia ativa. Contate o administrador.</div>
 {% else %}
-  <div class="grid gap-6">
+  <div class="grid gap-8">
     <div class="card">
-      <h2 class="font-serif text-xl mb-2">Proximas missas</h2>
-      <div class="space-y-3">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h2 class="font-serif text-2xl mb-1 text-moss">Próximas missas</h2>
+          <p class="text-sm text-slate">Visualize os proximos eventos liturgicos agendados.</p>
+        </div>
+        <div class="hidden sm:flex items-center gap-2">
+          <div class="w-3 h-3 bg-moss rounded-full"></div>
+          <span class="text-xs text-slate font-medium">{{ upcoming|length }} evento{{ upcoming|length|pluralize }}</span>
+        </div>
+      </div>
+      <div class="space-y-4">
         {% for mass in upcoming %}
-          <div class="flex items-center justify-between">
-            <div>
-              <div class="text-sm text-slate">{{ mass.starts_at|date:"d/m/Y H:i" }}</div>
-              <div class="font-medium">{{ mass.community.code }} - {{ mass.liturgy_label|default:"Missa" }}</div>
+          <div class="flex items-center justify-between p-4 border border-black/5 rounded-xl hover:bg-sand/30 transition-all duration-200 hover:shadow-sm">
+            <div class="flex items-center gap-4">
+               <div class="w-10 h-10 bg-slate rounded-full flex items-center justify-center text-white font-serif text-sm font-bold">
+                 {{ mass.community.code|slice:":1" }}
+               </div>
+              <div>
+                <div class="text-sm text-slate font-medium">{{ mass.starts_at|date:"d/m/Y" }} as {{ mass.starts_at|date:"H:i" }}</div>
+                <div class="font-semibold text-ink">{{ mass.community.code }} - {{ mass.liturgy_label|default:"Missa" }}</div>
+              </div>
             </div>
-            <a class="text-sm text-moss" href="{% url 'mass_detail' mass.id %}">Detalhes</a>
+            <a class="btn-secondary text-xs px-3 py-1.5" href="{% url 'mass_detail' mass.id %}">Ver detalhes</a>
           </div>
         {% empty %}
-          <p class="text-sm text-slate">Sem eventos no periodo.</p>
+          <div class="text-center py-8">
+            <div class="w-12 h-12 bg-sand rounded-full flex items-center justify-center mx-auto mb-3 text-slate">...</div>
+            <p class="text-slate font-medium">Nenhum evento proximo</p>
+            <p class="text-sm text-slate mt-1">Os proximos eventos aparecerao aqui quando forem agendados.</p>
+          </div>
         {% endfor %}
       </div>
     </div>
-    <div class="grid sm:grid-cols-2 gap-4">
-      <div class="card">
-        <div class="text-sm text-slate">Vagas abertas</div>
-        <div class="text-3xl font-serif">{{ unfilled }}</div>
+    <div class="grid sm:grid-cols-2 gap-6">
+      <div class="card text-center">
+         <div class="text-4xl font-serif text-moss mb-4">{{ unfilled }}</div>
+        <div class="text-sm text-slate font-medium">Vagas abertas</div>
+        <div class="text-xs text-slate mt-1">Posicoes disponiveis para agendamento</div>
       </div>
-      <div class="card">
-        <div class="text-sm text-slate">Acoes rapidas</div>
-        <div class="mt-3 flex flex-wrap gap-2">
-          <a class="btn-secondary" href="{% url 'scheduling_dashboard' %}">Recalcular escala</a>
-          <a class="btn-secondary" href="{% url 'template_list' %}">Modelos</a>
+       <div class="card">
+        <div class="mb-4">
+          <div class="text-sm text-slate font-medium">Ações rápidas</div>
+          <div class="text-xs text-slate">Ferramentas de gerenciamento</div>
+        </div>
+          <div>
+            <div class="text-sm text-slate font-medium">Acoes rapidas</div>
+            <div class="text-xs text-slate">Ferramentas de gerenciamento</div>
+          </div>
+        </div>
+        <div class="space-y-3">
+          <a class="btn-primary w-full justify-center" href="{% url 'scheduling_dashboard' %}">Recalcular escala</a>
+          <a class="btn-secondary w-full justify-center" href="{% url 'template_list' %}">Gerenciar modelos</a>
         </div>
       </div>
     </div>

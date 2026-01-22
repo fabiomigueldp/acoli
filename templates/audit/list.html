@@ -10,24 +10,39 @@
   <form method="get" class="card grid sm:grid-cols-4 gap-4">
     <div>
       <label class="label">Entidade</label>
-      <select name="entity">
-        <option value="">Todas</option>
-        <option value="MassInstance" {% if entity_type == "MassInstance" %}selected{% endif %}>MassInstance</option>
-        <option value="Assignment" {% if entity_type == "Assignment" %}selected{% endif %}>Assignment</option>
-        <option value="SwapRequest" {% if entity_type == "SwapRequest" %}selected{% endif %}>SwapRequest</option>
-        <option value="ReplacementRequest" {% if entity_type == "ReplacementRequest" %}selected{% endif %}>ReplacementRequest</option>
-        <option value="Parish" {% if entity_type == "Parish" %}selected{% endif %}>Parish</option>
-        <option value="Confirmation" {% if entity_type == "Confirmation" %}selected{% endif %}>Confirmation</option>
-      </select>
+      <div class="custom-select">
+        <input type="hidden" name="entity" value="{{ entity_type }}">
+        <button type="button" class="custom-select-button">
+          <span class="selected-text">
+            {% if entity_type %}{{ entity_type }}{% else %}Todas{% endif %}
+          </span>
+        </button>
+        <div class="custom-select-options">
+          <button type="button" class="custom-select-option {% if not entity_type %}selected{% endif %}" data-value="">Todas</button>
+          <button type="button" class="custom-select-option {% if entity_type == "MassInstance" %}selected{% endif %}" data-value="MassInstance">Missa</button>
+          <button type="button" class="custom-select-option {% if entity_type == "Assignment" %}selected{% endif %}" data-value="Assignment">Escala</button>
+          <button type="button" class="custom-select-option {% if entity_type == "SwapRequest" %}selected{% endif %}" data-value="SwapRequest">Troca</button>
+          <button type="button" class="custom-select-option {% if entity_type == "ReplacementRequest" %}selected{% endif %}" data-value="ReplacementRequest">Substituição</button>
+          <button type="button" class="custom-select-option {% if entity_type == "Parish" %}selected{% endif %}" data-value="Parish">Paróquia</button>
+          <button type="button" class="custom-select-option {% if entity_type == "Confirmation" %}selected{% endif %}" data-value="Confirmation">Confirmação</button>
+        </div>
+      </div>
     </div>
     <div>
-      <label class="label">Acao</label>
-      <select name="action">
-        <option value="">Todas</option>
-        <option value="create" {% if action_type == "create" %}selected{% endif %}>create</option>
-        <option value="update" {% if action_type == "update" %}selected{% endif %}>update</option>
-        <option value="delete" {% if action_type == "delete" %}selected{% endif %}>delete</option>
-        <option value="cancel" {% if action_type == "cancel" %}selected{% endif %}>cancel</option>
+      <label class="label">Ação</label>
+      <div class="custom-select">
+        <input type="hidden" name="action" value="{{ action_type }}">
+        <button type="button" class="custom-select-button">
+          <span class="selected-text">
+            {% if action_type %}{{ action_type|title }}{% else %}Todas{% endif %}
+          </span>
+        </button>
+        <div class="custom-select-options">
+          <button type="button" class="custom-select-option {% if not action_type %}selected{% endif %}" data-value="">Todas</button>
+          <button type="button" class="custom-select-option {% if action_type == "create" %}selected{% endif %}" data-value="create">Criar</button>
+          <button type="button" class="custom-select-option {% if action_type == "update" %}selected{% endif %}" data-value="update">Atualizar</button>
+          <button type="button" class="custom-select-option {% if action_type == "delete" %}selected{% endif %}" data-value="delete">Excluir</button>
+          <button type="button" class="custom-select-option {% if action_type == "cancel" %}selected{% endif %}" data-value="cancel">Cancelar</button>
         <option value="move" {% if action_type == "move" %}selected{% endif %}>move</option>
         <option value="publish" {% if action_type == "publish" %}selected{% endif %}>publish</option>
         <option value="assign" {% if action_type == "assign" %}selected{% endif %}>assign</option>

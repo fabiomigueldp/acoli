@@ -34,32 +34,32 @@
 <body class="bg-sand text-ink min-h-screen">
   <div class="absolute inset-0 bg-gradient-to-br from-sand via-white to-[#f2f7f1] pointer-events-none"></div>
   <div class="relative">
-    <header class="sticky top-0 z-40 bg-white/80 backdrop-blur border-b border-black/5">
+    <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-black/8 shadow-soft">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center justify-between h-16">
-          <div class="flex items-center gap-4">
-            <a href="{% url 'dashboard' %}" class="font-serif text-xl">Acoli</a>
+        <div class="flex items-center justify-between h-20">
+          <div class="flex items-center gap-6">
+            <a href="{% url 'dashboard' %}" class="font-serif text-2xl text-moss hover:text-sun transition-colors duration-200">Acoli</a>
             {% if active_parish %}
-              <div class="hidden sm:flex items-center text-sm text-slate">
+              <div class="hidden sm:flex items-center text-sm text-slate border-l border-black/10 pl-6">
                 <span class="font-medium text-ink">{{ active_parish.name }}</span>
-                <span class="mx-2">|</span>
+                <span class="mx-3 text-black/20">•</span>
                 <span>{{ active_parish.city }}</span>
               </div>
             {% endif %}
           </div>
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-4">
             {% if parish_memberships %}
               <div class="relative group">
-                <button class="text-sm px-3 py-1.5 rounded-full border border-black/10 bg-white">Trocar paroquia</button>
-                <div class="absolute right-0 mt-2 w-56 bg-white shadow-soft rounded-xl p-2 hidden group-hover:block">
+                <button class="text-sm px-4 py-2 rounded-xl border border-black/12 bg-white/80 hover:bg-white hover:border-black/20 transition-all duration-200 shadow-sm hover:shadow-md">Trocar paroquia</button>
+                <div class="absolute right-0 mt-3 w-64 bg-white shadow-soft rounded-xl p-3 hidden group-hover:block border border-black/5">
                   {% for membership in parish_memberships %}
-                    <a class="block text-sm px-3 py-2 rounded-lg hover:bg-sand" href="{% url 'switch_parish' membership.parish_id %}">{{ membership.parish.name }}</a>
+                    <a class="block text-sm px-4 py-3 rounded-lg hover:bg-sand transition-colors duration-150" href="{% url 'switch_parish' membership.parish_id %}">{{ membership.parish.name }}</a>
                   {% endfor %}
                 </div>
               </div>
             {% endif %}
             {% if request.user.is_authenticated %}
-              <a class="text-sm text-slate" href="{% url 'logout' %}">Sair</a>
+              <a class="text-sm text-slate hover:text-ink transition-colors duration-200" href="{% url 'logout' %}">Sair</a>
             {% endif %}
           </div>
         </div>
@@ -67,7 +67,7 @@
     </header>
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 grid lg:grid-cols-[220px_1fr] gap-6">
-      <nav class="hidden lg:flex flex-col gap-2 text-sm">
+      <nav class="hidden lg:flex flex-col gap-3 text-sm bg-white/50 backdrop-blur-sm rounded-2xl p-6 shadow-soft border border-white/20">
         <a class="nav-link" href="{% url 'dashboard' %}">Painel</a>
         <a class="nav-link" href="{% url 'calendar_month' %}">Calendario</a>
         <a class="nav-link" href="{% url 'my_assignments' %}">Minhas escalas</a>
@@ -75,7 +75,7 @@
         <a class="nav-link" href="{% url 'swap_requests' %}">Trocas</a>
         <a class="nav-link" href="{% url 'event_interest' %}">Eventos</a>
         {% if can_manage_parish %}
-          <div class="pt-3 text-xs uppercase tracking-widest text-slate">Admin</div>
+          <div class="pt-6 text-xs uppercase tracking-widest text-slate font-medium border-t border-black/10 mt-4">Administração</div>
           <a class="nav-link" href="{% url 'people_directory' %}">Pessoas</a>
           <a class="nav-link" href="{% url 'template_list' %}">Horarios fixos</a>
           <a class="nav-link" href="{% url 'event_series_list' %}">Programacao liturgica</a>
@@ -84,7 +84,7 @@
           <a class="nav-link" href="{% url 'replacement_center' %}">Substituicoes</a>
           <a class="nav-link" href="{% url 'reports_frequency' %}">Relatorios</a>
           <a class="nav-link" href="{% url 'audit_log' %}">Auditoria</a>
-          <div class="pt-3 text-xs uppercase tracking-widest text-slate">Estrutura liturgica</div>
+          <div class="pt-4 text-xs uppercase tracking-widest text-slate font-medium border-t border-black/10 mt-4">Estrutura</div>
           <a class="nav-link" href="{% url 'structure_communities_list' %}">Comunidades</a>
           <a class="nav-link" href="{% url 'structure_roles_list' %}">Funcoes na escala</a>
           <a class="nav-link" href="{% url 'structure_requirement_profiles_list' %}">Perfis de requisitos</a>
@@ -106,12 +106,69 @@
       </main>
     </div>
 
-    <nav class="fixed bottom-0 inset-x-0 bg-white border-t border-black/10 flex sm:hidden justify-around py-3 text-xs">
-      <a href="{% url 'dashboard' %}">Painel</a>
-      <a href="{% url 'calendar_month' %}">Calendario</a>
-      <a href="{% url 'my_assignments' %}">Escalas</a>
-      <a href="{% url 'swap_requests' %}">Trocas</a>
+    <nav class="fixed bottom-0 inset-x-0 bg-white/90 backdrop-blur-md border-t border-black/12 flex sm:hidden justify-around py-4 text-xs shadow-soft rounded-t-2xl">
+      <a href="{% url 'dashboard' %}" class="flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all duration-200 hover:bg-sand/50">
+        <span class="font-medium text-ink">Painel</span>
+      </a>
+      <a href="{% url 'calendar_month' %}" class="flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all duration-200 hover:bg-sand/50">
+        <span class="font-medium text-ink">Calendario</span>
+      </a>
+      <a href="{% url 'my_assignments' %}" class="flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all duration-200 hover:bg-sand/50">
+        <span class="font-medium text-ink">Escalas</span>
+      </a>
+      <a href="{% url 'swap_requests' %}" class="flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all duration-200 hover:bg-sand/50">
+        <span class="font-medium text-ink">Trocas</span>
+      </a>
     </nav>
-  </div>
+   </div>
+
+   <script>
+     // Custom Select Functionality
+     document.addEventListener('DOMContentLoaded', function() {
+       document.querySelectorAll('.custom-select').forEach(function(select) {
+         const button = select.querySelector('.custom-select-button');
+         const options = select.querySelector('.custom-select-options');
+         const hiddenInput = select.querySelector('input[type="hidden"]');
+
+         button.addEventListener('click', function(e) {
+           e.preventDefault();
+           select.classList.toggle('open');
+         });
+
+         select.querySelectorAll('.custom-select-option').forEach(function(option) {
+           option.addEventListener('click', function() {
+             const value = this.getAttribute('data-value');
+             const text = this.textContent.trim();
+
+             // Update button text
+             button.querySelector('.selected-text').textContent = text;
+
+             // Update hidden input
+             if (hiddenInput) {
+               hiddenInput.value = value;
+             }
+
+             // Update selected state
+             select.querySelectorAll('.custom-select-option').forEach(function(opt) {
+               opt.classList.remove('selected');
+             });
+             this.classList.add('selected');
+
+             // Close dropdown
+             select.classList.remove('open');
+           });
+         });
+       });
+
+       // Close dropdowns when clicking outside
+       document.addEventListener('click', function(e) {
+         if (!e.target.closest('.custom-select')) {
+           document.querySelectorAll('.custom-select.open').forEach(function(select) {
+             select.classList.remove('open');
+           });
+         }
+       });
+     });
+   </script>
 </body>
 </html>

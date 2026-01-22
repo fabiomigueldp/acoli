@@ -25,10 +25,28 @@
             <label class="label">Rotulo</label>
             {{ update_form.liturgy_label }}
           </div>
-          <div>
-            <label class="label">Perfil de requisitos</label>
-            {{ update_form.requirement_profile }}
-          </div>
+           <div>
+             <label class="label">Perfil de requisitos</label>
+             <div class="custom-select">
+               <input type="hidden" name="requirement_profile" value="{{ update_form.requirement_profile.value }}">
+               <button type="button" class="custom-select-button">
+                 <span class="selected-text">
+                   {% if update_form.requirement_profile.value %}
+                     {% for choice_value, choice_label in update_form.requirement_profile.field.choices %}
+                       {% if update_form.requirement_profile.value == choice_value %}{{ choice_label }}{% endif %}
+                     {% endfor %}
+                   {% else %}
+                     Selecionar...
+                   {% endif %}
+                 </span>
+               </button>
+               <div class="custom-select-options">
+                 {% for choice_value, choice_label in update_form.requirement_profile.field.choices %}
+                   <button type="button" class="custom-select-option {% if update_form.requirement_profile.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
+                 {% endfor %}
+               </div>
+             </div>
+           </div>
           <button class="btn-secondary" type="submit">Salvar</button>
         </form>
       </div>
@@ -40,10 +58,28 @@
             <label class="label">Nova data/hora</label>
             {{ move_form.starts_at }}
           </div>
-          <div>
-            <label class="label">Nova comunidade</label>
-            {{ move_form.community }}
-          </div>
+           <div>
+             <label class="label">Nova comunidade</label>
+             <div class="custom-select">
+               <input type="hidden" name="community" value="{{ move_form.community.value }}">
+               <button type="button" class="custom-select-button">
+                 <span class="selected-text">
+                   {% if move_form.community.value %}
+                     {% for choice_value, choice_label in move_form.community.field.choices %}
+                       {% if move_form.community.value == choice_value %}{{ choice_value }}{% endif %}
+                     {% endfor %}
+                   {% else %}
+                     Selecionar...
+                   {% endif %}
+                 </span>
+               </button>
+               <div class="custom-select-options">
+                 {% for choice_value, choice_label in move_form.community.field.choices %}
+                   <button type="button" class="custom-select-option {% if move_form.community.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_value }}</button>
+                 {% endfor %}
+               </div>
+             </div>
+           </div>
           <button class="btn-secondary" type="submit">Mover</button>
         </form>
       </div>

@@ -10,15 +10,28 @@
   <form method="post" class="card space-y-6">
     {% csrf_token %}
     {% if form.non_field_errors %}
-      <div class="text-sm text-red-600">{{ form.non_field_errors }}</div>
+      <div class="form-error">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+        </svg>
+        {{ form.non_field_errors }}
+      </div>
     {% endif %}
 
     <div class="grid gap-4 sm:grid-cols-2">
-      <div>
-        <label class="label">Nome completo</label>
-        {{ form.full_name }}
-        {% if form.full_name.errors %}<div class="text-xs text-red-600 mt-1">{{ form.full_name.errors|join:", " }}</div>{% endif %}
-      </div>
+       <div>
+         <label class="label">Nome completo</label>
+         {{ form.full_name }}
+         {% if form.full_name.errors %}
+           <div class="form-error">
+             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+               <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+             </svg>
+             {{ form.full_name.errors|join:", " }}
+           </div>
+         {% endif %}
+         {% if form.full_name.help_text %}<p class="form-help">{{ form.full_name.help_text }}</p>{% endif %}
+       </div>
       <div>
         <label class="label">Telefone</label>
         {{ form.phone }}
@@ -27,9 +40,10 @@
     </div>
 
     <div class="space-y-4">
-      <label class="check-inline">
-        {{ form.has_login }} <span class="text-sm">Tem acesso ao sistema?</span>
-      </label>
+       <div class="flex items-center gap-3">
+         {{ form.has_login }}
+         <label for="{{ form.has_login.id_for_label }}" class="text-sm font-medium text-slate cursor-pointer">Tem acesso ao sistema?</label>
+       </div>
       <div id="login-section" class="grid gap-4 sm:grid-cols-2">
         <div>
           <label class="label">Email</label>
@@ -40,28 +54,66 @@
           <label class="label">Senha</label>
           {{ form.password }}
           {% if form.password.errors %}<div class="text-xs text-red-600 mt-1">{{ form.password.errors|join:", " }}</div>{% endif %}
-          <label class="check-inline text-xs">
-            {{ form.send_invite }} <span>Gerar senha automatica e enviar convite por email</span>
-          </label>
+           <div class="flex items-center gap-3 mt-2">
+             {{ form.send_invite }}
+             <label for="{{ form.send_invite.id_for_label }}" class="text-xs font-medium text-slate cursor-pointer">Gerar senha automática e enviar convite por email</label>
+           </div>
         </div>
       </div>
     </div>
 
     <div class="space-y-4">
-      <label class="check-inline">
-        {{ form.is_acolyte }} <span class="text-sm">Serve no altar?</span>
-      </label>
+       <div class="flex items-center gap-3">
+         {{ form.is_acolyte }}
+         <label for="{{ form.is_acolyte.id_for_label }}" class="text-sm font-medium text-slate cursor-pointer">Serve no altar?</label>
+       </div>
       <div id="acolyte-section" class="grid gap-4 sm:grid-cols-2">
         <div>
-          <label class="label">Comunidade de origem</label>
-          {{ form.community_of_origin }}
-          {% if form.community_of_origin.errors %}<div class="text-xs text-red-600 mt-1">{{ form.community_of_origin.errors|join:", " }}</div>{% endif %}
-        </div>
+         <label class="label">Comunidade de origem</label>
+         <div class="custom-select">
+           <input type="hidden" name="community_of_origin" value="{{ form.community_of_origin.value }}">
+           <button type="button" class="custom-select-button">
+             <span class="selected-text">
+               {% if form.community_of_origin.value %}
+                 {% for choice_value, choice_label in form.community_of_origin.field.choices %}
+                   {% if form.community_of_origin.value == choice_value %}{{ choice_value }}{% endif %}
+                 {% endfor %}
+               {% else %}
+                 Selecionar...
+               {% endif %}
+             </span>
+           </button>
+           <div class="custom-select-options">
+             {% for choice_value, choice_label in form.community_of_origin.field.choices %}
+               <button type="button" class="custom-select-option {% if form.community_of_origin.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_value }}</button>
+             {% endfor %}
+           </div>
+         </div>
+           {% if form.community_of_origin.errors %}<div class="form-error">{{ form.community_of_origin.errors|join:", " }}</div>{% endif %}
+       </div>
         <div>
-          <label class="label">Nivel de experiencia</label>
-          {{ form.experience_level }}
-          {% if form.experience_level.errors %}<div class="text-xs text-red-600 mt-1">{{ form.experience_level.errors|join:", " }}</div>{% endif %}
-        </div>
+         <label class="label">Nível de experiência</label>
+         <div class="custom-select">
+           <input type="hidden" name="experience_level" value="{{ form.experience_level.value }}">
+           <button type="button" class="custom-select-button">
+             <span class="selected-text">
+               {% if form.experience_level.value %}
+                 {% for choice_value, choice_label in form.experience_level.field.choices %}
+                   {% if form.experience_level.value == choice_value %}{{ choice_label }}{% endif %}
+                 {% endfor %}
+               {% else %}
+                 Selecionar...
+               {% endif %}
+             </span>
+           </button>
+           <div class="custom-select-options">
+             {% for choice_value, choice_label in form.experience_level.field.choices %}
+               <button type="button" class="custom-select-option {% if form.experience_level.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
+             {% endfor %}
+           </div>
+         </div>
+           {% if form.experience_level.errors %}<div class="form-error">{{ form.experience_level.errors|join:", " }}</div>{% endif %}
+       </div>
         <div>
           <label class="label">Familia / grupo</label>
           {{ form.family_group }}
@@ -84,18 +136,28 @@
             </div>
             {% if form.qualifications.errors %}<div class="text-xs text-red-600 mt-1">{{ form.qualifications.errors|join:", " }}</div>{% endif %}
           </div>
-          <div class="sm:col-span-2">
-            <label class="check-inline">
-              {{ form.acolyte_active }} <span class="text-sm">Perfil de acolito ativo</span>
-            </label>
-          </div>
+           <div class="sm:col-span-2">
+             <div class="custom-checkbox">
+               <input type="checkbox" id="{{ form.acolyte_active.id_for_label }}" name="{{ form.acolyte_active.name }}" class="checkbox-input" {% if form.acolyte_active.value %}checked{% endif %}>
+               <label for="{{ form.acolyte_active.id_for_label }}" class="checkbox-label">
+                 <svg class="checkbox-checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                   <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                 </svg>
+               </label>
+               <label for="{{ form.acolyte_active.id_for_label }}" class="checkbox-text">
+                 <div class="checkbox-title">Perfil ativo</div>
+                 <p class="checkbox-description">Permite que o perfil seja incluído em escalas e atribuições automáticas.</p>
+               </label>
+             </div>
+           </div>
       </div>
     </div>
 
     <div class="space-y-4">
-      <label class="check-inline">
-        {{ form.has_admin_access }} <span class="text-sm">Tem acesso administrativo?</span>
-      </label>
+       <div class="flex items-center gap-3">
+         {{ form.has_admin_access }}
+         <label for="{{ form.has_admin_access.id_for_label }}" class="text-sm font-medium text-slate cursor-pointer">Tem acesso administrativo?</label>
+       </div>
       <div id="roles-section">
         <label class="label">Papeis na paroquia</label>
         <div class="check-grid text-sm">

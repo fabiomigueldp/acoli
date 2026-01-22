@@ -21,10 +21,18 @@
         <p class="text-xs text-slate mt-1">Se vazio, geramos automaticamente. Use ate 10 caracteres.</p>
       </div>
       <div class="sm:col-span-2">
-        <label class="check-inline">
-          {{ form.active }}
-          <span class="text-sm">Funcao ativa</span>
-        </label>
+        <div class="custom-checkbox">
+          <input type="checkbox" id="{{ form.active.id_for_label }}" name="{{ form.active.name }}" class="checkbox-input" {% if form.active.value %}checked{% endif %}>
+          <label for="{{ form.active.id_for_label }}" class="checkbox-label">
+            <svg class="checkbox-checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+            </svg>
+          </label>
+          <label for="{{ form.active.id_for_label }}" class="checkbox-text">
+            <div class="checkbox-title">Função ativa</div>
+            <p class="checkbox-description">Permite que a função seja atribuída em escalas e apareça nas opções disponíveis.</p>
+          </label>
+        </div>
       </div>
     </div>
     <details class="mt-2 rounded-xl border border-black/5 bg-white/70 px-4 py-3">
@@ -43,7 +51,7 @@
             </label>
           {% endfor %}
         </div>
-        <p class="text-xs text-slate mt-2">{{ form.extra_functions.help_text }}</p>
+        <p class="form-help">{{ form.extra_functions.help_text }}</p>
       </div>
     </details>
     <div class="flex items-center gap-3">

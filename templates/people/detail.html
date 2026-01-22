@@ -77,7 +77,18 @@
             </div>
             <div class="sm:mt-6">
               <label class="check-inline">
-                {{ user_form.is_active }} <span class="text-sm">Usuario ativo</span>
+                <div class="custom-checkbox">
+                  <input type="checkbox" id="{{ user_form.is_active.id_for_label }}" name="{{ user_form.is_active.name }}" class="checkbox-input" {% if user_form.is_active.value %}checked{% endif %}>
+                  <label for="{{ user_form.is_active.id_for_label }}" class="checkbox-label">
+                    <svg class="checkbox-checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                    </svg>
+                  </label>
+                  <label for="{{ user_form.is_active.id_for_label }}" class="checkbox-text">
+                    <div class="checkbox-title">Conta ativa</div>
+                    <p class="checkbox-description">Permite que o usuário faça login e acesse o sistema.</p>
+                  </label>
+                </div>
               </label>
             </div>
           </div>
@@ -91,7 +102,18 @@
           <input type="hidden" name="form_type" value="membership" />
           <h3 class="font-semibold">Papeis na paroquia</h3>
           <label class="check-inline">
-            {{ membership_form.active }} <span class="text-sm">Membership ativa</span>
+            <div class="custom-checkbox">
+              <input type="checkbox" id="{{ membership_form.active.id_for_label }}" name="{{ membership_form.active.name }}" class="checkbox-input" {% if membership_form.active.value %}checked{% endif %}>
+              <label for="{{ membership_form.active.id_for_label }}" class="checkbox-label">
+                <svg class="checkbox-checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                </svg>
+              </label>
+              <label for="{{ membership_form.active.id_for_label }}" class="checkbox-text">
+                <div class="checkbox-title">Membership ativa</div>
+                <p class="checkbox-description">Quando ativa, o usuário pode gerenciar esta paróquia.</p>
+              </label>
+            </div>
           </label>
           <div class="check-grid text-sm">
             {% for checkbox in membership_form.roles %}
@@ -133,11 +155,20 @@
             <label class="label">Notas</label>
             {{ acolyte_form.notes }}
           </div>
-          <div class="sm:col-span-2">
-            <label class="check-inline">
-              {{ acolyte_form.active }} <span class="text-sm">Perfil ativo</span>
-            </label>
-          </div>
+           <div class="sm:col-span-2">
+             <div class="custom-checkbox">
+               <input type="checkbox" id="{{ acolyte_form.active.id_for_label }}" name="{{ acolyte_form.active.name }}" class="checkbox-input" {% if acolyte_form.active.value %}checked{% endif %}>
+               <label for="{{ acolyte_form.active.id_for_label }}" class="checkbox-label">
+                 <svg class="checkbox-checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                   <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                 </svg>
+               </label>
+               <label for="{{ acolyte_form.active.id_for_label }}" class="checkbox-text">
+                 <div class="checkbox-title">Perfil ativo</div>
+                 <p class="checkbox-description">Quando ativo, o perfil pode ser usado em escalas e atribuições.</p>
+               </label>
+             </div>
+           </div>
         </div>
         <button class="btn-primary" type="submit">Salvar perfil</button>
       </form>

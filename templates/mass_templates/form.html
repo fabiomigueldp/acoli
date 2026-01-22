@@ -3,7 +3,7 @@
 {% block content %}
 <div class="card max-w-2xl">
   <h2 class="font-serif text-xl mb-4">Criar horario fixo</h2>
-  <form method="post" class="space-y-4">
+   <form method="post" class="space-y-4" id="mass-template-form">
     {% csrf_token %}
     {{ form.non_field_errors }}
     <div class="grid sm:grid-cols-2 gap-4">
@@ -44,11 +44,24 @@
         {{ form.notes }}
       </div>
       <div class="sm:col-span-2">
-        <label class="label">Ativo</label>
-        {{ form.active }}
+        <div class="custom-checkbox">
+          <input type="checkbox" id="{{ form.active.id_for_label }}" name="{{ form.active.name }}" class="checkbox-input" {% if form.active.value %}checked{% endif %}>
+          <label for="{{ form.active.id_for_label }}" class="checkbox-label">
+            <svg class="checkbox-checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+            </svg>
+          </label>
+          <label for="{{ form.active.id_for_label }}" class="checkbox-text">
+            <div class="checkbox-title">Template ativo</div>
+            <p class="checkbox-description">Quando ativo, o template gera eventos automaticamente conforme sua programação.</p>
+          </label>
+        </div>
       </div>
-    </div>
-    <button class="btn-primary">Salvar</button>
-  </form>
-</div>
+       </div>
+     </div>
+   </form>
+   <div class="mt-6 flex justify-end">
+     <button class="btn-primary" form="mass-template-form">Salvar</button>
+   </div>
+ </div>
 {% endblock %}
