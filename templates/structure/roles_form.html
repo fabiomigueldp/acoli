@@ -21,8 +21,10 @@
         <p class="text-xs text-slate mt-1">Se vazio, geramos automaticamente. Use ate 10 caracteres.</p>
       </div>
       <div class="sm:col-span-2">
-        <label class="label">Ativa</label>
-        {{ form.active }}
+        <label class="check-inline">
+          {{ form.active }}
+          <span class="text-sm">Funcao ativa</span>
+        </label>
       </div>
     </div>
     <details class="mt-2 rounded-xl border border-black/5 bg-white/70 px-4 py-3">
@@ -33,11 +35,11 @@
         {% if form.extra_functions.errors %}
           <div class="text-xs text-red-600 mt-1">{{ form.extra_functions.errors }}</div>
         {% endif %}
-        <div class="grid sm:grid-cols-2 gap-3 text-sm">
+        <div class="check-grid text-sm">
           {% for option in form.extra_functions %}
-            <label class="flex items-start gap-3 rounded-xl border border-black/5 bg-white px-3 py-2.5 leading-5 shadow-sm transition hover:border-black/10 hover:bg-sand/40">
+            <label class="check-item">
               {{ option.tag }}
-              <span class="flex-1 text-ink">{{ option.choice_label }}</span>
+              <span class="text-ink">{{ option.choice_label }}</span>
             </label>
           {% endfor %}
         </div>

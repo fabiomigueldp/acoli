@@ -34,16 +34,16 @@
       </div>
     </div>
 
-    <div class="grid sm:grid-cols-2 gap-4">
-      <label class="flex items-center gap-2">
+    <div class="check-grid">
+      <label class="check-item">
         {{ form.swap_requires_approval }}
         <span class="text-sm">Trocas exigem aprovacao</span>
       </label>
-      <label class="flex items-center gap-2">
+      <label class="check-item">
         {{ form.notify_on_cancellation }}
         <span class="text-sm">Notificar coordenacao em cancelamentos</span>
       </label>
-      <label class="flex items-center gap-2">
+      <label class="check-item">
         {{ form.auto_assign_on_decline }}
         <span class="text-sm">Auto atribuir substituto ao recusar</span>
       </label>

@@ -27,8 +27,8 @@
     </div>
 
     <div class="space-y-4">
-      <label class="flex items-center gap-2 text-sm">
-        {{ form.has_login }} <span>Tem acesso ao sistema?</span>
+      <label class="check-inline">
+        {{ form.has_login }} <span class="text-sm">Tem acesso ao sistema?</span>
       </label>
       <div id="login-section" class="grid gap-4 sm:grid-cols-2">
         <div>
@@ -40,7 +40,7 @@
           <label class="label">Senha</label>
           {{ form.password }}
           {% if form.password.errors %}<div class="text-xs text-red-600 mt-1">{{ form.password.errors|join:", " }}</div>{% endif %}
-          <label class="flex items-center gap-2 text-xs text-slate mt-2">
+          <label class="check-inline text-xs">
             {{ form.send_invite }} <span>Gerar senha automatica e enviar convite por email</span>
           </label>
         </div>
@@ -48,8 +48,8 @@
     </div>
 
     <div class="space-y-4">
-      <label class="flex items-center gap-2 text-sm">
-        {{ form.is_acolyte }} <span>Serve no altar?</span>
+      <label class="check-inline">
+        {{ form.is_acolyte }} <span class="text-sm">Serve no altar?</span>
       </label>
       <div id="acolyte-section" class="grid gap-4 sm:grid-cols-2">
         <div>
@@ -72,35 +72,35 @@
           {{ form.notes }}
           {% if form.notes.errors %}<div class="text-xs text-red-600 mt-1">{{ form.notes.errors|join:", " }}</div>{% endif %}
         </div>
-        <div class="sm:col-span-2">
-          <label class="label">Qualificacoes iniciais</label>
-          <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 text-sm">
-            {% for checkbox in form.qualifications %}
-              <label class="flex items-start gap-2">
-                {{ checkbox.tag }}
-                <span>{{ checkbox.choice_label }}</span>
-              </label>
-            {% endfor %}
+          <div class="sm:col-span-2">
+            <label class="label">Qualificacoes iniciais</label>
+            <div class="check-grid text-sm">
+              {% for checkbox in form.qualifications %}
+                <label class="check-item">
+                  {{ checkbox.tag }}
+                  <span>{{ checkbox.choice_label }}</span>
+                </label>
+              {% endfor %}
+            </div>
+            {% if form.qualifications.errors %}<div class="text-xs text-red-600 mt-1">{{ form.qualifications.errors|join:", " }}</div>{% endif %}
           </div>
-          {% if form.qualifications.errors %}<div class="text-xs text-red-600 mt-1">{{ form.qualifications.errors|join:", " }}</div>{% endif %}
-        </div>
-        <div class="sm:col-span-2">
-          <label class="flex items-center gap-2 text-sm">
-            {{ form.acolyte_active }} <span>Perfil de acolito ativo</span>
-          </label>
-        </div>
+          <div class="sm:col-span-2">
+            <label class="check-inline">
+              {{ form.acolyte_active }} <span class="text-sm">Perfil de acolito ativo</span>
+            </label>
+          </div>
       </div>
     </div>
 
     <div class="space-y-4">
-      <label class="flex items-center gap-2 text-sm">
-        {{ form.has_admin_access }} <span>Tem acesso administrativo?</span>
+      <label class="check-inline">
+        {{ form.has_admin_access }} <span class="text-sm">Tem acesso administrativo?</span>
       </label>
       <div id="roles-section">
         <label class="label">Papeis na paroquia</label>
-        <div class="grid gap-2 sm:grid-cols-2 text-sm">
+        <div class="check-grid text-sm">
           {% for checkbox in form.roles %}
-            <label class="flex items-start gap-2">
+            <label class="check-item">
               {{ checkbox.tag }}
               <span>{{ checkbox.choice_label }}</span>
             </label>

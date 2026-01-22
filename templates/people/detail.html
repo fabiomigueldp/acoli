@@ -75,9 +75,9 @@
               <label class="label">Telefone</label>
               {{ user_form.phone }}
             </div>
-            <div>
-              <label class="flex items-center gap-2 text-sm mt-6">
-                {{ user_form.is_active }} <span>Usuario ativo</span>
+            <div class="sm:mt-6">
+              <label class="check-inline">
+                {{ user_form.is_active }} <span class="text-sm">Usuario ativo</span>
               </label>
             </div>
           </div>
@@ -90,12 +90,12 @@
           {% csrf_token %}
           <input type="hidden" name="form_type" value="membership" />
           <h3 class="font-semibold">Papeis na paroquia</h3>
-          <label class="flex items-center gap-2 text-sm">
-            {{ membership_form.active }} <span>Membership ativa</span>
+          <label class="check-inline">
+            {{ membership_form.active }} <span class="text-sm">Membership ativa</span>
           </label>
-          <div class="grid gap-2 sm:grid-cols-2 text-sm">
+          <div class="check-grid text-sm">
             {% for checkbox in membership_form.roles %}
-              <label class="flex items-start gap-2">
+              <label class="check-item">
                 {{ checkbox.tag }}
                 <span>{{ checkbox.choice_label }}</span>
               </label>
@@ -134,8 +134,8 @@
             {{ acolyte_form.notes }}
           </div>
           <div class="sm:col-span-2">
-            <label class="flex items-center gap-2 text-sm">
-              {{ acolyte_form.active }} <span>Perfil ativo</span>
+            <label class="check-inline">
+              {{ acolyte_form.active }} <span class="text-sm">Perfil ativo</span>
             </label>
           </div>
         </div>
@@ -147,9 +147,9 @@
           {% csrf_token %}
           <input type="hidden" name="form_type" value="qualifications" />
           <h3 class="font-semibold">Qualificacoes</h3>
-          <div class="grid gap-2 sm:grid-cols-2 text-sm">
+          <div class="check-grid text-sm">
             {% for checkbox in qual_form.qualifications %}
-              <label class="flex items-start gap-2">
+              <label class="check-item">
                 {{ checkbox.tag }}
                 <span>{{ checkbox.choice_label }}</span>
               </label>
@@ -211,7 +211,7 @@
                 <label class="label">Comunidade</label>
                 {{ weekly_form.community }}
               </div>
-              <div>
+              <div class="sm:col-span-2">
                 <label class="label">Observacao</label>
                 {{ weekly_form.notes }}
               </div>
