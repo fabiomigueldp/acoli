@@ -2,6 +2,7 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.urls import reverse
 from django.utils import timezone
+from datetime import timedelta
 
 from core.models import Assignment, AssignmentSlot, SwapRequest
 from notifications.models import Notification, NotificationPreference
@@ -16,8 +17,18 @@ class NotificationService:
     def __init__(self):
         self.whatsapp_provider = WhatsAppProvider()
 
+    def reclaim_stuck(self, now=None, timeout_minutes=10):
+        now = now or timezone.now()
+        cutoff = now - timedelta(minutes=timeout_minutes)
+        Notification.objects.filter(status="processing", last_attempt_at__lt=cutoff).update(
+            status="pending",
+            error_message="reclaimed",
+            last_attempt_at=None,
+        )
+
     def claim_pending_ids(self, limit=100, now=None):
         now = now or timezone.now()
+        self.reclaim_stuck(now=now)
         pending_ids = list(
             Notification.objects.filter(status="pending")
             .order_by("created_at")

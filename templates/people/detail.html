@@ -1,0 +1,423 @@
+{% extends 'base.html' %}
+{% load extras %}
+{% block title %}Pessoa{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="card flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div class="flex items-center gap-3">
+      <div class="h-12 w-12 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center font-semibold">
+        {% if acolyte %}
+          {{ acolyte.display_name|initials }}
+        {% else %}
+          {{ user.full_name|initials }}
+        {% endif %}
+      </div>
+      <div>
+        <div class="font-serif text-xl">
+          {% if acolyte %}
+            {{ acolyte.display_name }}
+          {% else %}
+            {{ user.full_name }}
+          {% endif %}
+        </div>
+        <div class="text-sm text-slate">
+          {% if user %}
+            {{ user.email|default:"Sem email" }}
+          {% else %}
+            Sem login
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-2 text-xs">
+      {% if membership %}
+        {% for role in membership.roles.all %}
+          <span class="badge">{{ role.name }}</span>
+        {% endfor %}
+      {% endif %}
+      {% if acolyte %}
+        <span class="badge">{{ acolyte.get_experience_level_display }}</span>
+      {% endif %}
+      {% if user and not user.is_active %}
+        <span class="badge">Usuario inativo</span>
+      {% endif %}
+      {% if acolyte and not acolyte.active %}
+        <span class="badge">Acolito inativo</span>
+      {% endif %}
+    </div>
+    <div class="flex flex-wrap gap-4 text-sm text-slate">
+      <div>30 dias: <span class="text-ink font-medium">{{ stats.services_last_30_days|default:"—" }}</span></div>
+      <div>90 dias: <span class="text-ink font-medium">{{ stats.services_last_90_days|default:"—" }}</span></div>
+      <div>Confiabilidade: <span class="text-ink font-medium">{{ stats.reliability_score|default:"—" }}</span></div>
+      <div>Creditos: <span class="text-ink font-medium">{{ stats.credit_balance|default:"—" }}</span></div>
+    </div>
+  </div>
+
+  <div class="grid gap-6 lg:grid-cols-2">
+    <div class="space-y-6">
+      {% if user_form %}
+        <form method="post" class="card space-y-4">
+          {% csrf_token %}
+          <input type="hidden" name="form_type" value="user" />
+          <h3 class="font-semibold">Identidade</h3>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label class="label">Nome</label>
+              {{ user_form.full_name }}
+              {% if user_form.full_name.errors %}<div class="text-xs text-red-600 mt-1">{{ user_form.full_name.errors|join:", " }}</div>{% endif %}
+            </div>
+            <div>
+              <label class="label">Email</label>
+              {{ user_form.email }}
+              {% if user_form.email.errors %}<div class="text-xs text-red-600 mt-1">{{ user_form.email.errors|join:", " }}</div>{% endif %}
+            </div>
+            <div>
+              <label class="label">Telefone</label>
+              {{ user_form.phone }}
+            </div>
+            <div>
+              <label class="flex items-center gap-2 text-sm mt-6">
+                {{ user_form.is_active }} <span>Usuario ativo</span>
+              </label>
+            </div>
+          </div>
+          <button class="btn-primary" type="submit">Salvar identidade</button>
+        </form>
+      {% endif %}
+
+      {% if user %}
+        <form method="post" class="card space-y-4">
+          {% csrf_token %}
+          <input type="hidden" name="form_type" value="membership" />
+          <h3 class="font-semibold">Papeis na paroquia</h3>
+          <label class="flex items-center gap-2 text-sm">
+            {{ membership_form.active }} <span>Membership ativa</span>
+          </label>
+          <div class="grid gap-2 sm:grid-cols-2 text-sm">
+            {% for checkbox in membership_form.roles %}
+              <label class="flex items-start gap-2">
+                {{ checkbox.tag }}
+                <span>{{ checkbox.choice_label }}</span>
+              </label>
+            {% endfor %}
+          </div>
+          <button class="btn-primary" type="submit">Salvar papeis</button>
+        </form>
+      {% endif %}
+
+      <form method="post" class="card space-y-4">
+        {% csrf_token %}
+        <input type="hidden" name="form_type" value="acolyte" />
+        <h3 class="font-semibold">Perfil de acolito</h3>
+        {% if not acolyte %}
+          <p class="text-sm text-slate">Este membro ainda nao possui perfil de acolito. Preencha abaixo para criar.</p>
+        {% endif %}
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label class="label">Nome para escalas</label>
+            {{ acolyte_form.display_name }}
+          </div>
+          <div>
+            <label class="label">Comunidade de origem</label>
+            {{ acolyte_form.community_of_origin }}
+          </div>
+          <div>
+            <label class="label">Nivel de experiencia</label>
+            {{ acolyte_form.experience_level }}
+          </div>
+          <div>
+            <label class="label">Familia / grupo</label>
+            {{ acolyte_form.family_group }}
+          </div>
+          <div class="sm:col-span-2">
+            <label class="label">Notas</label>
+            {{ acolyte_form.notes }}
+          </div>
+          <div class="sm:col-span-2">
+            <label class="flex items-center gap-2 text-sm">
+              {{ acolyte_form.active }} <span>Perfil ativo</span>
+            </label>
+          </div>
+        </div>
+        <button class="btn-primary" type="submit">Salvar perfil</button>
+      </form>
+
+      {% if acolyte %}
+        <form method="post" class="card space-y-4">
+          {% csrf_token %}
+          <input type="hidden" name="form_type" value="qualifications" />
+          <h3 class="font-semibold">Qualificacoes</h3>
+          <div class="grid gap-2 sm:grid-cols-2 text-sm">
+            {% for checkbox in qual_form.qualifications %}
+              <label class="flex items-start gap-2">
+                {{ checkbox.tag }}
+                <span>{{ checkbox.choice_label }}</span>
+              </label>
+            {% endfor %}
+          </div>
+          <button class="btn-primary" type="submit">Salvar qualificacoes</button>
+        </form>
+      {% endif %}
+    </div>
+
+    <div class="space-y-6">
+      {% if acolyte %}
+        <div class="card space-y-4">
+          <h3 class="font-semibold">Disponibilidade</h3>
+          <div class="space-y-2">
+            <div class="text-xs uppercase tracking-wider text-slate">Rotina semanal</div>
+            {% for rule in weekly_rules %}
+              <div class="flex flex-wrap items-center justify-between gap-2 border border-black/5 rounded-lg p-3 text-sm">
+                <div>
+                  <div class="font-medium">{{ rule.get_day_of_week_display|default:"Qualquer dia" }}</div>
+                  <div class="text-xs text-slate">
+                    {{ rule.rule_type }}
+                    {% if rule.start_time or rule.end_time %} · {{ rule.start_time|default:"--:--" }} – {{ rule.end_time|default:"--:--" }}{% endif %}
+                    {% if rule.community %} · {{ rule.community.code }}{% endif %}
+                  </div>
+                </div>
+                <form method="post">
+                  {% csrf_token %}
+                  <input type="hidden" name="form_type" value="delete_availability" />
+                  <input type="hidden" name="rule_id" value="{{ rule.id }}" />
+                  <button class="btn-secondary" type="submit">Remover</button>
+                </form>
+              </div>
+            {% empty %}
+              <p class="text-sm text-slate">Nenhuma regra semanal cadastrada.</p>
+            {% endfor %}
+          </div>
+          <form method="post" class="space-y-3">
+            {% csrf_token %}
+            <input type="hidden" name="form_type" value="weekly_availability" />
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label class="label">Tipo</label>
+                {{ weekly_form.rule_type }}
+              </div>
+              <div>
+                <label class="label">Dia</label>
+                {{ weekly_form.day_of_week }}
+              </div>
+              <div>
+                <label class="label">Inicio</label>
+                {{ weekly_form.start_time }}
+              </div>
+              <div>
+                <label class="label">Fim</label>
+                {{ weekly_form.end_time }}
+              </div>
+              <div>
+                <label class="label">Comunidade</label>
+                {{ weekly_form.community }}
+              </div>
+              <div>
+                <label class="label">Observacao</label>
+                {{ weekly_form.notes }}
+              </div>
+            </div>
+            <button class="btn-secondary" type="submit">Adicionar rotina</button>
+          </form>
+
+          <div class="space-y-2">
+            <div class="text-xs uppercase tracking-wider text-slate">Ausencias por data</div>
+            {% for absence in date_absences %}
+              <div class="flex flex-wrap items-center justify-between gap-2 border border-black/5 rounded-lg p-3 text-sm">
+                <div>
+                  <div class="font-medium">{{ absence.start_date|date:"d/m/Y" }}{% if absence.end_date and absence.end_date != absence.start_date %} – {{ absence.end_date|date:"d/m/Y" }}{% endif %}</div>
+                  <div class="text-xs text-slate">{{ absence.notes|default:"Sem observacao" }}</div>
+                </div>
+                <form method="post">
+                  {% csrf_token %}
+                  <input type="hidden" name="form_type" value="delete_availability" />
+                  <input type="hidden" name="rule_id" value="{{ absence.id }}" />
+                  <button class="btn-secondary" type="submit">Remover</button>
+                </form>
+              </div>
+            {% empty %}
+              <p class="text-sm text-slate">Nenhuma ausencia registrada.</p>
+            {% endfor %}
+          </div>
+          <form method="post" class="space-y-3">
+            {% csrf_token %}
+            <input type="hidden" name="form_type" value="date_absence" />
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label class="label">Data inicio</label>
+                {{ date_absence_form.start_date }}
+              </div>
+              <div>
+                <label class="label">Data fim</label>
+                {{ date_absence_form.end_date }}
+              </div>
+              <div class="sm:col-span-2">
+                <label class="label">Motivo</label>
+                {{ date_absence_form.notes }}
+              </div>
+            </div>
+            <button class="btn-secondary" type="submit">Adicionar ausencia</button>
+          </form>
+        </div>
+
+        <div class="card space-y-4">
+          <h3 class="font-semibold">Preferencias</h3>
+          <div class="space-y-2">
+            {% for preference in preferences %}
+              <div class="flex flex-wrap items-center justify-between gap-2 border border-black/5 rounded-lg p-3 text-sm">
+                <div>
+                  <div class="font-medium">{{ preference|preference_summary }}</div>
+                  <div class="text-xs text-slate">{{ preference|preference_detail }}</div>
+                </div>
+                <form method="post">
+                  {% csrf_token %}
+                  <input type="hidden" name="form_type" value="delete_preference" />
+                  <input type="hidden" name="pref_id" value="{{ preference.id }}" />
+                  <button class="btn-secondary" type="submit">Remover</button>
+                </form>
+              </div>
+            {% empty %}
+              <p class="text-sm text-slate">Nenhuma preferencia cadastrada.</p>
+            {% endfor %}
+          </div>
+          <form method="post" class="space-y-3" id="pref-form">
+            {% csrf_token %}
+            <input type="hidden" name="form_type" value="preference" />
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label class="label">Tipo</label>
+                {{ preference_form.preference_type }}
+              </div>
+              <div>
+                <label class="label">Prioridade</label>
+                <div class="flex gap-2" id="pref-priority">
+                  <button class="btn-secondary" type="button" data-weight="25">Baixa</button>
+                  <button class="btn-secondary" type="button" data-weight="50">Media</button>
+                  <button class="btn-secondary" type="button" data-weight="100">Alta</button>
+                </div>
+                {{ preference_form.weight }}
+              </div>
+              <div data-field="community">
+                <label class="label">Comunidade</label>
+                {{ preference_form.target_community }}
+              </div>
+              <div data-field="position">
+                <label class="label">Funcao</label>
+                {{ preference_form.target_position }}
+              </div>
+              <div data-field="function">
+                <label class="label">Responsabilidade</label>
+                {{ preference_form.target_function }}
+              </div>
+              <div data-field="template">
+                <label class="label">Modelo</label>
+                {{ preference_form.target_template }}
+              </div>
+              <div data-field="partner">
+                <label class="label">Parceiro</label>
+                {{ preference_form.target_acolyte }}
+              </div>
+              <div data-field="timeslot">
+                <label class="label">Dia</label>
+                {{ preference_form.weekday }}
+              </div>
+              <div data-field="timeslot">
+                <label class="label">Inicio</label>
+                {{ preference_form.start_time }}
+              </div>
+              <div data-field="timeslot">
+                <label class="label">Fim</label>
+                {{ preference_form.end_time }}
+              </div>
+            </div>
+            <button class="btn-secondary" type="submit">Adicionar preferencia</button>
+          </form>
+        </div>
+      {% endif %}
+
+      <div class="card space-y-3">
+        <h3 class="font-semibold">Escalas</h3>
+        <div>
+          <div class="text-xs uppercase tracking-wider text-slate">Proximas</div>
+          <div class="space-y-2 mt-2">
+            {% for assignment in upcoming %}
+              <a class="block border border-black/5 rounded-lg p-3 text-sm hover:bg-sand" href="{% url 'mass_detail' assignment.slot.mass_instance.id %}">
+                <div class="text-slate text-xs">{{ assignment.slot.mass_instance.starts_at|date:"d/m H:i" }}</div>
+                <div class="font-medium">{{ assignment.slot.mass_instance.community.code }} - {{ assignment.slot.position_type.name }}</div>
+              </a>
+            {% empty %}
+              <p class="text-sm text-slate">Sem escalas futuras.</p>
+            {% endfor %}
+          </div>
+        </div>
+        <div>
+          <div class="text-xs uppercase tracking-wider text-slate">Recentes</div>
+          <div class="space-y-2 mt-2">
+            {% for assignment in recent %}
+              <a class="block border border-black/5 rounded-lg p-3 text-sm hover:bg-sand" href="{% url 'mass_detail' assignment.slot.mass_instance.id %}">
+                <div class="text-slate text-xs">{{ assignment.slot.mass_instance.starts_at|date:"d/m H:i" }}</div>
+                <div class="font-medium">{{ assignment.slot.mass_instance.community.code }} - {{ assignment.slot.position_type.name }}</div>
+              </a>
+            {% empty %}
+              <p class="text-sm text-slate">Sem historico recente.</p>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const preferenceType = document.getElementById("id_preference_type");
+  const fields = document.querySelectorAll("[data-field]");
+  const weightInput = document.getElementById("id_weight");
+  const priorityButtons = document.querySelectorAll("#pref-priority button");
+
+  function updatePriority(value) {
+    if (weightInput) {
+      weightInput.value = value;
+    }
+    priorityButtons.forEach((btn) => {
+      btn.classList.toggle("bg-moss", btn.dataset.weight === value);
+      btn.classList.toggle("text-white", btn.dataset.weight === value);
+    });
+  }
+
+  function updateFields() {
+    const value = preferenceType ? preferenceType.value : "";
+    fields.forEach((field) => {
+      const type = field.getAttribute("data-field");
+      const show =
+        (type === "community" && (value === "preferred_community" || value === "avoid_community")) ||
+        (type === "position" && (value === "preferred_position" || value === "avoid_position")) ||
+        (type === "function" && (value === "preferred_function" || value === "avoid_function")) ||
+        (type === "template" && value === "preferred_mass_template") ||
+        (type === "partner" && (value === "preferred_partner" || value === "avoid_partner")) ||
+        (type === "timeslot" && value === "preferred_timeslot");
+      field.classList.toggle("hidden", !show);
+      field.querySelectorAll("input, select").forEach((input) => {
+        input.disabled = !show;
+        if (!show) {
+          if (input.type === "checkbox" || input.type === "radio") {
+            input.checked = false;
+          } else {
+            input.value = "";
+          }
+        }
+      });
+    });
+  }
+
+  if (preferenceType) {
+    preferenceType.addEventListener("change", updateFields);
+    updateFields();
+  }
+  if (weightInput) {
+    weightInput.type = "hidden";
+    updatePriority(weightInput.value || "50");
+    priorityButtons.forEach((btn) => {
+      btn.addEventListener("click", () => updatePriority(btn.dataset.weight));
+    });
+  }
+</script>
+{% endblock %}

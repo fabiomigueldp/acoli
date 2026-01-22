@@ -8,6 +8,7 @@ from django.contrib import messages
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.core.mail import send_mail
 from django.core.paginator import Paginator
 from django.db.models import Count, F, Prefetch, Q
 from django.forms import formset_factory
@@ -20,6 +21,7 @@ from django.utils import timezone
 from core.models import (
     AcolyteAvailabilityRule,
     AcolyteQualification,
+    AcolyteProfile,
     AcolyteStats,
     AuditEvent,
     Assignment,
@@ -80,6 +82,11 @@ from web.forms import (
     MassInstanceUpdateForm,
     MassTemplateForm,
     ParishSettingsForm,
+    PeopleAcolyteForm,
+    PeopleCreateForm,
+    PeopleMembershipForm,
+    PeopleQualificationsForm,
+    PeopleUserForm,
     RequirementProfileForm,
     RequirementProfilePositionFormSet,
     ReplacementResolveForm,
@@ -1947,76 +1954,484 @@ def replacement_pick(request, request_id):
 @require_active_parish
 @require_parish_roles(ADMIN_ROLE_CODES)
 def acolyte_list(request):
-    parish = request.active_parish
-    acolytes = parish.acolytes.filter(active=True)
-    return render(request, "acolytes/list.html", {"acolytes": acolytes})
+    return redirect("people_directory")
 
 
 @login_required
 @require_active_parish
 @require_parish_roles(ADMIN_ROLE_CODES)
 def acolyte_link(request):
+    return redirect("people_create")
+
+
+def _build_people_members(parish, filters):
+    search = filters.get("q", "").strip()
+    community_id = filters.get("community")
+    experience = filters.get("experience")
+    status = filters.get("status")
+    role = filters.get("role")
+
+    memberships = ParishMembership.objects.filter(parish=parish).select_related("user").prefetch_related("roles")
+    if role:
+        memberships = memberships.filter(roles__code=role)
+    if status in {"active", "inactive"}:
+        memberships = memberships.filter(user__is_active=(status == "active"))
+    if search:
+        memberships = memberships.filter(
+            Q(user__full_name__icontains=search)
+            | Q(user__email__icontains=search)
+            | Q(user__phone__icontains=search)
+        )
+
+    acolytes = (
+        AcolyteProfile.objects.filter(parish=parish)
+        .select_related("user", "community_of_origin", "family_group")
+        .prefetch_related(
+            Prefetch(
+                "acolytequalification_set",
+                queryset=AcolyteQualification.objects.select_related("position_type").filter(qualified=True),
+            )
+        )
+    )
+    if community_id:
+        acolytes = acolytes.filter(community_of_origin_id=community_id)
+    if experience:
+        acolytes = acolytes.filter(experience_level=experience)
+    if status in {"active", "inactive"}:
+        acolytes = acolytes.filter(active=(status == "active"))
+    if search:
+        acolytes = acolytes.filter(
+            Q(display_name__icontains=search)
+            | Q(user__full_name__icontains=search)
+            | Q(user__email__icontains=search)
+            | Q(user__phone__icontains=search)
+        )
+
+    stats_map = {}
+    acolyte_ids = list(acolytes.values_list("id", flat=True))
+    if acolyte_ids:
+        stats_map = {
+            stat.acolyte_id: stat
+            for stat in AcolyteStats.objects.filter(parish=parish, acolyte_id__in=acolyte_ids)
+        }
+
+    acolytes_by_user = {ac.user_id: ac for ac in acolytes if ac.user_id}
+    member_rows = []
+    membership_user_ids = set(memberships.values_list("user_id", flat=True))
+    for membership in memberships:
+        user = membership.user
+        acolyte = acolytes_by_user.get(user.id)
+        qualifications = []
+        stats = None
+        if acolyte:
+            quals = list(acolyte.acolytequalification_set.all())
+            qualifications = [qual.position_type.name for qual in quals]
+            stats = stats_map.get(acolyte.id)
+        member_rows.append(
+            {
+                "user": user,
+                "acolyte": acolyte,
+                "name": acolyte.display_name if acolyte else user.full_name,
+                "roles": list(membership.roles.all()),
+                "experience": acolyte.experience_level if acolyte else None,
+                "qualifications": qualifications,
+                "stats": stats,
+                "membership_active": membership.active,
+                "detail_url": reverse("people_acolyte_detail", args=[acolyte.id])
+                if acolyte
+                else reverse("people_user_detail", args=[user.id]),
+            }
+        )
+
+    for acolyte in acolytes:
+        if acolyte.user_id and acolyte.user_id in membership_user_ids:
+            continue
+        stats = stats_map.get(acolyte.id)
+        quals = list(acolyte.acolytequalification_set.all())
+        member_rows.append(
+            {
+                "user": acolyte.user,
+                "acolyte": acolyte,
+                "name": acolyte.display_name,
+                "roles": [],
+                "experience": acolyte.experience_level,
+                "qualifications": [qual.position_type.name for qual in quals],
+                "stats": stats,
+                "membership_active": False,
+                "detail_url": reverse("people_acolyte_detail", args=[acolyte.id]),
+            }
+        )
+
+    member_rows.sort(key=lambda row: (row["name"] or "").lower())
+    return member_rows
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def people_directory(request):
+    parish = request.active_parish
+    filters = {
+        "q": request.GET.get("q", ""),
+        "community": request.GET.get("community"),
+        "experience": request.GET.get("experience"),
+        "status": request.GET.get("status"),
+        "role": request.GET.get("role"),
+    }
+    members = _build_people_members(parish, filters)
+    communities = Community.objects.filter(parish=parish, active=True).order_by("name")
+    roles = MembershipRole.objects.filter(code__in=AcolyteLinkForm.ALLOWED_ROLE_CODES).order_by("code")
+    return render(
+        request,
+        "people/directory.html",
+        {
+            "members": members,
+            "communities": communities,
+            "roles": roles,
+            "experience_choices": AcolyteProfile.EXPERIENCE_CHOICES,
+            "filters": filters,
+        },
+    )
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def people_create(request):
     parish = request.active_parish
     User = get_user_model()
     if request.method == "POST":
-        data = request.POST.copy()
-        allowed_ids = set(
-            MembershipRole.objects.filter(code__in=AcolyteLinkForm.ALLOWED_ROLE_CODES).values_list("id", flat=True)
-        )
-        if data.getlist("roles"):
-            filtered_roles = []
-            for role_id in data.getlist("roles"):
-                try:
-                    if int(role_id) in allowed_ids:
-                        filtered_roles.append(role_id)
-                except (TypeError, ValueError):
-                    continue
-            data.setlist("roles", filtered_roles)
-        form = AcolyteLinkForm(data, parish=parish, actor=request.user)
+        form = PeopleCreateForm(request.POST, parish=parish)
         if form.is_valid():
-            email = form.cleaned_data["email"]
-            full_name = form.cleaned_data.get("full_name", "")
+            full_name = form.cleaned_data["full_name"]
+            phone = form.cleaned_data.get("phone", "")
+            has_login = form.cleaned_data.get("has_login")
+            email = form.cleaned_data.get("email")
             password = form.cleaned_data.get("password")
-            acolyte = form.cleaned_data["acolyte"]
+            send_invite = form.cleaned_data.get("send_invite")
+            is_acolyte = form.cleaned_data.get("is_acolyte")
+            community = form.cleaned_data.get("community_of_origin")
+            experience = form.cleaned_data.get("experience_level")
+            family_group = form.cleaned_data.get("family_group")
+            notes = form.cleaned_data.get("notes")
+            acolyte_active = form.cleaned_data.get("acolyte_active")
+            has_admin_access = form.cleaned_data.get("has_admin_access")
             roles = form.cleaned_data.get("roles") or []
+            qualifications = form.cleaned_data.get("qualifications") or []
 
-            user = User.objects.filter(email=email).first()
-            if not user:
-                if not full_name or not password:
-                    messages.error(request, "Informe nome e senha para criar o usuario.")
-                    return render(request, "acolytes/link_user.html", {"form": form})
-                user = User.objects.create_user(email=email, full_name=full_name, password=password)
+            user = None
+            generated_password = None
+            if has_login and email:
+                user = User.objects.filter(email=email).first()
+                if not user:
+                    if not password:
+                        generated_password = User.objects.make_random_password()
+                        password = generated_password
+                    user = User.objects.create_user(email=email, full_name=full_name, password=password, phone=phone)
+                else:
+                    updates = []
+                    if full_name and user.full_name != full_name:
+                        user.full_name = full_name
+                        updates.append("full_name")
+                    if phone and user.phone != phone:
+                        user.phone = phone
+                        updates.append("phone")
+                    if updates:
+                        user.save(update_fields=updates + ["updated_at"])
 
-            if acolyte.user and acolyte.user_id != user.id:
-                messages.error(request, "Este acolito ja esta vinculado a outro usuario.")
-                return render(request, "acolytes/link_user.html", {"form": form})
+            membership = None
+            if user:
+                membership, _ = ParishMembership.objects.get_or_create(
+                    parish=parish, user=user, defaults={"active": True}
+                )
+                if not membership.active:
+                    membership.active = True
+                    membership.save(update_fields=["active", "updated_at"])
+                if has_admin_access and roles:
+                    allowed_ids = set(
+                        MembershipRole.objects.filter(code__in=AcolyteLinkForm.ALLOWED_ROLE_CODES).values_list(
+                            "id", flat=True
+                        )
+                    )
+                    membership.roles.add(*[role for role in roles if role.id in allowed_ids])
 
-            if parish.acolytes.filter(user=user).exclude(id=acolyte.id).exists():
-                messages.error(request, "Este usuario ja esta vinculado a outro acolito nesta paroquia.")
-                return render(request, "acolytes/link_user.html", {"form": form})
+            acolyte = None
+            if is_acolyte:
+                if user and parish.acolytes.filter(user=user).exists():
+                    acolyte = parish.acolytes.filter(user=user).first()
+                else:
+                    acolyte = AcolyteProfile(parish=parish)
+                acolyte.display_name = full_name
+                acolyte.user = user if user else None
+                acolyte.community_of_origin = community
+                acolyte.experience_level = experience
+                acolyte.family_group = family_group
+                acolyte.notes = notes or ""
+                acolyte.active = True if acolyte_active is None else bool(acolyte_active)
+                acolyte.save()
 
-            acolyte.user = user
-            acolyte.save(update_fields=["user", "updated_at"])
-            membership, _ = ParishMembership.objects.get_or_create(
-                parish=parish, user=user, defaults={"active": True}
-            )
-            if not membership.active:
-                membership.active = True
-                membership.save(update_fields=["active", "updated_at"])
-            acolyte_role = MembershipRole.objects.filter(code="ACOLYTE").first()
-            if acolyte_role and not membership.roles.filter(id=acolyte_role.id).exists():
-                membership.roles.add(acolyte_role)
-            if roles:
-                allowed_roles = MembershipRole.objects.filter(code__in=AcolyteLinkForm.ALLOWED_ROLE_CODES)
-                allowed_ids = set(allowed_roles.values_list("id", flat=True))
-                membership.roles.add(*[role for role in roles if role.id in allowed_ids])
-            log_audit(parish, request.user, "AcolyteProfile", acolyte.id, "link_user", {"user_id": user.id})
-            messages.success(request, "Usuario vinculado com sucesso.")
-            return redirect("acolyte_link")
+                if user:
+                    acolyte_role = MembershipRole.objects.filter(code="ACOLYTE").first()
+                    if membership and acolyte_role:
+                        membership.roles.add(acolyte_role)
+
+                existing_ids = set(
+                    AcolyteQualification.objects.filter(parish=parish, acolyte=acolyte).values_list(
+                        "position_type_id", flat=True
+                    )
+                )
+                for position in qualifications:
+                    if position.id not in existing_ids:
+                        AcolyteQualification.objects.create(
+                            parish=parish,
+                            acolyte=acolyte,
+                            position_type=position,
+                            qualified=True,
+                        )
+
+            if user and (send_invite or generated_password):
+                if password:
+                    send_mail(
+                        "Acesso ao Acoli",
+                        f"Seu acesso foi criado.\\nEmail: {user.email}\\nSenha: {password}\\n",
+                        settings.DEFAULT_FROM_EMAIL,
+                        [user.email],
+                    )
+
+            messages.success(request, "Pessoa criada com sucesso.")
+            return redirect("people_directory")
     else:
-        form = AcolyteLinkForm(parish=parish, actor=request.user)
-    return render(request, "acolytes/link_user.html", {"form": form})
+        form = PeopleCreateForm(parish=parish)
+    return render(request, "people/create.html", {"form": form})
 
+
+def _people_member_context(parish, user=None, acolyte=None):
+    membership = None
+    if user:
+        membership = ParishMembership.objects.filter(parish=parish, user=user).prefetch_related("roles").first()
+
+    stats = None
+    if acolyte:
+        stats = AcolyteStats.objects.filter(parish=parish, acolyte=acolyte).first()
+
+    user_form = PeopleUserForm(instance=user) if user else None
+    membership_form = PeopleMembershipForm(
+        parish=parish,
+        initial={
+            "active": membership.active if membership else True,
+            "roles": membership.roles.all() if membership else [],
+        },
+    )
+    acolyte_form = PeopleAcolyteForm(instance=acolyte, parish=parish) if acolyte else PeopleAcolyteForm(parish=parish)
+    qual_form = PeopleQualificationsForm(
+        parish=parish,
+        initial={
+            "qualifications": AcolyteQualification.objects.filter(
+                parish=parish, acolyte=acolyte, qualified=True
+            ).values_list("position_type_id", flat=True)
+            if acolyte
+            else []
+        },
+    )
+
+    availability = acolyte.acolyteavailabilityrule_set.select_related("community") if acolyte else []
+    weekly_rules = (
+        availability.filter(start_date__isnull=True, end_date__isnull=True).order_by("day_of_week", "start_time")
+        if acolyte
+        else []
+    )
+    date_absences = (
+        availability.filter(Q(start_date__isnull=False) | Q(end_date__isnull=False)).order_by("start_date")
+        if acolyte
+        else []
+    )
+    preferences = (
+        acolyte.acolytepreference_set.select_related(
+            "target_community", "target_position", "target_function", "target_template", "target_acolyte"
+        )
+        if acolyte
+        else []
+    )
+
+    upcoming = []
+    recent = []
+    if acolyte:
+        upcoming = (
+            Assignment.objects.filter(
+                parish=parish, acolyte=acolyte, is_active=True, slot__mass_instance__starts_at__gte=timezone.now()
+            )
+            .select_related("slot__mass_instance__community", "slot__position_type", "confirmation")
+            .order_by("slot__mass_instance__starts_at")[:5]
+        )
+        recent = (
+            Assignment.objects.filter(
+                parish=parish, acolyte=acolyte, slot__mass_instance__starts_at__lt=timezone.now()
+            )
+            .select_related("slot__mass_instance__community", "slot__position_type", "confirmation")
+            .order_by("-slot__mass_instance__starts_at")[:5]
+        )
+
+    return {
+        "membership": membership,
+        "stats": stats,
+        "user_form": user_form,
+        "membership_form": membership_form,
+        "acolyte_form": acolyte_form,
+        "qual_form": qual_form,
+        "weekly_rules": weekly_rules,
+        "date_absences": date_absences,
+        "preferences": preferences,
+        "weekly_form": WeeklyAvailabilityForm(acolyte=acolyte) if acolyte else None,
+        "date_absence_form": DateAbsenceForm() if acolyte else None,
+        "preference_form": AcolytePreferenceForm(parish=parish) if acolyte else None,
+        "upcoming": upcoming,
+        "recent": recent,
+    }
+
+
+def _handle_member_post(request, parish, user=None, acolyte=None):
+    form_type = request.POST.get("form_type")
+    if form_type == "user" and user:
+        form = PeopleUserForm(request.POST, instance=user)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Identidade atualizada.")
+        else:
+            messages.error(request, "Revise os dados de identidade.")
+    elif form_type == "membership" and user:
+        form = PeopleMembershipForm(request.POST, parish=parish)
+        if form.is_valid():
+            membership, _ = ParishMembership.objects.get_or_create(parish=parish, user=user, defaults={"active": True})
+            membership.active = bool(form.cleaned_data.get("active"))
+            membership.save(update_fields=["active", "updated_at"])
+            membership.roles.clear()
+            if form.cleaned_data.get("roles"):
+                membership.roles.add(*form.cleaned_data["roles"])
+            messages.success(request, "Papeis atualizados.")
+        else:
+            messages.error(request, "Revise os papeis informados.")
+    elif form_type == "acolyte":
+        form = PeopleAcolyteForm(request.POST, instance=acolyte, parish=parish)
+        if form.is_valid():
+            profile = form.save(commit=False)
+            profile.parish = parish
+            if user:
+                profile.user = user
+            profile.save()
+            messages.success(request, "Perfil de acolito atualizado.")
+        else:
+            messages.error(request, "Revise os dados do acolito.")
+    elif form_type == "qualifications" and acolyte:
+        form = PeopleQualificationsForm(request.POST, parish=parish)
+        if form.is_valid():
+            selected = set(form.cleaned_data.get("qualifications").values_list("id", flat=True))
+            existing = set(
+                AcolyteQualification.objects.filter(parish=parish, acolyte=acolyte).values_list(
+                    "position_type_id", flat=True
+                )
+            )
+            for to_add in selected - existing:
+                AcolyteQualification.objects.create(
+                    parish=parish, acolyte=acolyte, position_type_id=to_add, qualified=True
+                )
+            if existing - selected:
+                AcolyteQualification.objects.filter(
+                    parish=parish, acolyte=acolyte, position_type_id__in=existing - selected
+                ).delete()
+            messages.success(request, "Qualificacoes atualizadas.")
+        else:
+            messages.error(request, "Revise as qualificacoes.")
+    elif form_type == "weekly_availability" and acolyte:
+        form = WeeklyAvailabilityForm(request.POST, acolyte=acolyte)
+        if form.is_valid():
+            cleaned = form.cleaned_data
+            existing = AcolyteAvailabilityRule.objects.filter(
+                parish=parish,
+                acolyte=acolyte,
+                rule_type=cleaned.get("rule_type"),
+                day_of_week=cleaned.get("day_of_week"),
+                start_time=cleaned.get("start_time"),
+                end_time=cleaned.get("end_time"),
+                community=cleaned.get("community"),
+            ).exists()
+            if existing:
+                messages.info(request, "Voce ja possui uma regra igual.")
+            else:
+                rule = form.save(commit=False)
+                rule.parish = parish
+                rule.acolyte = acolyte
+                rule.save()
+                messages.success(request, "Regra semanal adicionada.")
+        else:
+            if form.non_field_errors():
+                messages.info(request, form.non_field_errors()[0])
+            else:
+                messages.error(request, "Revise a regra semanal.")
+    elif form_type == "date_absence" and acolyte:
+        form = DateAbsenceForm(request.POST)
+        if form.is_valid():
+            absence = form.save(commit=False)
+            absence.parish = parish
+            absence.acolyte = acolyte
+            absence.rule_type = "unavailable"
+            absence.day_of_week = None
+            absence.save()
+            messages.success(request, "Ausencia cadastrada.")
+        else:
+            messages.error(request, "Revise a ausencia.")
+    elif form_type == "preference" and acolyte:
+        form = AcolytePreferenceForm(request.POST, parish=parish)
+        if form.is_valid():
+            pref = form.save(commit=False)
+            pref.parish = parish
+            pref.acolyte = acolyte
+            pref.save()
+            messages.success(request, "Preferencia adicionada.")
+        else:
+            messages.error(request, "Revise a preferencia.")
+    elif form_type == "delete_availability" and acolyte:
+        rule_id = request.POST.get("rule_id")
+        rule = get_object_or_404(AcolyteAvailabilityRule, parish=parish, acolyte=acolyte, id=rule_id)
+        rule.delete()
+        messages.success(request, "Regra removida.")
+    elif form_type == "delete_preference" and acolyte:
+        pref_id = request.POST.get("pref_id")
+        pref = get_object_or_404(AcolytePreference, parish=parish, acolyte=acolyte, id=pref_id)
+        pref.delete()
+        messages.success(request, "Preferencia removida.")
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def people_user_detail(request, user_id):
+    parish = request.active_parish
+    user = get_object_or_404(get_user_model(), id=user_id)
+    membership = ParishMembership.objects.filter(parish=parish, user=user).first()
+    acolyte = parish.acolytes.filter(user=user).first()
+    if not membership and not acolyte and not request.user.is_system_admin:
+        return HttpResponseNotFound()
+    if request.method == "POST":
+        _handle_member_post(request, parish, user=user, acolyte=acolyte)
+        return redirect("people_user_detail", user_id=user.id)
+    context = _people_member_context(parish, user=user, acolyte=acolyte)
+    context.update({"user": user, "acolyte": acolyte})
+    return render(request, "people/detail.html", context)
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def people_acolyte_detail(request, acolyte_id):
+    parish = request.active_parish
+    acolyte = get_object_or_404(AcolyteProfile, parish=parish, id=acolyte_id)
+    user = acolyte.user
+    if request.method == "POST":
+        _handle_member_post(request, parish, user=user, acolyte=acolyte)
+        return redirect("people_acolyte_detail", acolyte_id=acolyte.id)
+    context = _people_member_context(parish, user=user, acolyte=acolyte)
+    context.update({"user": user, "acolyte": acolyte})
+    return render(request, "people/detail.html", context)
 
 @login_required
 @require_active_parish

@@ -30,7 +30,7 @@ python manage.py createsuperuser
 
 4) Vincule o superuser a uma paroquia (PARISH_ADMIN ou COORDINATOR):
 - Acesse `/admin/` e crie um `ParishMembership` para o usuario.
-- Ou use a tela "Vincular usuarios" para adicionar o papel.
+- Ou use a tela "Pessoas" para adicionar o papel.
 
 5) Inicie o servidor:
 
@@ -51,7 +51,7 @@ python manage.py runserver
 
 ## API (DRF)
 - Para clientes sem sessao, envie `X-Parish-ID` (ou `?parish_id=`) nas requisicoes `/api/*`.
-- O usuario precisa ter membership ativa na paroquia (ou ser SYSTEM_ADMIN).
+- O usuario precisa ter membership ativa na paroquia (ou ser system admin via `is_system_admin`).
 
 ## Calendario (ICS)
 - Apos gerar o link em "Minhas escalas", use `/calendar/my.ics?token=...` para assinar o calendario.

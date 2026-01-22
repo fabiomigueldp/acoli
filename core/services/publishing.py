@@ -36,8 +36,10 @@ def publish_assignments(parish, start_date, end_date, actor=None):
                 published_at=timezone.now(),
                 updated_at=timezone.now(),
             )
-            if updated:
-                published += 1
+            if not updated:
+                continue
+
+            published += 1
             slot = assignment.slot
             if connection.features.has_select_for_update:
                 slot = AssignmentSlot.objects.select_for_update().get(id=slot.id)

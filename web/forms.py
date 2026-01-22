@@ -11,14 +11,17 @@ from core.models import (
     AcolyteAvailabilityRule,
     AcolytePreference,
     AcolyteProfile,
+    AcolyteQualification,
     AssignmentSlot,
     Community,
     EventOccurrence,
     EventSeries,
+    FamilyGroup,
     FunctionType,
     MassTemplate,
     MassInstance,
     MembershipRole,
+    ParishMembership,
     RequirementProfile,
     RequirementProfilePosition,
     PositionType,
@@ -795,4 +798,146 @@ class ReplacementResolveForm(forms.Form):
     )
     notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
     confirm_cancel_mass = forms.BooleanField(required=False)
+
+
+class PeopleUserForm(forms.ModelForm):
+    class Meta:
+        model = get_user_model()
+        fields = ["full_name", "email", "phone", "is_active"]
+
+    def clean_email(self):
+        email = self.cleaned_data.get("email")
+        if not email:
+            return email
+        qs = get_user_model().objects.filter(email=email)
+        if self.instance:
+            qs = qs.exclude(id=self.instance.id)
+        if qs.exists():
+            raise forms.ValidationError("Email ja utilizado por outro usuario.")
+        return email
+
+
+class PeopleMembershipForm(forms.Form):
+    ALLOWED_ROLE_CODES = AcolyteLinkForm.ALLOWED_ROLE_CODES
+    active = forms.BooleanField(required=False)
+    roles = forms.ModelMultipleChoiceField(
+        queryset=MembershipRole.objects.none(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
+
+    def __init__(self, *args, **kwargs):
+        parish = kwargs.pop("parish", None)
+        super().__init__(*args, **kwargs)
+        roles_qs = MembershipRole.objects.filter(code__in=self.ALLOWED_ROLE_CODES).order_by("code")
+        self.fields["roles"].queryset = roles_qs
+        if parish is None:
+            return
+
+
+class PeopleAcolyteForm(forms.ModelForm):
+    class Meta:
+        model = AcolyteProfile
+        fields = [
+            "display_name",
+            "community_of_origin",
+            "experience_level",
+            "family_group",
+            "notes",
+            "active",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        parish = kwargs.pop("parish", None)
+        super().__init__(*args, **kwargs)
+        if parish:
+            self.fields["community_of_origin"].queryset = Community.objects.filter(parish=parish, active=True)
+            self.fields["family_group"].queryset = FamilyGroup.objects.filter(parish=parish)
+
+
+class PeopleQualificationsForm(forms.Form):
+    qualifications = forms.ModelMultipleChoiceField(
+        queryset=PositionType.objects.none(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
+
+    def __init__(self, *args, **kwargs):
+        parish = kwargs.pop("parish", None)
+        super().__init__(*args, **kwargs)
+        if parish:
+            self.fields["qualifications"].queryset = PositionType.objects.filter(parish=parish, active=True)
+
+
+class PeopleCreateForm(forms.Form):
+    ALLOWED_ROLE_CODES = AcolyteLinkForm.ALLOWED_ROLE_CODES
+
+    full_name = forms.CharField()
+    phone = forms.CharField(required=False)
+    email = forms.EmailField(required=False)
+    has_login = forms.BooleanField(required=False)
+    password = forms.CharField(required=False, widget=forms.PasswordInput)
+    send_invite = forms.BooleanField(required=False)
+
+    is_acolyte = forms.BooleanField(required=False)
+    community_of_origin = forms.ModelChoiceField(queryset=Community.objects.none(), required=False)
+    experience_level = forms.ChoiceField(choices=AcolyteProfile.EXPERIENCE_CHOICES, required=False)
+    family_group = forms.ModelChoiceField(queryset=FamilyGroup.objects.none(), required=False)
+    notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
+    acolyte_active = forms.BooleanField(required=False, initial=True)
+
+    has_admin_access = forms.BooleanField(required=False)
+    roles = forms.ModelMultipleChoiceField(
+        queryset=MembershipRole.objects.none(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
+    qualifications = forms.ModelMultipleChoiceField(
+        queryset=PositionType.objects.none(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
+
+    def __init__(self, *args, **kwargs):
+        parish = kwargs.pop("parish", None)
+        super().__init__(*args, **kwargs)
+        if parish:
+            self.fields["community_of_origin"].queryset = Community.objects.filter(parish=parish, active=True)
+            self.fields["family_group"].queryset = FamilyGroup.objects.filter(parish=parish)
+            self.fields["roles"].queryset = MembershipRole.objects.filter(
+                code__in=self.ALLOWED_ROLE_CODES
+            ).order_by("code")
+            self.fields["qualifications"].queryset = PositionType.objects.filter(parish=parish, active=True)
+
+    def clean(self):
+        cleaned = super().clean()
+        has_login = cleaned.get("has_login")
+        email = cleaned.get("email")
+        password = cleaned.get("password")
+        send_invite = cleaned.get("send_invite")
+        is_acolyte = cleaned.get("is_acolyte")
+        community = cleaned.get("community_of_origin")
+        experience = cleaned.get("experience_level")
+        has_admin_access = cleaned.get("has_admin_access")
+        roles = cleaned.get("roles")
+
+        if has_login and not email:
+            self.add_error("email", "Informe o email para criar acesso.")
+        if has_login and not password and not send_invite:
+            self.add_error("password", "Defina uma senha ou marque envio de convite.")
+        if is_acolyte:
+            if not community:
+                self.add_error("community_of_origin", "Selecione a comunidade de origem.")
+            if not experience:
+                self.add_error("experience_level", "Defina o nivel de experiencia.")
+        if has_admin_access and not roles:
+            self.add_error("roles", "Selecione pelo menos um papel.")
+        if not has_login:
+            cleaned["email"] = ""
+            cleaned["password"] = ""
+        if not has_admin_access:
+            cleaned["roles"] = []
+        if not is_acolyte:
+            cleaned["qualifications"] = []
+        return cleaned
 

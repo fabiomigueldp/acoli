@@ -1,4 +1,4 @@
-from django.http import HttpResponseForbidden
+from django.http import HttpResponseBadRequest, HttpResponseForbidden
 from rest_framework.authentication import BasicAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 
@@ -65,6 +65,8 @@ class ApiParishHeaderMiddleware:
                 if parish is None:
                     return HttpResponseForbidden("Paroquia invalida.")
                 request.active_parish = parish
+            if request.active_parish is None:
+                return HttpResponseBadRequest("Informe X-Parish-ID ou parish_id.")
 
         return self.get_response(request)
 

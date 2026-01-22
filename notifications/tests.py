@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -143,3 +145,22 @@ class NotificationProcessingTests(TestCase):
         self.assertEqual(notification.status, "failed")
         self.assertIsNone(notification.sent_at)
         self.assertTrue(notification.error_message)
+
+    def test_reclaim_stuck_processing(self):
+        now = timezone.now()
+        stuck = Notification.objects.create(
+            parish=self.parish,
+            user=self.user,
+            channel="email",
+            template_code="ASSIGNMENT_PUBLISHED",
+            payload={"subject": "Teste", "body": "Teste"},
+            idempotency_key="parish:1:stuck:1",
+            status="processing",
+            last_attempt_at=now - timedelta(minutes=20),
+        )
+        service = NotificationService()
+        claimed = service.claim_pending_ids(limit=10, now=now)
+        self.assertIn(stuck.id, claimed)
+        stuck.refresh_from_db()
+        self.assertEqual(stuck.status, "processing")
+        self.assertEqual(stuck.last_attempt_at, now)

@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+{% block title %}Nova pessoa{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="card">
+    <h2 class="font-serif text-xl mb-2">Nova pessoa</h2>
+    <p class="text-sm text-slate">Crie um membro completo com perfil pastoral, acesso e qualificacoes em um unico fluxo.</p>
+  </div>
+
+  <form method="post" class="card space-y-6">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div class="text-sm text-red-600">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div class="grid gap-4 sm:grid-cols-2">
+      <div>
+        <label class="label">Nome completo</label>
+        {{ form.full_name }}
+        {% if form.full_name.errors %}<div class="text-xs text-red-600 mt-1">{{ form.full_name.errors|join:", " }}</div>{% endif %}
+      </div>
+      <div>
+        <label class="label">Telefone</label>
+        {{ form.phone }}
+        {% if form.phone.errors %}<div class="text-xs text-red-600 mt-1">{{ form.phone.errors|join:", " }}</div>{% endif %}
+      </div>
+    </div>
+
+    <div class="space-y-4">
+      <label class="flex items-center gap-2 text-sm">
+        {{ form.has_login }} <span>Tem acesso ao sistema?</span>
+      </label>
+      <div id="login-section" class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="label">Email</label>
+          {{ form.email }}
+          {% if form.email.errors %}<div class="text-xs text-red-600 mt-1">{{ form.email.errors|join:", " }}</div>{% endif %}
+        </div>
+        <div>
+          <label class="label">Senha</label>
+          {{ form.password }}
+          {% if form.password.errors %}<div class="text-xs text-red-600 mt-1">{{ form.password.errors|join:", " }}</div>{% endif %}
+          <label class="flex items-center gap-2 text-xs text-slate mt-2">
+            {{ form.send_invite }} <span>Gerar senha automatica e enviar convite por email</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="space-y-4">
+      <label class="flex items-center gap-2 text-sm">
+        {{ form.is_acolyte }} <span>Serve no altar?</span>
+      </label>
+      <div id="acolyte-section" class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="label">Comunidade de origem</label>
+          {{ form.community_of_origin }}
+          {% if form.community_of_origin.errors %}<div class="text-xs text-red-600 mt-1">{{ form.community_of_origin.errors|join:", " }}</div>{% endif %}
+        </div>
+        <div>
+          <label class="label">Nivel de experiencia</label>
+          {{ form.experience_level }}
+          {% if form.experience_level.errors %}<div class="text-xs text-red-600 mt-1">{{ form.experience_level.errors|join:", " }}</div>{% endif %}
+        </div>
+        <div>
+          <label class="label">Familia / grupo</label>
+          {{ form.family_group }}
+          {% if form.family_group.errors %}<div class="text-xs text-red-600 mt-1">{{ form.family_group.errors|join:", " }}</div>{% endif %}
+        </div>
+        <div>
+          <label class="label">Notas</label>
+          {{ form.notes }}
+          {% if form.notes.errors %}<div class="text-xs text-red-600 mt-1">{{ form.notes.errors|join:", " }}</div>{% endif %}
+        </div>
+        <div class="sm:col-span-2">
+          <label class="label">Qualificacoes iniciais</label>
+          <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 text-sm">
+            {% for checkbox in form.qualifications %}
+              <label class="flex items-start gap-2">
+                {{ checkbox.tag }}
+                <span>{{ checkbox.choice_label }}</span>
+              </label>
+            {% endfor %}
+          </div>
+          {% if form.qualifications.errors %}<div class="text-xs text-red-600 mt-1">{{ form.qualifications.errors|join:", " }}</div>{% endif %}
+        </div>
+        <div class="sm:col-span-2">
+          <label class="flex items-center gap-2 text-sm">
+            {{ form.acolyte_active }} <span>Perfil de acolito ativo</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="space-y-4">
+      <label class="flex items-center gap-2 text-sm">
+        {{ form.has_admin_access }} <span>Tem acesso administrativo?</span>
+      </label>
+      <div id="roles-section">
+        <label class="label">Papeis na paroquia</label>
+        <div class="grid gap-2 sm:grid-cols-2 text-sm">
+          {% for checkbox in form.roles %}
+            <label class="flex items-start gap-2">
+              {{ checkbox.tag }}
+              <span>{{ checkbox.choice_label }}</span>
+            </label>
+          {% endfor %}
+        </div>
+        {% if form.roles.errors %}<div class="text-xs text-red-600 mt-1">{{ form.roles.errors|join:", " }}</div>{% endif %}
+      </div>
+    </div>
+
+    <div class="flex flex-wrap gap-2">
+      <button class="btn-primary" type="submit">Criar pessoa</button>
+      <a class="btn-secondary" href="{% url 'people_directory' %}">Voltar</a>
+    </div>
+  </form>
+</div>
+
+<script>
+  const toggleBlocks = [
+    { toggle: "id_has_login", target: "login-section" },
+    { toggle: "id_is_acolyte", target: "acolyte-section" },
+    { toggle: "id_has_admin_access", target: "roles-section" },
+  ];
+
+  function toggleSection(toggleId, targetId) {
+    const toggle = document.getElementById(toggleId);
+    const target = document.getElementById(targetId);
+    if (!toggle || !target) return;
+
+    const update = () => {
+      const isOn = toggle.checked;
+      target.classList.toggle("hidden", !isOn);
+      target.querySelectorAll("input, select, textarea").forEach((el) => {
+        el.disabled = !isOn;
+        if (!isOn) {
+          if (el.type === "checkbox" || el.type === "radio") {
+            el.checked = false;
+          } else {
+            el.value = "";
+          }
+        }
+      });
+    };
+
+    toggle.addEventListener("change", update);
+    update();
+  }
+
+  toggleBlocks.forEach((item) => toggleSection(item.toggle, item.target));
+
+  const sendInvite = document.getElementById("id_send_invite");
+  const passwordInput = document.getElementById("id_password");
+  if (sendInvite && passwordInput) {
+    const updatePassword = () => {
+      passwordInput.disabled = sendInvite.checked;
+      if (sendInvite.checked) {
+        passwordInput.value = "";
+      }
+    };
+    sendInvite.addEventListener("change", updatePassword);
+    updatePassword();
+  }
+</script>
+{% endblock %}

@@ -37,7 +37,7 @@ class RosterViewTests(TestCase):
     def test_roster_marks_open_and_external_and_na(self):
         position_open = PositionType.objects.create(parish=self.parish, code="LIB", name="Libriferario")
         position_external = PositionType.objects.create(parish=self.parish, code="TUR", name="Turiferario")
-        position_na = PositionType.objects.create(parish=self.parish, code="CER", name="Cerimoniario")
+        position_na = PositionType.objects.create(parish=self.parish, code="NAV", name="Naveteiro")
 
         instance = MassInstance.objects.create(
             parish=self.parish,

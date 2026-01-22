@@ -57,3 +57,11 @@ class ParishIsolationTests(TestCase):
         response = client.get("/api/masses/")
         self.assertEqual(response.status_code, 403)
 
+    def test_api_requires_parish_header_when_missing(self):
+        client = APIClient()
+        credentials = base64.b64encode(b"user@example.com:pass").decode("utf-8")
+        client.credentials(HTTP_AUTHORIZATION=f"Basic {credentials}")
+        response = client.get("/api/masses/")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("X-Parish-ID", response.content.decode("utf-8"))
+

@@ -98,3 +98,15 @@ def preference_detail(pref):
         return " | ".join(parts)
     return ""
 
+
+@register.filter
+def initials(value):
+    if not value:
+        return "--"
+    parts = [part for part in str(value).strip().split() if part]
+    if not parts:
+        return "--"
+    if len(parts) == 1:
+        return parts[0][:2].upper()
+    return f"{parts[0][0]}{parts[-1][0]}".upper()
+
