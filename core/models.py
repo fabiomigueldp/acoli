@@ -84,6 +84,10 @@ class AcolyteProfile(TimeStampedModel):
         ("intermediate", "Intermediario"),
         ("senior", "Senior"),
     ]
+    SCHEDULING_MODE_CHOICES = [
+        ("normal", "Normal"),
+        ("reserve", "Reserva tecnica"),
+    ]
     parish = models.ForeignKey(Parish, on_delete=models.CASCADE, related_name="acolytes")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     display_name = models.CharField(max_length=200)
@@ -92,6 +96,7 @@ class AcolyteProfile(TimeStampedModel):
     notes = models.TextField(blank=True)
     active = models.BooleanField(default=True)
     experience_level = models.CharField(max_length=20, choices=EXPERIENCE_CHOICES, default="intermediate")
+    scheduling_mode = models.CharField(max_length=20, choices=SCHEDULING_MODE_CHOICES, default="normal")
 
     class Meta:
         constraints = [

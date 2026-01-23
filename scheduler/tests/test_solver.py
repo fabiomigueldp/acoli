@@ -259,3 +259,35 @@ class SolverTests(TestCase):
         for members in members_by_mass.values():
             self.assertNotEqual(len(members), 1)
 
+    def test_solver_penalizes_reserve_acolyte(self):
+        parish = Parish.objects.create(name="Parish")
+        community = Community.objects.create(parish=parish, code="MAT", name="Matriz")
+        position = PositionType.objects.create(parish=parish, code="LIB", name="Libriferario")
+        normal = AcolyteProfile.objects.create(parish=parish, display_name="Normal")
+        reserve = AcolyteProfile.objects.create(
+            parish=parish, display_name="Reserva", scheduling_mode="reserve"
+        )
+        AcolyteQualification.objects.create(parish=parish, acolyte=normal, position_type=position, qualified=True)
+        AcolyteQualification.objects.create(parish=parish, acolyte=reserve, position_type=position, qualified=True)
+
+        instance = MassInstance.objects.create(
+            parish=parish,
+            community=community,
+            starts_at=timezone.now() + timedelta(days=3),
+            status="scheduled",
+        )
+        AssignmentSlot.objects.create(
+            parish=parish, mass_instance=instance, position_type=position, required=True, slot_index=1
+        )
+
+        solve_schedule(
+            parish,
+            [instance],
+            parish.consolidation_days,
+            {"reserve_penalty": 1000, "fairness_penalty": 0, "stability_penalty": 0},
+            allow_changes=True,
+        )
+
+        slot = AssignmentSlot.objects.filter(parish=parish, mass_instance=instance).first()
+        self.assertEqual(slot.get_active_assignment().acolyte_id, normal.id)
+

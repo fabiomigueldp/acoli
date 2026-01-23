@@ -116,6 +116,7 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
     acolytes = list(parish.acolytes.filter(active=True))
     if not acolytes:
         return ScheduleSolveResult(coverage=0, preference_score=0, fairness_std=0, changes=0, feasible=False)
+    reserve_ids = {acolyte.id for acolyte in acolytes if acolyte.scheduling_mode == "reserve"}
 
     qualifications = AcolyteQualification.objects.filter(parish=parish, qualified=True)
     preferences = AcolytePreference.objects.filter(parish=parish)
@@ -135,6 +136,7 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
         interest_map[interest.event_series_id].add(interest.acolyte_id)
     candidates = _build_candidate_map(decision_slots, acolytes, qualifications, interest_map=interest_map)
     max_candidates = weights.get("max_candidates_per_slot")
+    reserve_penalty = int(weights.get("reserve_penalty", 1000))
     try:
         max_candidates = int(max_candidates) if max_candidates else None
     except (TypeError, ValueError):
@@ -154,6 +156,8 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
                     slot,
                     pref_by_acolyte.get(acolyte.id, []),
                 )
+                if acolyte.id in reserve_ids:
+                    score -= reserve_penalty
                 scored.append((score, acolyte))
             scored.sort(key=lambda item: item[0], reverse=True)
             slot_candidates = [acolyte for _score, acolyte in scored[: int(max_candidates)]]
@@ -305,6 +309,8 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
     for slot in decision_slots:
         for acolyte in candidates.get(slot.id, []):
             base_score = preference_score(acolyte, slot.mass_instance, slot, pref_by_acolyte.get(acolyte.id, []))
+            if acolyte.id in reserve_ids:
+                base_score -= reserve_penalty
             credit_balance = stats.get(acolyte.id).credit_balance if stats.get(acolyte.id) else 0
             credit_cap = int(weights.get("credit_cap", 10))
             credit_bonus = min(max(credit_balance, 0), credit_cap)
@@ -418,7 +424,9 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
         raw_targets = {}
         for acolyte in acolytes:
             intent = intents.get(acolyte.id)
-            if intent and intent.desired_frequency_per_month:
+            if acolyte.id in reserve_ids:
+                raw_target = 0
+            elif intent and intent.desired_frequency_per_month:
                 raw_target = intent.desired_frequency_per_month * (horizon_days / 30)
             else:
                 level = getattr(intent, "willingness_level", "normal") if intent else "normal"

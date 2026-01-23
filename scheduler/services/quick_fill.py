@@ -68,6 +68,7 @@ def quick_fill_slot(slot, parish, max_candidates=3, cache=None, exclude_acolyte_
         availability_rules = AcolyteAvailabilityRule.objects.filter(parish=parish, acolyte_id__in=qualified_ids)
         rules_by_acolyte = group_rules_by_acolyte(availability_rules)
 
+    reserve_penalty = int((parish.schedule_weights or {}).get("reserve_penalty", 1000))
     scores = []
     for acolyte in acolytes:
         if acolyte.id not in qualified_ids:
@@ -77,6 +78,8 @@ def quick_fill_slot(slot, parish, max_candidates=3, cache=None, exclude_acolyte_
         if not is_acolyte_available_with_rules(rules_by_acolyte.get(acolyte.id, []), slot.mass_instance):
             continue
         score = preference_score(acolyte, slot.mass_instance, slot, pref_by_acolyte.get(acolyte.id, []))
+        if acolyte.scheduling_mode == "reserve":
+            score -= reserve_penalty
         stats = stats_map.get(acolyte.id)
         if stats:
             score += max(0, 10 - int(stats.services_last_30_days / 2))

@@ -7,7 +7,14 @@ from core.models import (
     MembershipRole,
     Parish,
     ParishMembership,
+    PositionType,
+    MassInstance,
+    AssignmentSlot,
+    Assignment,
+    AcolyteQualification,
 )
+from django.utils import timezone
+from datetime import timedelta
 
 
 class PeopleTests(TestCase):
@@ -99,3 +106,42 @@ class PeopleTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertFalse(get_user_model().objects.filter(email="forbidden@example.com").exists())
+
+    def test_deactivate_acolyte_removes_future_assignments(self):
+        self._login()
+        position = PositionType.objects.create(parish=self.parish, code="LIB", name="Libriferario")
+        acolyte = AcolyteProfile.objects.create(
+            parish=self.parish,
+            display_name="Acolito A",
+            community_of_origin=self.community,
+            experience_level="intermediate",
+            active=True,
+        )
+        AcolyteQualification.objects.create(parish=self.parish, acolyte=acolyte, position_type=position, qualified=True)
+        instance = MassInstance.objects.create(
+            parish=self.parish,
+            community=self.community,
+            starts_at=timezone.now() + timedelta(days=7),
+            status="scheduled",
+        )
+        slot = AssignmentSlot.objects.create(parish=self.parish, mass_instance=instance, position_type=position)
+        assignment = Assignment.objects.create(
+            parish=self.parish, slot=slot, acolyte=acolyte, is_active=True
+        )
+
+        response = self.client.post(
+            f"/people/acolyte/{acolyte.id}/",
+            {
+                "form_type": "acolyte",
+                "display_name": acolyte.display_name,
+                "community_of_origin": self.community.id,
+                "experience_level": "intermediate",
+                "scheduling_mode": "normal",
+                "notes": "",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        assignment.refresh_from_db()
+        slot.refresh_from_db()
+        self.assertFalse(assignment.is_active)
+        self.assertEqual(slot.status, "open")

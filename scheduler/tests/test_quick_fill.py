@@ -92,3 +92,10 @@ class QuickFillSlotTests(TestCase):
         """quick_fill_slot with None exclude set returns all candidates"""
         candidates = quick_fill_slot(self.slot1, self.parish, exclude_acolyte_ids=None)
         self.assertEqual(len(candidates), 3)
+
+    def test_quick_fill_deprioritizes_reserve(self):
+        """reserve acolytes should be ranked after normal candidates"""
+        self.acolyte_b.scheduling_mode = "reserve"
+        self.acolyte_b.save(update_fields=["scheduling_mode"])
+        candidates = quick_fill_slot(self.slot1, self.parish)
+        self.assertEqual(candidates[0].id, self.acolyte_a.id)

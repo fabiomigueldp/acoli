@@ -538,6 +538,7 @@ class ParishSettingsForm(forms.Form):
         "max_solve_seconds": 15,
         "rotation_days": 60,
         "rotation_penalty": 3,
+        "reserve_penalty": 1000,
     }
     consolidation_days = forms.IntegerField(min_value=7, max_value=21)
     horizon_days = forms.IntegerField(min_value=30, max_value=90)
@@ -554,6 +555,7 @@ class ParishSettingsForm(forms.Form):
     max_consecutive_weekends = forms.IntegerField(min_value=0, max_value=10, required=False)
     rotation_penalty = forms.IntegerField(min_value=0, max_value=20, required=False)
     rotation_days = forms.IntegerField(min_value=0, max_value=120, required=False)
+    reserve_penalty = forms.IntegerField(min_value=0, max_value=10000, required=False)
     schedule_weights_json = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 4}))
 
     def __init__(self, *args, **kwargs):
@@ -576,6 +578,7 @@ class ParishSettingsForm(forms.Form):
             self.fields["max_consecutive_weekends"].initial = weights.get("max_consecutive_weekends")
             self.fields["rotation_penalty"].initial = weights.get("rotation_penalty", 3)
             self.fields["rotation_days"].initial = weights.get("rotation_days", 60)
+            self.fields["reserve_penalty"].initial = weights.get("reserve_penalty", 1000)
             self.fields["schedule_weights_json"].initial = json.dumps(weights, ensure_ascii=True, indent=2)
 
     def clean(self):
@@ -614,6 +617,7 @@ class ParishSettingsForm(forms.Form):
                 "max_consecutive_weekends",
                 "rotation_penalty",
                 "rotation_days",
+                "reserve_penalty",
             ]:
                 if self.cleaned_data.get(key) is not None:
                     weights[key] = int(self.cleaned_data[key])
@@ -851,6 +855,7 @@ class PeopleAcolyteForm(forms.ModelForm):
             "display_name",
             "community_of_origin",
             "experience_level",
+            "scheduling_mode",
             "family_group",
             "notes",
             "active",
@@ -891,6 +896,7 @@ class PeopleCreateForm(forms.Form):
     is_acolyte = forms.BooleanField(required=False)
     community_of_origin = forms.ModelChoiceField(queryset=Community.objects.none(), required=False)
     experience_level = forms.ChoiceField(choices=AcolyteProfile.EXPERIENCE_CHOICES, required=False)
+    scheduling_mode = forms.ChoiceField(choices=AcolyteProfile.SCHEDULING_MODE_CHOICES, required=False)
     family_group = forms.ModelChoiceField(queryset=FamilyGroup.objects.none(), required=False)
     notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
     acolyte_active = forms.BooleanField(required=False, initial=True)
@@ -939,6 +945,8 @@ class PeopleCreateForm(forms.Form):
                 self.add_error("community_of_origin", "Selecione a comunidade de origem.")
             if not experience:
                 self.add_error("experience_level", "Defina o nivel de experiencia.")
+            if not cleaned.get("scheduling_mode"):
+                cleaned["scheduling_mode"] = "normal"
         if has_admin_access and not roles:
             self.add_error("roles", "Selecione pelo menos um papel.")
         if not has_login:

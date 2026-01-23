@@ -68,6 +68,7 @@ from core.services.replacements import (
 )
 from core.services.swaps import apply_swap_request
 from core.services.availability import is_acolyte_available, is_acolyte_available_with_rules
+from core.services.acolytes import deactivate_future_assignments_for_acolyte
 from scheduler.models import ScheduleJobRequest
 from notifications.services import enqueue_notification
 from scheduler.services.quick_fill import build_quick_fill_cache, quick_fill_slot
@@ -2293,6 +2294,7 @@ def people_create(request):
             is_acolyte = form.cleaned_data.get("is_acolyte")
             community = form.cleaned_data.get("community_of_origin")
             experience = form.cleaned_data.get("experience_level")
+            scheduling_mode = form.cleaned_data.get("scheduling_mode") or "normal"
             family_group = form.cleaned_data.get("family_group")
             notes = form.cleaned_data.get("notes")
             acolyte_active = form.cleaned_data.get("acolyte_active")
@@ -2346,6 +2348,7 @@ def people_create(request):
                 acolyte.user = user if user else None
                 acolyte.community_of_origin = community
                 acolyte.experience_level = experience
+                acolyte.scheduling_mode = scheduling_mode
                 acolyte.family_group = family_group
                 acolyte.notes = notes or ""
                 acolyte.active = True if acolyte_active is None else bool(acolyte_active)
@@ -2492,6 +2495,7 @@ def _handle_member_post(request, parish, user=None, acolyte=None):
         else:
             messages.error(request, "Revise os papeis informados.")
     elif form_type == "acolyte":
+        was_active = acolyte.active if acolyte else None
         form = PeopleAcolyteForm(request.POST, instance=acolyte, parish=parish)
         if form.is_valid():
             profile = form.save(commit=False)
@@ -2499,6 +2503,10 @@ def _handle_member_post(request, parish, user=None, acolyte=None):
             if user:
                 profile.user = user
             profile.save()
+            if was_active and not profile.active:
+                removed = deactivate_future_assignments_for_acolyte(profile, actor=request.user)
+                if removed:
+                    messages.info(request, f"{removed} escalas futuras foram removidas.")
             messages.success(request, "Perfil de acolito atualizado.")
         else:
             messages.error(request, "Revise os dados do acolito.")
