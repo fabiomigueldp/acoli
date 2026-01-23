@@ -3307,12 +3307,17 @@ def acolyte_remove_assignment(request, acolyte_id, assignment_id):
     
     try:
         deactivate_assignment(assignment, reason="manual_unassign", actor=request.user)
+        
+        # For HTMX requests, return empty response to remove the row
+        if request.headers.get("HX-Request"):
+            response = HttpResponse("")
+            response["HX-Success-Message"] = "Escala removida."
+            return response
+        
         messages.success(request, "Escala removida.")
     except Exception as e:
         messages.error(request, f"Erro ao remover escala: {str(e)}")
     
-    if request.headers.get("HX-Request"):
-        return redirect(f"{reverse('people_acolyte_detail', args=[acolyte.id])}?tab=schedule")
     return redirect("people_acolyte_detail", acolyte_id=acolyte.id)
 
 
@@ -3346,11 +3351,22 @@ def acolyte_confirm_assignment(request, acolyte_id, assignment_id):
         action_type="admin_confirm",
         diff={"acolyte_id": acolyte.id, "assignment_id": assignment.id}
     )
-    messages.success(request, "Presenca confirmada.")
     
-    if request.headers.get("HX-Request"):
-        return redirect(f"{reverse('people_acolyte_detail', args=[acolyte.id])}?tab=schedule")
-    return redirect("people_acolyte_detail", acolyte_id=acolyte.id)
+    # Refetch assignment with all needed relations for the template
+    assignment = Assignment.objects.select_related(
+        'slot__mass_instance__community',
+        'slot__position_type',
+        'confirmation',
+        'assigned_by'
+    ).get(id=assignment.id)
+    
+    return _htmx_or_redirect(
+        request,
+        "people/acolyte_tabs/_schedule_row.html",
+        {"assignment": assignment, "acolyte": acolyte},
+        reverse("people_acolyte_detail", args=[acolyte.id]),
+        "Presenca confirmada."
+    )
 
 
 @login_required
@@ -3436,16 +3452,31 @@ def calendar_feed_token(request):
     parish = request.active_parish
     if request.method != "POST":
         return redirect("my_assignments")
+    
     token = CalendarFeedToken.objects.filter(parish=parish, user=request.user).first()
+    success_message = None
+    
     if token:
         token.token = uuid4().hex
         token.rotated_at = timezone.now()
         token.save(update_fields=["token", "rotated_at", "updated_at"])
-        messages.success(request, "Link do calendario atualizado.")
+        success_message = "Link do calendario atualizado."
     else:
-        CalendarFeedToken.objects.create(parish=parish, user=request.user, token=uuid4().hex)
-        messages.success(request, "Link do calendario criado.")
-    return redirect("my_assignments")
+        token = CalendarFeedToken.objects.create(parish=parish, user=request.user, token=uuid4().hex)
+        success_message = "Link do calendario criado."
+    
+    # Build calendar feed URL
+    calendar_feed_url = request.build_absolute_uri(
+        f"{reverse('calendar_feed')}?token={token.token}"
+    )
+    
+    return _htmx_or_redirect(
+        request,
+        "acolytes/_partials/calendar_feed_section.html",
+        {"calendar_feed_url": calendar_feed_url},
+        "my_assignments",
+        success_message
+    )
 
 
 def _ics_escape(value):
@@ -3892,6 +3923,10 @@ def swap_request_accept(request, swap_id):
     parish = request.active_parish
     swap = get_object_or_404(SwapRequest, parish=parish, id=swap_id)
     if swap.open_to_admin and not user_has_role(request.user, parish, ADMIN_ROLE_CODES):
+        if request.headers.get("HX-Request"):
+            response = HttpResponse(status=204)
+            response["HX-Success-Message"] = "Solicitacao em aberto. A coordenacao vai tratar esta troca."
+            return response
         messages.info(request, "Solicitacao em aberto. A coordenacao vai tratar esta troca.")
         return redirect("swap_requests")
     if swap.open_to_admin:
@@ -3919,10 +3954,23 @@ def swap_request_accept(request, swap_id):
                 {"swap_id": swap.id},
                 idempotency_key=f"swap:{swap.id}:awaiting",
             )
-        return redirect("swap_requests")
+        
+        # Refetch swap to get updated status
+        swap = SwapRequest.objects.select_related('mass_instance', 'requestor_acolyte', 'target_acolyte').get(id=swap_id)
+        return _htmx_or_redirect(
+            request,
+            "acolytes/_partials/swap_card.html",
+            {"swap": swap, "can_manage_parish": user_has_role(request.user, parish, ADMIN_ROLE_CODES)},
+            "swap_requests",
+            "Troca enviada para aprovacao da coordenacao."
+        )
     try:
         applied = apply_swap_request(swap, actor=request.user)
     except ConcurrentUpdateError:
+        if request.headers.get("HX-Request"):
+            response = HttpResponse(status=204)
+            response["HX-Success-Message"] = "Esta vaga foi atualizada por outra acao. Recarregue e tente novamente."
+            return response
         messages.error(request, "Esta vaga foi atualizada por outra acao. Recarregue e tente novamente.")
         return redirect("swap_requests")
     if applied:
@@ -3936,7 +3984,21 @@ def swap_request_accept(request, swap_id):
                 {"swap_id": swap.id},
                 idempotency_key=f"swap:{swap.id}:accepted",
             )
+        
+        # Refetch swap to get updated status
+        swap = SwapRequest.objects.select_related('mass_instance', 'requestor_acolyte', 'target_acolyte').get(id=swap_id)
+        return _htmx_or_redirect(
+            request,
+            "acolytes/_partials/swap_card.html",
+            {"swap": swap, "can_manage_parish": user_has_role(request.user, parish, ADMIN_ROLE_CODES)},
+            "swap_requests",
+            "Troca aceita com sucesso."
+        )
     else:
+        if request.headers.get("HX-Request"):
+            response = HttpResponse(status=204)
+            response["HX-Success-Message"] = "Nao foi possivel aplicar a troca."
+            return response
         messages.error(request, "Nao foi possivel aplicar a troca.")
     return redirect("swap_requests")
 
@@ -3949,6 +4011,10 @@ def swap_request_reject(request, swap_id):
     parish = request.active_parish
     swap = get_object_or_404(SwapRequest, parish=parish, id=swap_id)
     if swap.open_to_admin and not user_has_role(request.user, parish, ADMIN_ROLE_CODES):
+        if request.headers.get("HX-Request"):
+            response = HttpResponse(status=204)
+            response["HX-Success-Message"] = "Solicitacao em aberto. A coordenacao vai tratar esta troca."
+            return response
         messages.info(request, "Solicitacao em aberto. A coordenacao vai tratar esta troca.")
         return redirect("swap_requests")
     if swap.target_acolyte and swap.target_acolyte.user_id != request.user.id and not user_has_role(
@@ -3965,7 +4031,16 @@ def swap_request_reject(request, swap_id):
             {"swap_id": swap.id},
             idempotency_key=f"swap:{swap.id}:rejected",
         )
-    return redirect("swap_requests")
+    
+    # Refetch swap to get updated status
+    swap = SwapRequest.objects.select_related('mass_instance', 'requestor_acolyte', 'target_acolyte').get(id=swap_id)
+    return _htmx_or_redirect(
+        request,
+        "acolytes/_partials/swap_card.html",
+        {"swap": swap, "can_manage_parish": user_has_role(request.user, parish, ADMIN_ROLE_CODES)},
+        "swap_requests",
+        "Troca recusada."
+    )
 
 
 @login_required
@@ -3977,10 +4052,18 @@ def swap_request_approve(request, swap_id):
     parish = request.active_parish
     swap = get_object_or_404(SwapRequest, parish=parish, id=swap_id)
     if swap.status != "awaiting_approval":
+        if request.headers.get("HX-Request"):
+            response = HttpResponse(status=204)
+            response["HX-Success-Message"] = "Esta troca nao esta aguardando aprovacao."
+            return response
         return redirect("swap_requests")
     try:
         applied = apply_swap_request(swap, actor=request.user)
     except ConcurrentUpdateError:
+        if request.headers.get("HX-Request"):
+            response = HttpResponse(status=204)
+            response["HX-Success-Message"] = "Esta vaga foi atualizada por outra acao. Recarregue e tente novamente."
+            return response
         messages.error(request, "Esta vaga foi atualizada por outra acao. Recarregue e tente novamente.")
         return redirect("swap_requests")
     if applied:
@@ -3994,7 +4077,21 @@ def swap_request_approve(request, swap_id):
                 {"swap_id": swap.id},
                 idempotency_key=f"swap:{swap.id}:accepted",
             )
+        
+        # Refetch swap to get updated status
+        swap = SwapRequest.objects.select_related('mass_instance', 'requestor_acolyte', 'target_acolyte').get(id=swap_id)
+        return _htmx_or_redirect(
+            request,
+            "acolytes/_partials/swap_card.html",
+            {"swap": swap, "can_manage_parish": True},
+            "swap_requests",
+            "Troca aprovada com sucesso."
+        )
     else:
+        if request.headers.get("HX-Request"):
+            response = HttpResponse(status=204)
+            response["HX-Success-Message"] = "Nao foi possivel aplicar a troca."
+            return response
         messages.error(request, "Nao foi possivel aplicar a troca.")
     return redirect("swap_requests")
 

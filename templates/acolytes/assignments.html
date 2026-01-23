@@ -6,32 +6,7 @@
   <div class="card">
     <h2 class="font-serif text-xl mb-2">Minhas escalas</h2>
     <p class="text-sm text-slate">Consulte suas escalas e confirme com antecedencia.</p>
-    <div id="calendar-feed-section">
-    {% if calendar_feed_url %}
-      <div class="mt-4 flex flex-wrap items-center gap-2 text-sm">
-        <span class="text-slate">Assinar calendario:</span>
-        <a class="text-ink underline" href="{{ calendar_feed_url }}">{{ calendar_feed_url }}</a>
-        <button class="btn-secondary" type="button" data-copy="{{ calendar_feed_url }}">Copiar link</button>
-        <button 
-          hx-post="{% url 'calendar_feed_token' %}"
-          hx-target="#calendar-feed-section"
-          hx-swap="outerHTML"
-          class="btn-secondary" 
-          type="button">
-          Gerar novo link
-        </button>
-      </div>
-    {% else %}
-      <button 
-        hx-post="{% url 'calendar_feed_token' %}"
-        hx-target="#calendar-feed-section"
-        hx-swap="outerHTML"
-        class="btn-secondary mt-4" 
-        type="button">
-        Gerar link do calendario
-      </button>
-    {% endif %}
-    </div>
+    {% include 'acolytes/_partials/calendar_feed_section.html' %}
   </div>
 
    <div class="card">
@@ -57,19 +32,4 @@
     </div>
   </div>
 </div>
-
-<script>
-  document.querySelectorAll("[data-copy]").forEach(function(btn) {
-    btn.addEventListener("click", async function() {
-      const value = btn.getAttribute("data-copy");
-      try {
-        await navigator.clipboard.writeText(value);
-        btn.textContent = "Copiado";
-        setTimeout(() => { btn.textContent = "Copiar link"; }, 1600);
-      } catch (err) {
-        alert("Nao foi possivel copiar.");
-      }
-    });
-  });
-</script>
 {% endblock %}

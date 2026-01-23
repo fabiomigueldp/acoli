@@ -1,0 +1,62 @@
+<div id="calendar-feed-section">
+{% if calendar_feed_url %}
+  <div class="mt-4 text-sm">
+    <button 
+      type="button" 
+      class="text-ink-600 hover:text-ink-900 underline decoration-dotted underline-offset-2"
+      onclick="copyCalendarLink(this, '{{ calendar_feed_url }}')">
+      <span class="copy-text">Copiar link do calendario</span>
+    </button>
+    <span class="text-ink-400 mx-2">·</span>
+    <button 
+      type="button"
+      class="text-ink-400 hover:text-ink-600 underline decoration-dotted underline-offset-2"
+      onclick="document.getElementById('calendar-details').classList.toggle('hidden')">
+      Ver detalhes
+    </button>
+    
+    <div id="calendar-details" class="hidden mt-3 pt-3 border-t border-sand-200">
+      <input 
+        type="text" 
+        readonly 
+        value="{{ calendar_feed_url }}" 
+        class="input text-xs w-full bg-sand-50 font-mono text-ink-500 mb-2"
+        onclick="this.select()">
+      <button 
+        hx-post="{% url 'calendar_feed_token' %}"
+        hx-target="#calendar-feed-section"
+        hx-swap="outerHTML"
+        hx-confirm="O link anterior deixara de funcionar. Continuar?"
+        class="text-ink-400 hover:text-ink-600 text-xs underline decoration-dotted underline-offset-2" 
+        type="button">
+        Gerar novo link
+      </button>
+    </div>
+  </div>
+{% else %}
+  <button 
+    hx-post="{% url 'calendar_feed_token' %}"
+    hx-target="#calendar-feed-section"
+    hx-swap="outerHTML"
+    class="mt-4 text-sm text-ink-600 hover:text-ink-900 underline decoration-dotted underline-offset-2" 
+    type="button">
+    Gerar link do calendario
+  </button>
+{% endif %}
+</div>
+
+<script>
+function copyCalendarLink(button, url) {
+  navigator.clipboard.writeText(url).then(() => {
+    const span = button.querySelector('.copy-text');
+    const originalText = span.textContent;
+    span.textContent = 'Link copiado';
+    setTimeout(() => {
+      span.textContent = originalText;
+    }, 2000);
+  }).catch(() => {
+    document.getElementById('calendar-details').classList.remove('hidden');
+    document.querySelector('#calendar-details input').select();
+  });
+}
+</script>

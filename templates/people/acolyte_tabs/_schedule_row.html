@@ -1,0 +1,61 @@
+<tr class="hover:bg-sand-50 {% if not assignment.is_active %}opacity-60{% endif %}" id="assignment-row-{{ assignment.id }}">
+    <td class="px-4 py-3 whitespace-nowrap">
+        <div class="font-medium text-ink-900">{{ assignment.slot.mass_instance.starts_at|date:"d/m/Y" }}</div>
+        <div class="text-sm text-ink-500">{{ assignment.slot.mass_instance.starts_at|time:"H:i" }}</div>
+    </td>
+    <td class="px-4 py-3">
+        {{ assignment.slot.mass_instance.community.name }}
+    </td>
+    <td class="px-4 py-3">
+        {{ assignment.slot.position_type.name }}
+    </td>
+    <td class="px-4 py-3">
+        <span class="badge {% if assignment.assignment_state == 'published' %}badge-green{% elif assignment.assignment_state == 'proposed' %}badge-yellow{% else %}badge-blue{% endif %}">
+            {{ assignment.get_assignment_state_display }}
+        </span>
+        {% if not assignment.is_active %}
+        <span class="badge badge-gray ml-1">{{ assignment.get_end_reason_display }}</span>
+        {% endif %}
+    </td>
+    <td class="px-4 py-3">
+        {% if assignment.confirmation %}
+        <span class="badge {% if assignment.confirmation.status == 'confirmed' %}badge-green{% elif assignment.confirmation.status == 'declined' %}badge-red{% elif assignment.confirmation.status == 'pending' %}badge-yellow{% else %}badge-gray{% endif %}">
+            {{ assignment.confirmation.get_status_display }}
+        </span>
+        {% else %}
+        <span class="text-ink-400">-</span>
+        {% endif %}
+    </td>
+    <td class="px-4 py-3 text-sm text-ink-500">
+        {% if assignment.assigned_by %}
+        {{ assignment.assigned_by.full_name }}
+        {% else %}
+        Sistema
+        {% endif %}
+    </td>
+    <td class="px-4 py-3 text-right">
+        {% if assignment.is_active %}
+        <div class="flex items-center justify-end gap-2">
+            {% if not assignment.confirmation or assignment.confirmation.status == 'pending' %}
+            <button 
+                hx-post="{% url 'acolyte_confirm_assignment' acolyte.id assignment.id %}"
+                hx-target="#assignment-row-{{ assignment.id }}"
+                hx-swap="outerHTML"
+                type="button"
+                class="text-moss-600 hover:text-moss-700 text-sm font-medium">
+                Confirmar
+            </button>
+            {% endif %}
+            <button 
+                hx-post="{% url 'acolyte_remove_assignment' acolyte.id assignment.id %}"
+                hx-target="#assignment-row-{{ assignment.id }}"
+                hx-swap="outerHTML"
+                hx-confirm="Tem certeza que deseja remover esta escala?"
+                type="button"
+                class="text-red-600 hover:text-red-700 text-sm font-medium">
+                Remover
+            </button>
+        </div>
+        {% endif %}
+    </td>
+</tr>

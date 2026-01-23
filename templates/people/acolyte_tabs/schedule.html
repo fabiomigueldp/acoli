@@ -72,7 +72,7 @@
                 </thead>
                 <tbody class="divide-y divide-sand-100">
                     {% for assignment in assignments %}
-                    <tr class="hover:bg-sand-50 {% if not assignment.is_active %}opacity-60{% endif %}">
+                    <tr class="hover:bg-sand-50 {% if not assignment.is_active %}opacity-60{% endif %}" id="assignment-row-{{ assignment.id }}">
                         <td class="px-4 py-3 whitespace-nowrap">
                             <div class="font-medium text-ink-900">{{ assignment.slot.mass_instance.starts_at|date:"d/m/Y" }}</div>
                             <div class="text-sm text-ink-500">{{ assignment.slot.mass_instance.starts_at|time:"H:i" }}</div>
@@ -111,20 +111,24 @@
                             {% if assignment.is_active %}
                             <div class="flex items-center justify-end gap-2">
                                 {% if not assignment.confirmation or assignment.confirmation.status == 'pending' %}
-                                <form method="post" action="{% url 'acolyte_confirm_assignment' acolyte.id assignment.id %}" class="inline">
-                                    {% csrf_token %}
-                                    <button type="submit" class="text-moss-600 hover:text-moss-700 text-sm font-medium">
-                                        Confirmar
-                                    </button>
-                                </form>
+                                <button 
+                                    hx-post="{% url 'acolyte_confirm_assignment' acolyte.id assignment.id %}"
+                                    hx-target="#assignment-row-{{ assignment.id }}"
+                                    hx-swap="outerHTML"
+                                    type="button"
+                                    class="text-moss-600 hover:text-moss-700 text-sm font-medium">
+                                    Confirmar
+                                </button>
                                 {% endif %}
-                                <form method="post" action="{% url 'acolyte_remove_assignment' acolyte.id assignment.id %}" class="inline"
-                                      onsubmit="return confirm('Tem certeza que deseja remover esta escala?')">
-                                    {% csrf_token %}
-                                    <button type="submit" class="text-red-600 hover:text-red-700 text-sm font-medium">
-                                        Remover
-                                    </button>
-                                </form>
+                                <button 
+                                    hx-post="{% url 'acolyte_remove_assignment' acolyte.id assignment.id %}"
+                                    hx-target="#assignment-row-{{ assignment.id }}"
+                                    hx-swap="outerHTML"
+                                    hx-confirm="Tem certeza que deseja remover esta escala?"
+                                    type="button"
+                                    class="text-red-600 hover:text-red-700 text-sm font-medium">
+                                    Remover
+                                </button>
                             </div>
                             {% endif %}
                         </td>
