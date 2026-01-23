@@ -94,17 +94,11 @@
       </nav>
 
       <main>
-        <div id="messages-container">
-          {% if messages %}
-            <div class="space-y-2 mb-4">
-              {% for message in messages %}
-                <div class="rounded-xl border border-black/10 bg-white px-4 py-3 text-sm">
-                  {{ message }}
-                </div>
-              {% endfor %}
-            </div>
-          {% endif %}
+        <!-- Toast Notifications Container -->
+        <div id="toast-container" class="fixed top-24 right-6 z-50 space-y-2 pointer-events-none">
+          <!-- Toasts will be injected here -->
         </div>
+
         {% block content %}{% endblock %}
       </main>
     </div>
@@ -125,8 +119,133 @@
     </nav>
    </div>
 
+   <!-- Global Confirmation Modal -->
+   <div id="confirm-modal" class="hidden fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+     <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+       <div class="fixed inset-0 bg-ink/40 backdrop-blur-sm transition-opacity" aria-hidden="true" onclick="window.closeConfirmModal()"></div>
+       <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+       <div class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-soft transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-black/5">
+         <div class="bg-white px-6 pt-6 pb-4">
+           <div class="sm:flex sm:items-start">
+             <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
+               <h3 class="text-lg font-semibold text-ink-900 mb-2" id="modal-title">
+                 <!-- Title will be injected -->
+               </h3>
+               <div class="mt-2">
+                 <p class="text-sm text-slate" id="modal-body">
+                   <!-- Message will be injected -->
+                 </p>
+               </div>
+             </div>
+           </div>
+         </div>
+         <div class="bg-sand-50 px-6 py-4 sm:flex sm:flex-row-reverse gap-3">
+           <button type="button" id="modal-confirm-btn" class="btn-primary w-full sm:w-auto">
+             Confirmar
+           </button>
+           <button type="button" onclick="window.closeConfirmModal()" class="btn-secondary w-full sm:w-auto mt-3 sm:mt-0">
+             Cancelar
+           </button>
+         </div>
+       </div>
+     </div>
+   </div>
+
    <script>
-     // Custom Select Functionality
+     // ===== Toast Notification System =====
+     window.showToast = function(message, type = 'success') {
+       const container = document.getElementById('toast-container');
+       const toast = document.createElement('div');
+       
+       const bgColors = {
+         success: 'bg-moss-50 border-moss-200 text-moss-800',
+         error: 'bg-red-50 border-red-200 text-red-800',
+         warning: 'bg-sun-50 border-sun-200 text-sun-800',
+         info: 'bg-slate-50 border-slate-200 text-slate-800'
+       };
+       
+       toast.className = `pointer-events-auto transform transition-all duration-300 ease-out translate-x-full opacity-0 rounded-xl border ${bgColors[type] || bgColors.success} px-4 py-3 text-sm shadow-soft backdrop-blur-sm max-w-sm`;
+       toast.textContent = message;
+       
+       container.appendChild(toast);
+       
+       // Trigger animation
+       requestAnimationFrame(() => {
+         requestAnimationFrame(() => {
+           toast.classList.remove('translate-x-full', 'opacity-0');
+         });
+       });
+       
+       // Auto dismiss after 4 seconds
+       setTimeout(() => {
+         toast.classList.add('translate-x-full', 'opacity-0');
+         setTimeout(() => toast.remove(), 300);
+       }, 4000);
+     };
+
+     // ===== Confirmation Modal System =====
+     window.showConfirmModal = function(message, onConfirm, title = 'Confirmar ação') {
+       const modal = document.getElementById('confirm-modal');
+       const modalTitle = document.getElementById('modal-title');
+       const modalBody = document.getElementById('modal-body');
+       const confirmBtn = document.getElementById('modal-confirm-btn');
+       
+       modalTitle.textContent = title;
+       modalBody.textContent = message;
+       
+       // Remove old listeners by cloning the button
+       const newConfirmBtn = confirmBtn.cloneNode(true);
+       confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+       
+       newConfirmBtn.addEventListener('click', function() {
+         window.closeConfirmModal();
+         onConfirm();
+       });
+       
+       modal.classList.remove('hidden');
+       document.body.style.overflow = 'hidden';
+     };
+
+     window.closeConfirmModal = function() {
+       const modal = document.getElementById('confirm-modal');
+       modal.classList.add('hidden');
+       document.body.style.overflow = '';
+     };
+
+     // Close modal on ESC key
+     document.addEventListener('keydown', function(e) {
+       if (e.key === 'Escape') {
+         window.closeConfirmModal();
+       }
+     });
+
+     // ===== HTMX Confirmation Integration =====
+     document.addEventListener('htmx:confirm', function(e) {
+       e.preventDefault();
+       const message = e.detail.question || 'Tem certeza que deseja realizar esta ação?';
+       
+       window.showConfirmModal(message, function() {
+         e.detail.issueRequest(true);
+       });
+     });
+
+     // ===== HTMX Success Flash Effect =====
+     document.addEventListener('htmx:afterSwap', function(e) {
+       // Check if response has success message header
+       const successMsg = e.detail.xhr.getResponseHeader('HX-Success-Message');
+       if (successMsg) {
+         window.showToast(successMsg, 'success');
+       }
+       
+       // Flash effect on updated elements
+       const target = e.detail.target;
+       if (target && e.detail.successful) {
+         target.classList.add('htmx-success-flash');
+         setTimeout(() => target.classList.remove('htmx-success-flash'), 1000);
+       }
+     });
+
+     // ===== Custom Select Functionality =====
      document.addEventListener('DOMContentLoaded', function() {
        document.querySelectorAll('.custom-select').forEach(function(select) {
          const button = select.querySelector('.custom-select-button');

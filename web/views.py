@@ -125,7 +125,22 @@ def dashboard(request):
             "upcoming": upcoming,
             "unfilled": unfilled,
         },
-    )
+)
+
+
+def _htmx_or_redirect(request, template_name, context, redirect_url, success_message=None):
+    """
+    Helper function to handle HTMX partial updates or regular redirects.
+    Returns a partial template for HTMX requests, or redirects for normal requests.
+    """
+    if request.headers.get("HX-Request"):
+        response = render(request, template_name, context)
+        if success_message:
+            response["HX-Success-Message"] = success_message
+        return response
+    if success_message:
+        messages.success(request, success_message)
+    return redirect(redirect_url)
 
 
 @login_required
@@ -4056,9 +4071,17 @@ def confirm_assignment(request, assignment_id):
     parish = request.active_parish
     assignment = get_object_or_404(Assignment, parish=parish, id=assignment_id)
     if not assignment.is_active:
+        if request.headers.get("HX-Request"):
+            response = HttpResponse(status=204)
+            response["HX-Success-Message"] = "Esta escala nao esta mais ativa."
+            return response
         messages.info(request, "Esta escala nao esta mais ativa.")
         return redirect("my_assignments")
     if assignment.slot.mass_instance.status == "canceled":
+        if request.headers.get("HX-Request"):
+            response = HttpResponse(status=204)
+            response["HX-Success-Message"] = "Esta missa foi cancelada."
+            return response
         messages.info(request, "Esta missa foi cancelada.")
         return redirect("my_assignments")
     if not _can_manage_assignment(request.user, assignment):
@@ -4068,7 +4091,35 @@ def confirm_assignment(request, assignment_id):
     confirmation.updated_by = request.user
     confirmation.save(update_fields=["status", "updated_by", "timestamp"])
     log_audit(parish, request.user, "Confirmation", confirmation.id, "update", {"status": "confirmed"})
-    return redirect("my_assignments")
+    
+    # Refetch assignment to get updated confirmation
+    assignment = Assignment.objects.select_related(
+        "slot__mass_instance__community", 
+        "slot__position_type",
+        "confirmation",
+        "acolyte"
+    ).get(id=assignment_id)
+    
+    # Get team names for the assignment
+    from .views import my_assignments  # Import to reuse team names logic
+    team_names_map = {}
+    if assignment.slot.mass_instance:
+        team_members = Assignment.objects.filter(
+            parish=parish,
+            slot__mass_instance=assignment.slot.mass_instance,
+            is_active=True
+        ).select_related("acolyte").order_by("acolyte__display_name")
+        team_names = [a.acolyte.display_name for a in team_members]
+        if team_names:
+            team_names_map[assignment.slot.mass_instance.id] = ", ".join(team_names)
+    
+    return _htmx_or_redirect(
+        request,
+        "acolytes/_partials/assignment_card.html",
+        {"assignment": assignment, "team_names_map": team_names_map},
+        "my_assignments",
+        "Escala confirmada com sucesso."
+    )
 
 
 @login_required
@@ -4079,9 +4130,17 @@ def decline_assignment(request, assignment_id):
     parish = request.active_parish
     assignment = get_object_or_404(Assignment, parish=parish, id=assignment_id)
     if not assignment.is_active:
+        if request.headers.get("HX-Request"):
+            response = HttpResponse(status=204)
+            response["HX-Success-Message"] = "Esta escala nao esta mais ativa."
+            return response
         messages.info(request, "Esta escala nao esta mais ativa.")
         return redirect("my_assignments")
     if assignment.slot.mass_instance.status == "canceled":
+        if request.headers.get("HX-Request"):
+            response = HttpResponse(status=204)
+            response["HX-Success-Message"] = "Esta missa foi cancelada."
+            return response
         messages.info(request, "Esta missa foi cancelada.")
         return redirect("my_assignments")
     if not _can_manage_assignment(request.user, assignment):
@@ -4116,6 +4175,10 @@ def decline_assignment(request, assignment_id):
             try:
                 new_assignment = assign_replacement_request(parish, replacement.id, candidates[0], actor=request.user)
             except (ConcurrentUpdateError, ValueError):
+                if request.headers.get("HX-Request"):
+                    response = HttpResponse(status=204)
+                    response["HX-Success-Message"] = "Esta vaga foi atualizada por outra acao. Recarregue e tente novamente."
+                    return response
                 messages.error(request, "Esta vaga foi atualizada por outra acao. Recarregue e tente novamente.")
                 return redirect("my_assignments")
             if new_assignment.acolyte.user:
@@ -4126,6 +4189,13 @@ def decline_assignment(request, assignment_id):
                     {"assignment_id": new_assignment.id},
                     idempotency_key=f"replacement:{new_assignment.id}",
                 )
+    
+    # For HTMX, return empty response with success message (will remove the card)
+    if request.headers.get("HX-Request"):
+        response = HttpResponse("")
+        response["HX-Success-Message"] = "Escala recusada."
+        # Tell HTMX to remove the element by swapping with empty content
+        return response
     return redirect("my_assignments")
 
 
@@ -4137,8 +4207,16 @@ def cancel_assignment(request, assignment_id):
     parish = request.active_parish
     assignment = get_object_or_404(Assignment, parish=parish, id=assignment_id)
     if not assignment.is_active:
+        if request.headers.get("HX-Request"):
+            response = HttpResponse("")
+            response["HX-Success-Message"] = "Esta escala nao esta mais ativa."
+            return response
         return redirect("my_assignments")
     if assignment.slot.mass_instance.status == "canceled":
+        if request.headers.get("HX-Request"):
+            response = HttpResponse("")
+            response["HX-Success-Message"] = "A missa foi cancelada. Nenhuma acao e necessaria."
+            return response
         messages.info(request, "A missa foi cancelada. Nenhuma acao e necessaria.")
         return redirect("my_assignments")
     if not _can_manage_assignment(request.user, assignment):
@@ -4167,4 +4245,10 @@ def cancel_assignment(request, assignment_id):
                 {"slot_id": slot.id},
                 idempotency_key=f"cancel:{assignment.id}:{user.id}",
             )
+    
+    # For HTMX, return empty response with success message (will remove the card)
+    if request.headers.get("HX-Request"):
+        response = HttpResponse("")
+        response["HX-Success-Message"] = "Escala cancelada."
+        return response
     return redirect("my_assignments")

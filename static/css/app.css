@@ -343,19 +343,54 @@ input[type="checkbox"] { width: 1rem; height: 1rem; padding: 0; border-radius: 0
   line-height: 1.4;
 }
 
-/* Custom Toggle Switch */
-.custom-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1rem;
-  background: linear-gradient(135deg, #fefefe 0%, white 100%);
-  border: 1px solid rgba(10, 24, 32, 0.15);
-  border-radius: 0.875rem;
-  box-shadow: 0 1px 3px rgba(10, 24, 32, 0.05);
-  transition: all 0.2s ease;
-  width: 100%;
+/* HTMX Success Flash Animation */
+@keyframes successFlash {
+  0% {
+    background-color: rgba(15, 94, 77, 0.1);
+  }
+  50% {
+    background-color: rgba(15, 94, 77, 0.2);
+  }
+  100% {
+    background-color: transparent;
+  }
 }
+
+.htmx-success-flash {
+  animation: successFlash 1s ease-out;
+}
+
+/* Badge variations */
+.badge-green {
+  background: linear-gradient(135deg, rgba(15, 94, 77, 0.15) 0%, rgba(15, 94, 77, 0.1) 100%);
+  color: #0f5e4d;
+  border: 1px solid rgba(15, 94, 77, 0.2);
+}
+
+.badge-red {
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.15) 0%, rgba(220, 38, 38, 0.1) 100%);
+  color: #dc2626;
+  border: 1px solid rgba(220, 38, 38, 0.2);
+}
+
+.badge-yellow {
+  background: linear-gradient(135deg, rgba(217, 164, 65, 0.25) 0%, rgba(217, 164, 65, 0.15) 100%);
+  color: #7a5a12;
+  border: 1px solid rgba(217, 164, 65, 0.2);
+}
+
+.badge-blue {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.1) 100%);
+  color: #2563eb;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.badge-gray {
+  background: linear-gradient(135deg, rgba(90, 106, 114, 0.15) 0%, rgba(90, 106, 114, 0.1) 100%);
+  color: #5a6a72;
+  border: 1px solid rgba(90, 106, 114, 0.2);
+}
+
 
 .custom-toggle:hover {
   box-shadow: 0 2px 8px rgba(10, 24, 32, 0.1);

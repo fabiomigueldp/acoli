@@ -6,22 +6,32 @@
   <div class="card">
     <h2 class="font-serif text-xl mb-2">Minhas escalas</h2>
     <p class="text-sm text-slate">Consulte suas escalas e confirme com antecedencia.</p>
+    <div id="calendar-feed-section">
     {% if calendar_feed_url %}
       <div class="mt-4 flex flex-wrap items-center gap-2 text-sm">
         <span class="text-slate">Assinar calendario:</span>
         <a class="text-ink underline" href="{{ calendar_feed_url }}">{{ calendar_feed_url }}</a>
         <button class="btn-secondary" type="button" data-copy="{{ calendar_feed_url }}">Copiar link</button>
-        <form method="post" action="{% url 'calendar_feed_token' %}">
-          {% csrf_token %}
-          <button class="btn-secondary" type="submit">Gerar novo link</button>
-        </form>
+        <button 
+          hx-post="{% url 'calendar_feed_token' %}"
+          hx-target="#calendar-feed-section"
+          hx-swap="outerHTML"
+          class="btn-secondary" 
+          type="button">
+          Gerar novo link
+        </button>
       </div>
     {% else %}
-      <form method="post" action="{% url 'calendar_feed_token' %}" class="mt-4">
-        {% csrf_token %}
-        <button class="btn-secondary" type="submit">Gerar link do calendario</button>
-      </form>
+      <button 
+        hx-post="{% url 'calendar_feed_token' %}"
+        hx-target="#calendar-feed-section"
+        hx-swap="outerHTML"
+        class="btn-secondary mt-4" 
+        type="button">
+        Gerar link do calendario
+      </button>
     {% endif %}
+    </div>
   </div>
 
    <div class="card">
@@ -31,51 +41,7 @@
     </div>
     <div class="space-y-4">
       {% for assignment in assignments %}
-        <div class="border border-black/8 rounded-xl p-5 hover:bg-sand/20 hover:border-moss/20 transition-all duration-200 hover:shadow-sm group">
-          <div class="flex flex-wrap items-start justify-between gap-4">
-            <div class="flex items-start gap-4">
-              <div class="w-12 h-12 bg-slate rounded-full flex items-center justify-center text-white font-serif text-sm font-bold flex-shrink-0">
-                {{ assignment.slot.mass_instance.community.code|slice:":1" }}
-              </div>
-              <div>
-                <div class="text-sm text-slate font-medium mb-1">{{ assignment.slot.mass_instance.starts_at|date:"l, d/m/Y" }}</div>
-                <div class="font-semibold text-lg text-ink group-hover:text-moss transition-colors">{{ assignment.slot.mass_instance.starts_at|date:"H:i" }} • {{ assignment.slot.mass_instance.community.code }}</div>
-                <div class="text-slate font-medium">{{ assignment.slot.position_type.name }}</div>
-                {% with team=team_names_map|get_item:assignment.slot.mass_instance_id %}
-                  {% if team %}
-                    <div class="text-xs text-slate mt-2 bg-sand/50 rounded-lg px-2 py-1 inline-block">Equipe: {{ team }}</div>
-                  {% endif %}
-                {% endwith %}
-              </div>
-            </div>
-            <div class="flex flex-wrap items-center gap-3">
-              {% if assignment.confirmation %}
-              <span class="badge">{{ assignment.confirmation.status|confirmation_status_label }}</span>
-                {% if assignment.confirmation.status == "pending" %}
-                  <div class="flex gap-2">
-                    <form method="post" action="{% url 'confirm_assignment' assignment.id %}">
-                      {% csrf_token %}
-                      <button class="btn-primary text-sm px-4 py-2" type="submit">Confirmar</button>
-                    </form>
-                    <form method="post" action="{% url 'decline_assignment' assignment.id %}" onsubmit="return confirm('Tem certeza que deseja recusar esta escala?');">
-                      {% csrf_token %}
-                      <button class="btn-secondary text-sm px-4 py-2" type="submit">Recusar</button>
-                    </form>
-                  </div>
-                {% elif assignment.confirmation.status == "confirmed" %}
-                  <form method="post" action="{% url 'cancel_assignment' assignment.id %}" onsubmit="return confirm('Tem certeza que deseja cancelar esta escala?');">
-                    {% csrf_token %}
-                    <button class="btn-secondary text-sm px-4 py-2" type="submit">Cancelar</button>
-                  </form>
-                {% endif %}
-                <a class="btn-secondary text-sm px-4 py-2" href="{% url 'swap_request_create' assignment.id %}">Solicitar troca</a>
-              {% else %}
-              <span class="badge">{{ assignment.assignment_state|assignment_state_label }}</span>
-                <a class="btn-secondary text-sm px-4 py-2" href="{% url 'swap_request_create' assignment.id %}">Solicitar troca</a>
-              {% endif %}
-            </div>
-          </div>
-        </div>
+        {% include "acolytes/_partials/assignment_card.html" with assignment=assignment %}
       {% empty %}
         <div class="text-center py-12">
           <div class="w-16 h-16 bg-sand rounded-full flex items-center justify-center mx-auto mb-4">

@@ -1,0 +1,47 @@
+{% load extras %}
+<div class="border border-black/5 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3" id="swap-{{ swap.id }}">
+  <div>
+    <div class="font-medium">{{ swap.mass_instance.starts_at|date:"d/m H:i" }}</div>
+    <div class="text-sm text-slate">
+      {{ swap.swap_type|swap_type_label}} -
+      {% if swap.open_to_admin %}Aguardando coordenacao{% else %}{{ swap.status|swap_status_label }}{% endif %}
+    </div>
+  </div>
+  <div class="flex items-center gap-2">
+    {% if swap.open_to_admin %}
+      {% if can_manage_parish %}
+        <a class="btn-secondary" href="{% url 'swap_request_assign' swap.id %}">Atribuir</a>
+      {% else %}
+        <span class="text-xs text-slate">Aguardando coordenacao</span>
+      {% endif %}
+    {% elif swap.target_acolyte and swap.target_acolyte.user_id == request.user.id and swap.status == "pending" %}
+      <button 
+        hx-post="{% url 'swap_request_accept' swap.id %}"
+        hx-target="#swap-{{ swap.id }}"
+        hx-swap="outerHTML"
+        class="btn-secondary" 
+        type="button">
+        Aceitar
+      </button>
+      <button 
+        hx-post="{% url 'swap_request_reject' swap.id %}"
+        hx-target="#swap-{{ swap.id }}"
+        hx-swap="outerHTML"
+        hx-confirm="Tem certeza que deseja recusar esta troca?"
+        class="btn-secondary" 
+        type="button">
+        Recusar
+      </button>
+    {% endif %}
+    {% if can_manage_parish and swap.status == "awaiting_approval" %}
+      <button 
+        hx-post="{% url 'swap_request_approve' swap.id %}"
+        hx-target="#swap-{{ swap.id }}"
+        hx-swap="outerHTML"
+        class="btn-secondary" 
+        type="button">
+        Aprovar
+      </button>
+    {% endif %}
+  </div>
+</div>
