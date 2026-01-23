@@ -218,91 +218,42 @@
               <p class="text-sm text-slate">Nenhuma regra semanal cadastrada.</p>
             {% endfor %}
           </div>
-          <form method="post" class="space-y-3">
-            {% csrf_token %}
-            <input type="hidden" name="form_type" value="weekly_availability" />
-            <div class="grid gap-3 sm:grid-cols-2">
-               <div>
-                 <label class="label">Tipo</label>
-                 <div class="custom-select">
-                   <input type="hidden" name="rule_type" value="{{ weekly_form.rule_type.value }}">
-                   <button type="button" class="custom-select-button">
-                     <span class="selected-text">
-                       {% if weekly_form.rule_type.value %}
-                         {% for choice_value, choice_label in weekly_form.rule_type.field.choices %}
-                           {% if weekly_form.rule_type.value == choice_value %}{{ choice_label }}{% endif %}
-                         {% endfor %}
-                       {% else %}
-                         Selecionar...
-                       {% endif %}
-                     </span>
-                   </button>
-                   <div class="custom-select-options">
-                     {% for choice_value, choice_label in weekly_form.rule_type.field.choices %}
-                       <button type="button" class="custom-select-option {% if weekly_form.rule_type.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
-                     {% endfor %}
-                   </div>
+           <details class="mt-4">
+             <summary class="cursor-pointer inline-flex items-center gap-2 text-sm px-4 py-2 rounded-full border border-black/10 bg-white">
+               Adicionar rotina
+             </summary>
+             <form method="post" class="space-y-3 mt-3">
+               {% csrf_token %}
+               <input type="hidden" name="form_type" value="weekly_availability" />
+               <div class="grid gap-3 sm:grid-cols-2">
+                 <div>
+                   <label class="label">Tipo</label>
+                   {{ weekly_form.rule_type }}
+                 </div>
+                 <div>
+                   <label class="label">Dia</label>
+                   {{ weekly_form.day_of_week }}
+                 </div>
+                 <div>
+                   <label class="label">Inicio</label>
+                   {{ weekly_form.start_time }}
+                 </div>
+                 <div>
+                   <label class="label">Fim</label>
+                   {{ weekly_form.end_time }}
+                 </div>
+                 <div class="sm:col-span-2">
+                   <label class="label">Comunidade (opcional)</label>
+                   {{ weekly_form.community }}
+                 </div>
+                 <div class="sm:col-span-2">
+                   <label class="label">Notas</label>
+                   {{ weekly_form.notes }}
                  </div>
                </div>
-               <div>
-                 <label class="label">Dia</label>
-                 <div class="custom-select">
-                   <input type="hidden" name="day_of_week" value="{{ weekly_form.day_of_week.value }}">
-                   <button type="button" class="custom-select-button">
-                     <span class="selected-text">
-                       {% if weekly_form.day_of_week.value %}
-                         {% for choice_value, choice_label in weekly_form.day_of_week.field.choices %}
-                           {% if weekly_form.day_of_week.value == choice_value %}{{ choice_label }}{% endif %}
-                         {% endfor %}
-                       {% else %}
-                         Selecionar...
-                       {% endif %}
-                     </span>
-                   </button>
-                   <div class="custom-select-options">
-                     {% for choice_value, choice_label in weekly_form.day_of_week.field.choices %}
-                       <button type="button" class="custom-select-option {% if weekly_form.day_of_week.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
-                     {% endfor %}
-                   </div>
-                 </div>
-               </div>
-              <div>
-                <label class="label">Inicio</label>
-                {{ weekly_form.start_time }}
-              </div>
-              <div>
-                <label class="label">Fim</label>
-                {{ weekly_form.end_time }}
-              </div>
-               <div>
-                 <label class="label">Comunidade</label>
-                 <div class="custom-select">
-                   <input type="hidden" name="community" value="{{ weekly_form.community.value }}">
-                   <button type="button" class="custom-select-button">
-                     <span class="selected-text">
-                       {% if weekly_form.community.value %}
-                         {% for choice_value, choice_label in weekly_form.community.field.choices %}
-                           {% if weekly_form.community.value == choice_value %}{{ choice_label|slice:":3" }}{% endif %}
-                         {% endfor %}
-                       {% else %}
-                         Selecionar...
-                       {% endif %}
-                     </span>
-                   </button>
-                   <div class="custom-select-options">
-                     {% for choice_value, choice_label in weekly_form.community.field.choices %}
-                       <button type="button" class="custom-select-option {% if weekly_form.community.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label|slice:":3" }}</button>
-                     {% endfor %}
-                   </div>
-                 </div>
-               </div>
-              <div class="sm:col-span-2">
-                <label class="label">Observacao</label>
-                {{ weekly_form.notes }}
-              </div>
-            </div>
-            <button class="btn-secondary" type="submit">Adicionar rotina</button>
-          </form>
+               <button class="btn-secondary">Salvar rotina</button>
+             </form>
+           </details>
 
           <div class="space-y-2">
             <div class="text-xs uppercase tracking-wider text-slate">Ausencias por data</div>
@@ -323,136 +274,142 @@
               <p class="text-sm text-slate">Nenhuma ausencia registrada.</p>
             {% endfor %}
           </div>
-          <form method="post" class="space-y-3">
-            {% csrf_token %}
-            <input type="hidden" name="form_type" value="date_absence" />
-            <div class="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label class="label">Data inicio</label>
-                {{ date_absence_form.start_date }}
-              </div>
-              <div>
-                <label class="label">Data fim</label>
-                {{ date_absence_form.end_date }}
-              </div>
-              <div class="sm:col-span-2">
-                <label class="label">Motivo</label>
-                {{ date_absence_form.notes }}
-              </div>
-            </div>
-            <button class="btn-secondary" type="submit">Adicionar ausencia</button>
-          </form>
+           <details class="mt-4">
+             <summary class="cursor-pointer inline-flex items-center gap-2 text-sm px-4 py-2 rounded-full border border-black/10 bg-white">
+               Adicionar ausencia
+             </summary>
+             <form method="post" class="space-y-3 mt-3">
+               {% csrf_token %}
+               <input type="hidden" name="form_type" value="date_absence" />
+               <div class="grid gap-3 sm:grid-cols-2">
+                 <div>
+                   <label class="label">Data inicio</label>
+                   {{ date_absence_form.start_date }}
+                 </div>
+                 <div>
+                   <label class="label">Data fim (opcional)</label>
+                   {{ date_absence_form.end_date }}
+                 </div>
+                 <div class="sm:col-span-2">
+                   <label class="label">Motivo</label>
+                   {{ date_absence_form.notes }}
+                 </div>
+               </div>
+               <button class="btn-secondary">Salvar ausencia</button>
+             </form>
+           </details>
         </div>
 
-        <div class="card space-y-4">
-          <h3 class="font-semibold">Preferencias</h3>
-          <div class="space-y-2">
-            {% for preference in preferences %}
-              <div class="flex flex-wrap items-center justify-between gap-2 border border-black/5 rounded-lg p-3 text-sm">
-                <div>
-                  <div class="font-medium">{{ preference|preference_summary }}</div>
-                  <div class="text-xs text-slate">{{ preference|preference_detail }}</div>
-                </div>
-                <form method="post">
-                  {% csrf_token %}
-                  <input type="hidden" name="form_type" value="delete_preference" />
-                  <input type="hidden" name="pref_id" value="{{ preference.id }}" />
-                  <button class="btn-secondary" type="submit">Remover</button>
-                </form>
-              </div>
-            {% empty %}
-              <p class="text-sm text-slate">Nenhuma preferencia cadastrada.</p>
-            {% endfor %}
-          </div>
-          <form method="post" class="space-y-3" id="pref-form">
-            {% csrf_token %}
-            <input type="hidden" name="form_type" value="preference" />
-            <div class="grid gap-3 sm:grid-cols-2">
-               <div>
-                 <label class="label">Tipo</label>
-                 <div class="custom-select">
-                   <input type="hidden" name="preference_type" value="{{ preference_form.preference_type.value }}">
-                   <button type="button" class="custom-select-button">
-                     <span class="selected-text">
-                       {% if preference_form.preference_type.value %}
-                         {% for choice_value, choice_label in preference_form.preference_type.field.choices %}
-                           {% if preference_form.preference_type.value == choice_value %}{{ choice_label }}{% endif %}
-                         {% endfor %}
-                       {% else %}
-                         Selecionar...
+         <div class="card space-y-4">
+           <div>
+             <h3 class="font-semibold">Preferencias atuais</h3>
+             <p class="text-sm text-slate">Resumo simples para facilitar a leitura.</p>
+           </div>
+           <div class="mt-4 space-y-2">
+             {% for preference in preferences %}
+               <div class="border border-black/5 rounded-lg p-3 flex items-center justify-between gap-3">
+                 <div>
+                   <div class="font-medium">{{ preference|preference_summary }}</div>
+                   <div class="flex items-center gap-2 text-xs uppercase tracking-wide text-slate mt-1">
+                     <span class="px-2 py-0.5 rounded-full bg-sand text-ink/70">{{ preference.weight|preference_priority_label }}</span>
+                     {% with detail=preference|preference_detail %}
+                       {% if detail %}
+                         <span>{{ detail }}</span>
                        {% endif %}
-                     </span>
-                   </button>
-                   <div class="custom-select-options">
-                     {% for choice_value, choice_label in preference_form.preference_type.field.choices %}
-                       <button type="button" class="custom-select-option {% if preference_form.preference_type.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
-                     {% endfor %}
+                     {% endwith %}
                    </div>
                  </div>
+                 <form method="post">
+                   {% csrf_token %}
+                   <input type="hidden" name="form_type" value="delete_preference" />
+                   <input type="hidden" name="pref_id" value="{{ preference.id }}" />
+                   <button class="btn-secondary" type="submit">Remover</button>
+                 </form>
                </div>
-              <div>
-                <label class="label">Prioridade</label>
-                <div class="flex gap-2" id="pref-priority">
-                  <button class="btn-secondary" type="button" data-weight="25">Baixa</button>
-                  <button class="btn-secondary" type="button" data-weight="50">Media</button>
-                  <button class="btn-secondary" type="button" data-weight="100">Alta</button>
-                </div>
-                {{ preference_form.weight }}
-              </div>
-               <div data-field="community">
-                 <label class="label">Comunidade</label>
-                 <div class="custom-select">
-                   <input type="hidden" name="target_community" value="{{ preference_form.target_community.value }}">
-                   <button type="button" class="custom-select-button">
-                     <span class="selected-text">
-                       {% if preference_form.target_community.value %}
-                         {% for choice_value, choice_label in preference_form.target_community.field.choices %}
-                           {% if preference_form.target_community.value == choice_value %}{{ choice_label|slice:":3" }}{% endif %}
-                         {% endfor %}
-                       {% else %}
-                         Selecionar...
-                       {% endif %}
-                     </span>
-                   </button>
-                   <div class="custom-select-options">
-                     {% for choice_value, choice_label in preference_form.target_community.field.choices %}
-                       <button type="button" class="custom-select-option {% if preference_form.target_community.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label|slice:":3" }}</button>
-                     {% endfor %}
-                   </div>
+             {% empty %}
+               <p class="text-sm text-slate">Nenhuma preferencia cadastrada.</p>
+             {% endfor %}
+           </div>
+
+           <div class="border-t border-black/5 pt-4 mt-6">
+             <div>
+               <h4 class="font-semibold">Adicionar preferencia</h4>
+               <p class="text-sm text-slate">Prioridade alta reforca, mas nao garante.</p>
+             </div>
+             <form method="post" class="space-y-3 mt-4" id="pref-form">
+               {% csrf_token %}
+               <input type="hidden" name="form_type" value="preference" />
+               {{ preference_form.weight.as_hidden }}
+               <div class="grid gap-3 sm:grid-cols-2">
+                 <div class="sm:col-span-2">
+                   <label class="label">Tipo</label>
+                   {{ preference_form.preference_type }}
+                   {{ preference_form.preference_type.errors }}
+                 </div>
+                 <div class="sm:col-span-2">
+                   <label class="label">Prioridade</label>
+                   {% with weight_value=preference_form.weight.value|default:50 %}
+                     <div class="flex flex-wrap gap-2" id="pref_priority_group">
+                       <button type="button" data-priority="25"
+                         class="px-4 py-2 rounded-full border text-sm {% if weight_value|stringformat:"s" == "25" %}bg-ink text-white border-ink{% else %}border-black/10 text-slate{% endif %}">
+                         Baixa
+                       </button>
+                       <button type="button" data-priority="50"
+                         class="px-4 py-2 rounded-full border text-sm {% if weight_value|stringformat:"s" == "50" %}bg-ink text-white border-ink{% else %}border-black/10 text-slate{% endif %}">
+                         Media
+                       </button>
+                       <button type="button" data-priority="100"
+                         class="px-4 py-2 rounded-full border text-sm {% if weight_value|stringformat:"s" == "100" %}bg-ink text-white border-ink{% else %}border-black/10 text-slate{% endif %}">
+                         Alta
+                       </button>
+                     </div>
+                   {% endwith %}
+                 </div>
+                 <div class="sm:col-span-2 hidden" data-pref-field="target_community">
+                   <label class="label">Comunidade</label>
+                   {{ preference_form.target_community }}
+                   {{ preference_form.target_community.errors }}
+                 </div>
+                 <div class="sm:col-span-2 hidden" data-pref-field="target_position">
+                   <label class="label">Posicao</label>
+                   {{ preference_form.target_position }}
+                   {{ preference_form.target_position.errors }}
+                 </div>
+                 <div class="sm:col-span-2 hidden" data-pref-field="target_function">
+                   <label class="label">Funcao</label>
+                   {{ preference_form.target_function }}
+                   {{ preference_form.target_function.errors }}
+                 </div>
+                 <div class="sm:col-span-2 hidden" data-pref-field="target_template">
+                   <label class="label">Modelo</label>
+                   {{ preference_form.target_template }}
+                   {{ preference_form.target_template.errors }}
+                 </div>
+                 <div class="sm:col-span-2 hidden" data-pref-field="target_acolyte">
+                   <label class="label">Parceiro</label>
+                   {{ preference_form.target_acolyte }}
+                   {{ preference_form.target_acolyte.errors }}
+                 </div>
+                 <div class="hidden" data-pref-field="weekday">
+                   <label class="label">Dia da semana</label>
+                   {{ preference_form.weekday }}
+                   {{ preference_form.weekday.errors }}
+                 </div>
+                 <div class="hidden" data-pref-field="start_time">
+                   <label class="label">Horario inicio</label>
+                   {{ preference_form.start_time }}
+                   {{ preference_form.start_time.errors }}
+                 </div>
+                 <div class="hidden" data-pref-field="end_time">
+                   <label class="label">Horario fim</label>
+                   {{ preference_form.end_time }}
+                   {{ preference_form.end_time.errors }}
                  </div>
                </div>
-              <div data-field="position">
-                <label class="label">Funcao</label>
-                {{ preference_form.target_position }}
-              </div>
-              <div data-field="function">
-                <label class="label">Responsabilidade</label>
-                {{ preference_form.target_function }}
-              </div>
-              <div data-field="template">
-                <label class="label">Modelo</label>
-                {{ preference_form.target_template }}
-              </div>
-              <div data-field="partner">
-                <label class="label">Parceiro</label>
-                {{ preference_form.target_acolyte }}
-              </div>
-              <div data-field="timeslot">
-                <label class="label">Dia</label>
-                {{ preference_form.weekday }}
-              </div>
-              <div data-field="timeslot">
-                <label class="label">Inicio</label>
-                {{ preference_form.start_time }}
-              </div>
-              <div data-field="timeslot">
-                <label class="label">Fim</label>
-                {{ preference_form.end_time }}
-              </div>
-            </div>
-            <button class="btn-secondary" type="submit">Adicionar preferencia</button>
-          </form>
-        </div>
+               <button class="btn-secondary" type="submit">Salvar preferencia</button>
+             </form>
+           </div>
+         </div>
       {% endif %}
 
       <div class="card space-y-3">
@@ -489,56 +446,79 @@
 </div>
 
 <script>
-  const preferenceType = document.getElementById("id_preference_type");
-  const fields = document.querySelectorAll("[data-field]");
-  const weightInput = document.getElementById("id_weight");
-  const priorityButtons = document.querySelectorAll("#pref-priority button");
+  (function () {
+    const typeSelect = document.getElementById("id_preference_type");
+    const weightInput = document.getElementById("id_weight");
+    const priorityButtons = document.querySelectorAll("[data-priority]");
+    const groups = document.querySelectorAll("[data-pref-field]");
+    const mapping = {
+      preferred_community: ["target_community"],
+      avoid_community: ["target_community"],
+      preferred_position: ["target_position"],
+      avoid_position: ["target_position"],
+      preferred_function: ["target_function"],
+      avoid_function: ["target_function"],
+      preferred_mass_template: ["target_template"],
+      preferred_partner: ["target_acolyte"],
+      avoid_partner: ["target_acolyte"],
+      preferred_timeslot: ["weekday", "start_time", "end_time"],
+    };
 
-  function updatePriority(value) {
-    if (weightInput) {
+    function resetField(el) {
+      if (el.tagName === "SELECT") {
+        el.selectedIndex = 0;
+        return;
+      }
+      if (el.type === "checkbox" || el.type === "radio") {
+        el.checked = false;
+        return;
+      }
+      el.value = "";
+    }
+
+    function updateFields() {
+      if (!typeSelect) {
+        return;
+      }
+      const allowed = mapping[typeSelect.value] || [];
+      groups.forEach((group) => {
+        const field = group.getAttribute("data-pref-field");
+        const show = allowed.includes(field);
+        group.classList.toggle("hidden", !show);
+        group.querySelectorAll("select, input, textarea").forEach((el) => {
+          el.disabled = !show;
+          if (!show) {
+            resetField(el);
+          }
+        });
+      });
+    }
+
+    function setPriority(value) {
+      if (!weightInput) {
+        return;
+      }
       weightInput.value = value;
+      priorityButtons.forEach((btn) => {
+        const isActive = btn.dataset.priority === value;
+        btn.classList.toggle("bg-ink", isActive);
+        btn.classList.toggle("text-white", isActive);
+        btn.classList.toggle("border-ink", isActive);
+        btn.classList.toggle("border-black/10", !isActive);
+        btn.classList.toggle("text-slate", !isActive);
+      });
+    }
+
+    if (typeSelect) {
+      typeSelect.addEventListener("change", updateFields);
+      updateFields();
     }
     priorityButtons.forEach((btn) => {
-      btn.classList.toggle("bg-moss", btn.dataset.weight === value);
-      btn.classList.toggle("text-white", btn.dataset.weight === value);
+      btn.addEventListener("click", () => setPriority(btn.dataset.priority));
     });
-  }
-
-  function updateFields() {
-    const value = preferenceType ? preferenceType.value : "";
-    fields.forEach((field) => {
-      const type = field.getAttribute("data-field");
-      const show =
-        (type === "community" && (value === "preferred_community" || value === "avoid_community")) ||
-        (type === "position" && (value === "preferred_position" || value === "avoid_position")) ||
-        (type === "function" && (value === "preferred_function" || value === "avoid_function")) ||
-        (type === "template" && value === "preferred_mass_template") ||
-        (type === "partner" && (value === "preferred_partner" || value === "avoid_partner")) ||
-        (type === "timeslot" && value === "preferred_timeslot");
-      field.classList.toggle("hidden", !show);
-      field.querySelectorAll("input, select").forEach((input) => {
-        input.disabled = !show;
-        if (!show) {
-          if (input.type === "checkbox" || input.type === "radio") {
-            input.checked = false;
-          } else {
-            input.value = "";
-          }
-        }
-      });
-    });
-  }
-
-  if (preferenceType) {
-    preferenceType.addEventListener("change", updateFields);
-    updateFields();
-  }
-  if (weightInput) {
-    weightInput.type = "hidden";
-    updatePriority(weightInput.value || "50");
-    priorityButtons.forEach((btn) => {
-      btn.addEventListener("click", () => updatePriority(btn.dataset.weight));
-    });
-  }
+    if (weightInput) {
+      setPriority(weightInput.value || "50");
+    }
+  })();
 </script>
 {% endblock %}
