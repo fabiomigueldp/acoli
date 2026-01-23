@@ -1,0 +1,62 @@
+{% load extras %}
+{% include 'partials/_messages.html' %}
+<div id="slots-section" class="card">
+  <h3 class="font-semibold mb-3">Funcoes</h3>
+  <div class="space-y-2">
+    {% for slot in slots %}
+      <div class="border border-black/5 rounded-lg p-3 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div class="text-sm text-slate">{{ slot.position_type.name }}</div>
+            {% if slot.externally_covered %}
+              <div class="font-medium">Coberto externamente</div>
+              {% if slot.external_coverage_notes %}
+                <div class="text-xs text-slate">{{ slot.external_coverage_notes }}</div>
+              {% endif %}
+            {% elif not slot.required %}
+              <div class="font-medium">Nao necessario</div>
+            {% else %}
+              {% with active=slot.active_assignment %}
+                <div class="font-medium">{% if active %}{{ active.acolyte.display_name }}{% else %}Vaga aberta{% endif %}</div>
+              {% endwith %}
+            {% endif %}
+            {% if slot.recent_assignments and slot.recent_assignments|length > 1 %}
+              <div class="text-xs text-slate mt-2">
+                <div class="uppercase tracking-wide text-slate">Historico recente</div>
+                <div class="space-y-1">
+                  {% for past in slot.recent_assignments %}
+                    {% if not past.is_active %}
+                      <div>{{ past.acolyte.display_name }}{% if past.end_reason %} ({{ past.end_reason|assignment_end_reason_label }}){% endif %}</div>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+              </div>
+            {% endif %}
+          </div>
+          <span class="badge">{{ slot.status|slot_status_label }}</span>
+        </div>
+        {% if can_manage_parish and slot.required and not slot.externally_covered %}
+          {% with active=slot.active_assignment %}
+            <div class="flex flex-wrap items-center gap-2">
+              {% for candidate in slot_suggestions|get_list_item:slot.id %}
+                <button
+                  class="btn-secondary"
+                  hx-post="{% if active %}{% url 'slot_replace' instance.id slot.id %}{% else %}{% url 'slot_assign' instance.id slot.id %}{% endif %}"
+                  hx-vals='{"acolyte_id": "{{ candidate.id }}"}'
+                  hx-target="#slots-section"
+                  hx-swap="outerHTML"
+                  {% if slot.is_locked %}hx-confirm="Esta missa esta consolidada. Deseja continuar?"{% endif %}
+                >{% if active %}Substituir{% else %}Atribuir{% endif %} {{ candidate.display_name }}</button>
+              {% empty %}
+                <span class="text-xs text-slate">Sem sugestoes automaticas.</span>
+              {% endfor %}
+              <a class="btn-secondary" href="{% url 'slot_assign' instance.id slot.id %}">Escolher outro</a>
+            </div>
+          {% endwith %}
+        {% endif %}
+      </div>
+    {% empty %}
+      <p class="text-sm text-slate">Sem slots configurados.</p>
+    {% endfor %}
+  </div>
+</div>

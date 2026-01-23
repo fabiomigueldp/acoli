@@ -24,4 +24,5 @@ class TemplateTagTests(SimpleTestCase):
         self.assertEqual(slot_status_label("Assigned"), "Atribuida")
         self.assertEqual(slot_status_label("ASSIGNED"), "Atribuida")
         self.assertEqual(assignment_end_reason_label("replaced_by_solver"), "Substituido pelo sistema")
+        self.assertEqual(assignment_end_reason_label("moved_to_another_slot"), "Movido para outra posicao")
         self.assertEqual(confirmation_status_label("PENDING"), "Pendente")

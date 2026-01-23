@@ -332,10 +332,10 @@ class MassInstance(TimeStampedModel):
 
 class MassOverride(TimeStampedModel):
     OVERRIDE_CHOICES = [
-        ("cancel_instance", "Cancel instance"),
-        ("move_instance", "Move instance"),
-        ("change_requirements", "Change requirements"),
-        ("change_display_fields", "Change display fields"),
+        ("cancel_instance", "Cancelar missa"),
+        ("move_instance", "Mover missa"),
+        ("change_requirements", "Alterar requisitos"),
+        ("change_display_fields", "Alterar exibicao"),
     ]
     parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
     instance = models.ForeignKey(MassInstance, on_delete=models.CASCADE)
@@ -381,6 +381,7 @@ class Assignment(TimeStampedModel):
         ("replaced", "Substituido"),
         ("replaced_by_solver", "Substituido pelo sistema"),
         ("manual_unassign", "Removido manualmente"),
+        ("moved_to_another_slot", "Movido para outra posicao"),
         ("swap", "Trocado"),
     ]
     STATE_CHOICES = [
@@ -435,8 +436,8 @@ class SwapRequest(TimeStampedModel):
         ("canceled", "Cancelada"),
     ]
     TYPE_CHOICES = [
-        ("acolyte_swap", "Acolyte swap"),
-        ("role_swap", "Role swap"),
+        ("acolyte_swap", "Troca de acolito"),
+        ("role_swap", "Troca de funcao"),
     ]
     parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
     swap_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
@@ -458,10 +459,10 @@ class ReplacementRequest(TimeStampedModel):
         ("resolved", "Resolvida"),
     ]
     RESOLUTION_CHOICES = [
-        ("mass_canceled", "Mass canceled"),
-        ("slot_not_required", "Slot not required"),
-        ("covered_externally", "Covered externally"),
-        ("other", "Other"),
+        ("mass_canceled", "Missa cancelada"),
+        ("slot_not_required", "Funcao nao necessaria"),
+        ("covered_externally", "Coberto externamente"),
+        ("other", "Outro"),
     ]
     parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
     slot = models.ForeignKey(AssignmentSlot, on_delete=models.CASCADE)

@@ -457,28 +457,7 @@ def mass_detail(request, instance_id):
     parish = request.active_parish
     instance = get_object_or_404(MassInstance, parish=parish, id=instance_id)
     sync_slots_for_instance(instance)
-    slots = list(
-        instance.slots.select_related("position_type").prefetch_related(
-            Prefetch(
-                "assignments",
-                queryset=Assignment.objects.filter(is_active=True).select_related("acolyte"),
-                to_attr="active_assignments",
-            ),
-        )
-    )
-    recent_assignments = (
-        Assignment.objects.filter(slot__mass_instance=instance)
-        .select_related("acolyte", "slot")
-        .order_by("slot_id", "-created_at")
-    )
-    recent_by_slot = defaultdict(list)
-    for assignment in recent_assignments:
-        if len(recent_by_slot[assignment.slot_id]) < 5:
-            recent_by_slot[assignment.slot_id].append(assignment)
-    for slot in slots:
-        slot.recent_assignments = recent_by_slot.get(slot.id, [])
-    position_ids = {slot.position_type_id for slot in slots}
-    quick_fill_cache = build_quick_fill_cache(parish, position_type_ids=position_ids)
+    slots_context = _build_slots_context(parish, instance)
     update_form = MassInstanceUpdateForm(instance=instance, parish=parish)
     move_form = MassInstanceMoveForm(
         parish=parish,
@@ -508,11 +487,7 @@ def mass_detail(request, instance_id):
         request,
         "calendar/detail.html",
         {
-            "instance": instance,
-            "slots": slots,
-            "slot_suggestions": {
-                slot.id: quick_fill_slot(slot, parish, max_candidates=3, cache=quick_fill_cache) for slot in slots
-            },
+            **slots_context,
             "update_form": update_form,
             "move_form": move_form,
             "cancel_form": cancel_form,
@@ -536,26 +511,72 @@ def _slot_candidate_list(parish, slot, query=None):
     return [acolyte for acolyte in acolytes if is_acolyte_available(acolyte, slot.mass_instance)]
 
 
+def _build_slots_context(parish, instance):
+    """Build the context needed for rendering the slots section."""
+    slots = list(
+        instance.slots.select_related("position_type").prefetch_related(
+            Prefetch(
+                "assignments",
+                queryset=Assignment.objects.filter(is_active=True).select_related("acolyte"),
+                to_attr="active_assignments",
+            ),
+        )
+    )
+    recent_assignments = (
+        Assignment.objects.filter(slot__mass_instance=instance)
+        .select_related("acolyte", "slot")
+        .order_by("slot_id", "-created_at")
+    )
+    recent_by_slot = defaultdict(list)
+    for assignment in recent_assignments:
+        if len(recent_by_slot[assignment.slot_id]) < 5:
+            recent_by_slot[assignment.slot_id].append(assignment)
+    for slot in slots:
+        slot.recent_assignments = recent_by_slot.get(slot.id, [])
+    position_ids = {slot.position_type_id for slot in slots}
+    quick_fill_cache = build_quick_fill_cache(parish, position_type_ids=position_ids)
+    # Collect acolyte IDs already assigned in this mass to exclude from suggestions
+    assigned_acolyte_ids = set()
+    for slot in slots:
+        for assignment in slot.active_assignments:
+            assigned_acolyte_ids.add(assignment.acolyte_id)
+    slot_suggestions = {
+        slot.id: quick_fill_slot(
+            slot, parish, max_candidates=3, cache=quick_fill_cache, exclude_acolyte_ids=assigned_acolyte_ids
+        )
+        for slot in slots
+    }
+    return {"instance": instance, "slots": slots, "slot_suggestions": slot_suggestions}
+
+
 def _handle_slot_assign(request, instance_id, slot_id, action_label):
     parish = request.active_parish
     instance = get_object_or_404(MassInstance, parish=parish, id=instance_id)
     slot = get_object_or_404(AssignmentSlot, parish=parish, id=slot_id, mass_instance=instance)
-    query = request.GET.get("q", "").strip()
-    candidates = _slot_candidate_list(parish, slot, query=query)
+
+    def _htmx_or_redirect():
+        """Return partial for HTMX or redirect for normal requests."""
+        if request.htmx:
+            slots_context = _build_slots_context(parish, instance)
+            # Ensure can_manage_parish is available (normally comes from context processor)
+            slots_context["can_manage_parish"] = True  # User already passed role check via decorator
+            return render(request, "calendar/_slots_section.html", slots_context)
+        return redirect("mass_detail", instance_id=instance.id)
+
     if request.method == "POST":
         acolyte_id = request.POST.get("acolyte_id")
         if not acolyte_id:
             messages.error(request, "Selecione um acolito para atribuir.")
-            return redirect("mass_detail", instance_id=instance.id)
+            return _htmx_or_redirect()
         acolyte = get_object_or_404(parish.acolytes, id=acolyte_id, active=True)
         if not AcolyteQualification.objects.filter(
             parish=parish, acolyte=acolyte, position_type=slot.position_type, qualified=True
         ).exists():
             messages.error(request, "Este acolito nao e qualificado para esta funcao.")
-            return redirect("mass_detail", instance_id=instance.id)
+            return _htmx_or_redirect()
         if not is_acolyte_available(acolyte, slot.mass_instance):
             messages.error(request, "Este acolito nao esta disponivel para este horario.")
-            return redirect("mass_detail", instance_id=instance.id)
+            return _htmx_or_redirect()
         try:
             assignment = assign_manual(slot, acolyte, actor=request.user)
         except ValueError as e:
@@ -563,13 +584,17 @@ def _handle_slot_assign(request, instance_id, slot_id, action_label):
                 current_slot = e.args[2]
                 url = reverse('mass_detail', kwargs={'instance_id': instance.id})
                 url += f'?show_conflict=1&acolyte_id={acolyte.id}&current_slot_id={current_slot.id}&new_slot_id={slot.id}'
+                if request.htmx:
+                    response = HttpResponse()
+                    response["HX-Redirect"] = url
+                    return response
                 return redirect(url)
             else:
                 messages.error(request, str(e))
-                return redirect("mass_detail", instance_id=instance.id)
+                return _htmx_or_redirect()
         except ConcurrentUpdateError:
             messages.error(request, "Esta vaga foi atualizada por outra acao. Recarregue a pagina e tente novamente.")
-            return redirect("mass_detail", instance_id=instance.id)
+            return _htmx_or_redirect()
         if assignment.acolyte.user:
             enqueue_notification(
                 parish,
@@ -578,10 +603,8 @@ def _handle_slot_assign(request, instance_id, slot_id, action_label):
                 {"assignment_id": assignment.id},
                 idempotency_key=f"manual:{assignment.id}",
             )
-        response = HttpResponse()
-        response["HX-Redirect"] = redirect("mass_detail", instance_id=instance.id).url
         messages.success(request, "Escala atribuida com sucesso.")
-        return response
+        return _htmx_or_redirect()
 
     query = request.GET.get("q", "").strip()
     candidates = _slot_candidate_list(parish, slot, query=query)
@@ -1113,15 +1136,35 @@ def generate_instances(request):
 @require_parish_roles(ADMIN_ROLE_CODES)
 def event_series_list(request):
     parish = request.active_parish
+    status = request.GET.get("status") or "active"
+    base_qs = EventSeries.objects.filter(parish=parish)
+    if status == "archived":
+        base_qs = base_qs.filter(is_active=False)
+    else:
+        status = "active"
+        base_qs = base_qs.filter(is_active=True)
     series = (
-        EventSeries.objects.filter(parish=parish, is_active=True)
+        base_qs
         .annotate(
             occurrence_count=Count("occurrences", distinct=True),
             mass_count=Count("massinstance", distinct=True),
         )
         .order_by("start_date")
     )
-    return render(request, "events/list.html", {"series": series})
+    counts = EventSeries.objects.filter(parish=parish).aggregate(
+        active_count=Count("id", filter=Q(is_active=True)),
+        archived_count=Count("id", filter=Q(is_active=False)),
+    )
+    return render(
+        request,
+        "events/list.html",
+        {
+            "series": series,
+            "status": status,
+            "active_count": counts["active_count"],
+            "archived_count": counts["archived_count"],
+        },
+    )
 
 
 @login_required
@@ -1561,6 +1604,37 @@ def event_series_archive(request, series_id):
     series.save(update_fields=["is_active", "updated_by", "updated_at"])
     log_audit(parish, request.user, "EventSeries", series.id, "archive", {"title": series.title})
     messages.success(request, "Serie arquivada. As missas geradas permanecem no historico.")
+    return redirect(f"{reverse('event_series_list')}?status=archived")
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def event_series_unarchive(request, series_id):
+    parish = request.active_parish
+    series = get_object_or_404(EventSeries, parish=parish, id=series_id)
+    if request.method != "POST":
+        return redirect("event_series_detail", series_id=series.id)
+    series.is_active = True
+    series.updated_by = request.user
+    series.save(update_fields=["is_active", "updated_by", "updated_at"])
+    log_audit(parish, request.user, "EventSeries", series.id, "unarchive", {"title": series.title})
+    messages.success(request, "Serie reativada.")
+    return redirect("event_series_detail", series_id=series.id)
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def event_series_delete(request, series_id):
+    parish = request.active_parish
+    series = get_object_or_404(EventSeries, parish=parish, id=series_id)
+    if request.method != "POST":
+        return redirect("event_series_detail", series_id=series.id)
+    from core.services.event_series import delete_event_series_with_masses
+
+    delete_event_series_with_masses(parish, series, actor=request.user)
+    messages.success(request, "Serie excluida. Missas e escalas relacionadas foram removidas.")
     return redirect("event_series_list")
 
 

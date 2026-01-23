@@ -2,6 +2,7 @@ from datetime import date
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 
 from core.models import Community, EventSeries, MembershipRole, Parish, ParishMembership
 
@@ -68,3 +69,34 @@ class EventSeriesViewTests(TestCase):
         self.assertFalse(self.series.is_active)
         list_response = self.client.get("/events/")
         self.assertNotContains(list_response, "Festa")
+        archived_response = self.client.get("/events/?status=archived")
+        self.assertContains(archived_response, "Festa")
+
+    def test_event_series_unarchive_restores_visibility(self):
+        self._login_as(self.admin)
+        self.series.is_active = False
+        self.series.save(update_fields=["is_active"])
+        response = self.client.post(f"/events/{self.series.id}/unarchive/")
+        self.assertEqual(response.status_code, 302)
+        self.series.refresh_from_db()
+        self.assertTrue(self.series.is_active)
+        list_response = self.client.get("/events/")
+        self.assertContains(list_response, "Festa")
+
+    def test_event_series_delete_removes_masses(self):
+        self._login_as(self.admin)
+        self.series.is_active = False
+        self.series.save(update_fields=["is_active"])
+        from core.models import MassInstance
+
+        MassInstance.objects.create(
+            parish=self.parish,
+            event_series=self.series,
+            community=self.community,
+            starts_at=timezone.now(),
+            status="scheduled",
+        )
+        response = self.client.post(f"/events/{self.series.id}/delete/")
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(EventSeries.objects.filter(id=self.series.id).exists())
+        self.assertEqual(MassInstance.objects.filter(parish=self.parish).count(), 0)

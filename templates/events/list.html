@@ -1,10 +1,21 @@
 {% extends 'base.html' %}
 {% block title %}Programacao liturgica{% endblock %}
 {% block content %}
-<div class="card">
-  <div class="flex items-center justify-between mb-4">
-    <h2 class="font-serif text-xl">Programacao liturgica</h2>
+<div class="card space-y-4">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 class="font-serif text-xl">Programacao liturgica</h2>
+      <p class="text-sm text-slate">Gerencie celebracoes recorrentes e eventos especiais.</p>
+    </div>
     <a class="btn-primary" href="{% url 'event_series_create' %}">Agendar celebracao</a>
+  </div>
+  <div class="flex flex-wrap items-center gap-2 text-sm">
+    <a class="btn-secondary {% if status == 'active' %}bg-moss text-white border-moss{% endif %}" href="{% url 'event_series_list' %}?status=active">
+      Ativas ({{ active_count }})
+    </a>
+    <a class="btn-secondary {% if status == 'archived' %}bg-moss text-white border-moss{% endif %}" href="{% url 'event_series_list' %}?status=archived">
+      Arquivadas ({{ archived_count }})
+    </a>
   </div>
   <div class="space-y-2">
     {% for item in series %}
@@ -22,10 +33,21 @@
         </a>
         <div class="flex items-center gap-2">
           <a class="btn-secondary" href="{% url 'event_series_edit' item.id %}">Editar</a>
-          <form method="post" action="{% url 'event_series_archive' item.id %}" onsubmit="return confirm('Arquivar esta serie? As missas geradas permanecem no historico.');">
-            {% csrf_token %}
-            <button class="btn-secondary" type="submit">Arquivar</button>
-          </form>
+          {% if status == "archived" %}
+            <form method="post" action="{% url 'event_series_unarchive' item.id %}">
+              {% csrf_token %}
+              <button class="btn-secondary" type="submit">Reativar</button>
+            </form>
+            <form method="post" action="{% url 'event_series_delete' item.id %}" onsubmit="return confirm('Excluir esta serie e todas as missas geradas? Esta acao e irreversivel.');">
+              {% csrf_token %}
+              <button class="btn-secondary" type="submit">Excluir</button>
+            </form>
+          {% else %}
+            <form method="post" action="{% url 'event_series_archive' item.id %}" onsubmit="return confirm('Arquivar esta serie? As missas geradas permanecem no historico.');">
+              {% csrf_token %}
+              <button class="btn-secondary" type="submit">Arquivar</button>
+            </form>
+          {% endif %}
         </div>
       </div>
     {% empty %}

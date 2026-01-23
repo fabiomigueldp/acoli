@@ -175,6 +175,7 @@ def assignment_end_reason_label(value):
         "replaced": "Substituido",
         "replaced_by_solver": "Substituido pelo sistema",
         "manual_unassign": "Removido manualmente",
+        "moved_to_another_slot": "Movido para outra posicao",
         "swap": "Trocado",
     }
     return _map_choice_label(mapping, value)

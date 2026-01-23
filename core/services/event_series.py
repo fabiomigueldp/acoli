@@ -2,7 +2,9 @@ from datetime import datetime
 
 from django.utils import timezone
 
-from core.models import EventOccurrence, MassInstance, MassOverride
+from django.db import transaction
+
+from core.models import AuditEvent, EventInterest, EventOccurrence, MassInstance, MassOverride
 from core.services.audit import log_audit
 from core.services.slots import sync_slots_for_instance
 
@@ -152,3 +154,59 @@ def generate_instances_for_event_series(event_series, actor=None):
             }
         )
     return apply_event_occurrences(event_series, occurrences, actor=actor)
+
+
+def delete_event_series_with_masses(parish, series, actor=None):
+    if series.parish_id != parish.id:
+        raise ValueError("Serie nao pertence a esta paroquia.")
+    with transaction.atomic():
+        mass_ids = list(
+            MassInstance.objects.filter(parish=parish, event_series=series).values_list("id", flat=True)
+        )
+        slot_ids = []
+        assignment_ids = []
+        replacement_ids = []
+        swap_ids = []
+        if mass_ids:
+            from core.models import Assignment, AssignmentSlot, ReplacementRequest, SwapRequest
+
+            slot_ids = list(
+                AssignmentSlot.objects.filter(parish=parish, mass_instance_id__in=mass_ids).values_list("id", flat=True)
+            )
+            assignment_ids = list(
+                Assignment.objects.filter(parish=parish, slot_id__in=slot_ids).values_list("id", flat=True)
+            )
+            replacement_ids = list(
+                ReplacementRequest.objects.filter(parish=parish, slot_id__in=slot_ids).values_list("id", flat=True)
+            )
+            swap_ids = list(
+                SwapRequest.objects.filter(parish=parish, mass_instance_id__in=mass_ids).values_list("id", flat=True)
+            )
+            AuditEvent.objects.filter(
+                parish=parish,
+                entity_type="MassInstance",
+                entity_id__in=[str(mass_id) for mass_id in mass_ids],
+            ).delete()
+            if assignment_ids:
+                AuditEvent.objects.filter(
+                    parish=parish,
+                    entity_type="Assignment",
+                    entity_id__in=[str(assignment_id) for assignment_id in assignment_ids],
+                ).delete()
+            if replacement_ids:
+                AuditEvent.objects.filter(
+                    parish=parish,
+                    entity_type="ReplacementRequest",
+                    entity_id__in=[str(req_id) for req_id in replacement_ids],
+                ).delete()
+            if swap_ids:
+                AuditEvent.objects.filter(
+                    parish=parish,
+                    entity_type="SwapRequest",
+                    entity_id__in=[str(swap_id) for swap_id in swap_ids],
+                ).delete()
+        EventInterest.objects.filter(parish=parish, event_series=series).delete()
+        EventOccurrence.objects.filter(parish=parish, event_series=series).delete()
+        MassInstance.objects.filter(parish=parish, id__in=mass_ids).delete()
+        AuditEvent.objects.filter(parish=parish, entity_type="EventSeries", entity_id=str(series.id)).delete()
+        series.delete()

@@ -1,29 +1,57 @@
 {% extends 'base.html' %}
 {% block title %}{% if profile %}Editar perfil{% else %}Novo perfil{% endif %}{% endblock %}
 {% block content %}
-<div class="card max-w-4xl">
-  <h2 class="font-serif text-xl mb-4">{% if profile %}Editar perfil{% else %}Criar perfil{% endif %}</h2>
-  <form method="post" class="space-y-4">
+<div class="space-y-8">
+  <div>
+    <h1 class="font-serif text-3xl text-moss mb-2">{% if profile %}Editar perfil{% else %}Criar perfil{% endif %}</h1>
+    <p class="text-slate">Configure um perfil de requisitos para definir quantas funções cada missa necessita.</p>
+  </div>
+
+  <form method="post" class="card">
     {% csrf_token %}
-    {{ form.non_field_errors }}
-    {{ formset.non_form_errors }}
+    {% if form.non_field_errors %}
+      <div class="form-error">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+        </svg>
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+    {% if formset.non_form_errors %}
+      <div class="form-error">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+        </svg>
+        {{ formset.non_form_errors }}
+      </div>
+    {% endif %}
     {% if next_url %}
       <input type="hidden" name="next" value="{{ next_url }}">
     {% endif %}
-    <div class="grid sm:grid-cols-2 gap-4">
+
+    <div class="grid sm:grid-cols-2 gap-6">
       <div>
-        <label class="label">Nome</label>
+        <label class="label">Nome do perfil</label>
         {{ form.name }}
+        {% if form.name.errors %}
+          <div class="form-error">{{ form.name.errors.0 }}</div>
+        {% endif %}
       </div>
       <div>
-        <label class="label">Minimo de senior por missa</label>
+        <label class="label">Mínimo de seniors por missa</label>
         {{ form.min_senior_per_mass }}
+        {% if form.min_senior_per_mass.errors %}
+          <div class="form-error">{{ form.min_senior_per_mass.errors.0 }}</div>
+        {% endif %}
       </div>
       <div class="sm:col-span-2">
         <label class="label">Notas</label>
         {{ form.notes }}
+        {% if form.notes.errors %}
+          <div class="form-error">{{ form.notes.errors.0 }}</div>
+        {% endif %}
       </div>
-      <div class="sm:col-span-2">
+      <div class="sm:col-span-2 mt-6">
         <div class="custom-checkbox">
           <input type="checkbox" id="{{ form.active.id_for_label }}" name="{{ form.active.name }}" class="checkbox-input" {% if form.active.value %}checked{% endif %}>
           <label for="{{ form.active.id_for_label }}" class="checkbox-label">
@@ -40,55 +68,119 @@
       </div>
     </div>
 
-    <div class="border border-black/5 rounded-xl p-4 space-y-3">
-      <div class="font-medium">Composicao do perfil</div>
+    <div class="mt-8 card">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-8 h-8 bg-moss/10 rounded-lg flex items-center justify-center">
+          <svg class="w-5 h-5 text-moss" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+          </svg>
+        </div>
+        <div>
+          <h3 class="font-semibold text-lg text-ink">Composição do perfil</h3>
+          <p class="text-sm text-slate">Defina as funções e quantidades necessárias para cada missa</p>
+        </div>
+      </div>
+
       {{ formset.management_form }}
-      <div class="space-y-3" id="profile-rows">
+      <div class="space-y-4" id="profile-rows">
         {% for form in formset %}
-          <div class="grid sm:grid-cols-[1fr_120px_auto] gap-3 items-end profile-row">
-            <div>
-              <label class="label">Funcao na escala</label>
-              {{ form.position_type }}
-            </div>
-            <div>
-              <label class="label">Quantidade</label>
-              {{ form.quantity }}
-            </div>
-            <div class="flex items-center gap-2">
-              {% if form.DELETE %}
-                <label class="text-xs text-slate">
-                  {{ form.DELETE }} Remover
-                </label>
-              {% endif %}
+          <div class="border border-black/8 rounded-xl p-5 bg-sand/20 profile-row">
+            <div class="grid sm:grid-cols-[2fr_1fr_auto] gap-4 items-end">
+              <div>
+                <label class="label">Função na escala</label>
+                <div class="custom-select">
+                  <input type="hidden" name="{{ form.position_type.name }}" value="{{ form.position_type.value }}">
+                  <button type="button" class="custom-select-button">
+                    <span class="selected-text">
+                      {% if form.position_type.value %}
+                        {% for choice_value, choice_label in form.position_type.field.choices %}
+                          {% if form.position_type.value == choice_value %}{{ choice_label }}{% endif %}
+                        {% endfor %}
+                      {% else %}
+                        Selecionar função...
+                      {% endif %}
+                    </span>
+                  </button>
+                  <div class="custom-select-options">
+                    {% for choice_value, choice_label in form.position_type.field.choices %}
+                      <button type="button" class="custom-select-option {% if form.position_type.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
+                    {% endfor %}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label class="label">Quantidade</label>
+                {{ form.quantity }}
+              </div>
+              <div class="flex items-center gap-2">
+                {% if form.DELETE %}
+                  <label class="inline-flex items-center gap-2 text-sm text-slate cursor-pointer hover:text-red-600 transition-colors">
+                    {{ form.DELETE }}
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                    Remover
+                  </label>
+                {% endif %}
+              </div>
             </div>
             {{ form.id }}
           </div>
         {% endfor %}
       </div>
-      <button type="button" class="btn-secondary" id="add-role-row">Adicionar funcao</button>
+
+      <div class="mt-6 pt-4 border-t border-black/5">
+        <button type="button" class="btn-secondary inline-flex items-center gap-2" id="add-role-row">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+          </svg>
+          Adicionar função
+        </button>
+      </div>
     </div>
 
-    <div class="flex items-center gap-3">
-      <button class="btn-primary">Salvar</button>
-      <a class="btn-secondary" href="{% url 'structure_requirement_profiles_list' %}">Voltar</a>
+    <div class="mt-8 flex items-center justify-between pt-6 border-t border-black/5">
+      <a class="btn-secondary" href="{% url 'structure_requirement_profiles_list' %}">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+        </svg>
+        Voltar
+      </a>
+      <button class="btn-primary">Salvar perfil</button>
     </div>
   </form>
 </div>
 
 <template id="empty-form-template">
-  <div class="grid sm:grid-cols-[1fr_120px_auto] gap-3 items-end profile-row">
-    <div>
-      <label class="label">Funcao na escala</label>
-      {{ formset.empty_form.position_type }}
-    </div>
-    <div>
-      <label class="label">Quantidade</label>
-      {{ formset.empty_form.quantity }}
-    </div>
-    <div class="flex items-center gap-2">
-      <label class="text-xs text-slate">
-        {{ formset.empty_form.DELETE }} Remover
-      </label>
+  <div class="border border-black/8 rounded-xl p-5 bg-sand/20 profile-row">
+    <div class="grid sm:grid-cols-[2fr_1fr_auto] gap-4 items-end">
+      <div>
+        <label class="label">Função na escala</label>
+        <div class="custom-select">
+          <input type="hidden" name="{{ formset.empty_form.position_type.name }}" value="">
+          <button type="button" class="custom-select-button">
+            <span class="selected-text">Selecionar função...</span>
+          </button>
+          <div class="custom-select-options">
+            {% for choice_value, choice_label in formset.empty_form.position_type.field.choices %}
+              <button type="button" class="custom-select-option" data-value="{{ choice_value }}">{{ choice_label }}</button>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      <div>
+        <label class="label">Quantidade</label>
+        {{ formset.empty_form.quantity }}
+      </div>
+      <div class="flex items-center gap-2">
+        <label class="inline-flex items-center gap-2 text-sm text-slate cursor-pointer hover:text-red-600 transition-colors">
+          {{ formset.empty_form.DELETE }}
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+          </svg>
+          Remover
+        </label>
+      </div>
     </div>
     {{ formset.empty_form.id }}
   </div>

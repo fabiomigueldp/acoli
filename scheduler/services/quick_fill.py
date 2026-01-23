@@ -34,7 +34,20 @@ def build_quick_fill_cache(parish, position_type_ids=None):
     }
 
 
-def quick_fill_slot(slot, parish, max_candidates=3, cache=None):
+def quick_fill_slot(slot, parish, max_candidates=3, cache=None, exclude_acolyte_ids=None):
+    """
+    Return a list of candidate acolytes for a slot, ranked by preference score.
+
+    Args:
+        slot: The AssignmentSlot to fill
+        parish: The parish context
+        max_candidates: Maximum number of candidates to return (default 3)
+        cache: Optional pre-built cache from build_quick_fill_cache()
+        exclude_acolyte_ids: Set of acolyte IDs to exclude (e.g., already assigned in this mass)
+    """
+    if exclude_acolyte_ids is None:
+        exclude_acolyte_ids = set()
+
     if cache:
         acolytes = cache.get("acolytes", [])
         qualified_ids = cache.get("qualified_by_position", {}).get(slot.position_type_id, set())
@@ -58,6 +71,8 @@ def quick_fill_slot(slot, parish, max_candidates=3, cache=None):
     scores = []
     for acolyte in acolytes:
         if acolyte.id not in qualified_ids:
+            continue
+        if acolyte.id in exclude_acolyte_ids:
             continue
         if not is_acolyte_available_with_rules(rules_by_acolyte.get(acolyte.id, []), slot.mass_instance):
             continue

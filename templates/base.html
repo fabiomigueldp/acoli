@@ -30,8 +30,9 @@
   </script>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:wght@600;700&display=swap" />
   <link rel="stylesheet" href="{% static 'css/app.css' %}" />
+  <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 </head>
-<body class="bg-sand text-ink min-h-screen">
+<body class="bg-sand text-ink min-h-screen" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
   <div class="absolute inset-0 bg-gradient-to-br from-sand via-white to-[#f2f7f1] pointer-events-none"></div>
   <div class="relative">
     <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-black/8 shadow-soft">
@@ -93,15 +94,17 @@
       </nav>
 
       <main>
-        {% if messages %}
-          <div class="space-y-2 mb-4">
-            {% for message in messages %}
-              <div class="rounded-xl border border-black/10 bg-white px-4 py-3 text-sm">
-                {{ message }}
-              </div>
-            {% endfor %}
-          </div>
-        {% endif %}
+        <div id="messages-container">
+          {% if messages %}
+            <div class="space-y-2 mb-4">
+              {% for message in messages %}
+                <div class="rounded-xl border border-black/10 bg-white px-4 py-3 text-sm">
+                  {{ message }}
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
         {% block content %}{% endblock %}
       </main>
     </div>

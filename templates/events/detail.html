@@ -9,6 +9,12 @@
         <div class="text-sm text-slate">
           {{ series.series_type }} · {{ series.start_date }} a {{ series.end_date }}
         </div>
+        <div class="mt-2 flex items-center gap-2">
+          <span class="badge">{% if series.is_active %}Ativa{% else %}Arquivada{% endif %}</span>
+          {% if series.candidate_pool == "interested_only" %}
+            <span class="badge">Somente interessados</span>
+          {% endif %}
+        </div>
         <div class="text-xs text-slate mt-2 space-y-1">
           <div>Pool: {% if series.candidate_pool == "interested_only" %}Somente interessados{% else %}Todos os acolitos{% endif %}</div>
           <div>Comunidade padrao: {{ series.default_community|default:"-" }}</div>
@@ -19,10 +25,21 @@
       <div class="flex items-center gap-2">
         <a class="btn-secondary" href="{% url 'event_series_edit' series.id %}">Editar serie</a>
         <a class="btn-secondary" href="{% url 'event_series_occurrences' series.id %}">Editar dias</a>
-        <form method="post" action="{% url 'event_series_archive' series.id %}" onsubmit="return confirm('Arquivar esta serie? As missas geradas permanecem no historico.');">
-          {% csrf_token %}
-          <button class="btn-secondary" type="submit">Arquivar</button>
-        </form>
+        {% if series.is_active %}
+          <form method="post" action="{% url 'event_series_archive' series.id %}" onsubmit="return confirm('Arquivar esta serie? As missas geradas permanecem no historico.');">
+            {% csrf_token %}
+            <button class="btn-secondary" type="submit">Arquivar</button>
+          </form>
+        {% else %}
+          <form method="post" action="{% url 'event_series_unarchive' series.id %}">
+            {% csrf_token %}
+            <button class="btn-secondary" type="submit">Reativar</button>
+          </form>
+          <form method="post" action="{% url 'event_series_delete' series.id %}" onsubmit="return confirm('Excluir esta serie e todas as missas geradas? Esta acao e irreversivel.');">
+            {% csrf_token %}
+            <button class="btn-secondary" type="submit">Excluir</button>
+          </form>
+        {% endif %}
       </div>
     </div>
   </div>
