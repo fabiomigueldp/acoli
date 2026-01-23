@@ -11,6 +11,7 @@ urlpatterns = [
     path("calendar/<int:instance_id>/move/", views.mass_move, name="mass_move"),
     path("calendar/<int:instance_id>/cancel/", views.mass_cancel, name="mass_cancel"),
     path("calendar/<int:instance_id>/slots/<int:slot_id>/assign/", views.slot_assign, name="slot_assign"),
+    path("calendar/<int:instance_id>/slots/<int:slot_id>/move/", views.move_acolyte, name="move_acolyte"),
     path("calendar/<int:instance_id>/slots/<int:slot_id>/replace/", views.slot_replace, name="slot_replace"),
     path("templates/", views.template_list, name="template_list"),
     path("templates/new/", views.template_create, name="template_create"),

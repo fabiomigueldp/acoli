@@ -104,7 +104,38 @@ def assign_acolyte_to_slot(
         )
 
 
+def _validate_no_conflict_in_mass(slot, acolyte):
+    from core.models import Assignment
+    existing_assignments = Assignment.objects.filter(
+        slot__mass_instance=slot.mass_instance,
+        acolyte=acolyte,
+        is_active=True
+    ).exclude(slot=slot).select_related("slot__position_type")
+    if existing_assignments.exists():
+        current_slot = existing_assignments.first().slot
+        raise ValueError(
+            f"O acólito {acolyte.display_name} já está atribuído à posição {current_slot.position_type.name} nesta missa.",
+            "conflict",
+            current_slot
+        )
+
+
+def move_acolyte_to_slot(current_slot, new_slot, acolyte, actor=None):
+    with transaction.atomic():
+        # Valida se o acólito está no current_slot
+        current_assignment = current_slot.assignments.filter(acolyte=acolyte, is_active=True).first()
+        if not current_assignment:
+            raise ValueError("Acólito não está atribuído ao slot atual.")
+
+        # Desativa a atribuição anterior
+        deactivate_assignment(current_assignment, "moved_to_another_slot", actor=actor)
+
+        # Atribui ao novo slot
+        return assign_manual(new_slot, acolyte, actor=actor)
+
+
 def assign_manual(slot, acolyte, actor=None):
+    _validate_no_conflict_in_mass(slot, acolyte)
     with transaction.atomic():
         locked_slot = _lock_slot(slot.id)
         assignment_state = "locked" if locked_slot.is_locked else "published"

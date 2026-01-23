@@ -14,6 +14,8 @@ from django.db.models import Count, F, Prefetch, Q
 from django.forms import formset_factory
 from django.http import HttpResponse, HttpResponseNotFound
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
+from django.urls import reverse
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
@@ -486,6 +488,22 @@ def mass_detail(request, instance_id):
         },
     )
     cancel_form = MassInstanceCancelForm()
+    show_conflict_modal = False
+    conflict_acolyte = None
+    current_slot = None
+    new_slot = None
+    if request.GET.get('show_conflict') == '1':
+        acolyte_id = request.GET.get('acolyte_id')
+        current_slot_id = request.GET.get('current_slot_id')
+        new_slot_id = request.GET.get('new_slot_id')
+        if acolyte_id and current_slot_id and new_slot_id:
+            try:
+                conflict_acolyte = parish.acolytes.get(id=acolyte_id)
+                current_slot = instance.slots.get(id=current_slot_id)
+                new_slot = instance.slots.get(id=new_slot_id)
+                show_conflict_modal = True
+            except:
+                pass
     return render(
         request,
         "calendar/detail.html",
@@ -498,6 +516,10 @@ def mass_detail(request, instance_id):
             "update_form": update_form,
             "move_form": move_form,
             "cancel_form": cancel_form,
+            "show_conflict_modal": show_conflict_modal,
+            "conflict_acolyte": conflict_acolyte,
+            "current_slot": current_slot,
+            "new_slot": new_slot,
         },
     )
 
@@ -518,6 +540,8 @@ def _handle_slot_assign(request, instance_id, slot_id, action_label):
     parish = request.active_parish
     instance = get_object_or_404(MassInstance, parish=parish, id=instance_id)
     slot = get_object_or_404(AssignmentSlot, parish=parish, id=slot_id, mass_instance=instance)
+    query = request.GET.get("q", "").strip()
+    candidates = _slot_candidate_list(parish, slot, query=query)
     if request.method == "POST":
         acolyte_id = request.POST.get("acolyte_id")
         if not acolyte_id:
@@ -534,7 +558,16 @@ def _handle_slot_assign(request, instance_id, slot_id, action_label):
             return redirect("mass_detail", instance_id=instance.id)
         try:
             assignment = assign_manual(slot, acolyte, actor=request.user)
-        except (ConcurrentUpdateError, ValueError):
+        except ValueError as e:
+            if len(e.args) > 1 and e.args[1] == "conflict":
+                current_slot = e.args[2]
+                url = reverse('mass_detail', kwargs={'instance_id': instance.id})
+                url += f'?show_conflict=1&acolyte_id={acolyte.id}&current_slot_id={current_slot.id}&new_slot_id={slot.id}'
+                return redirect(url)
+            else:
+                messages.error(request, str(e))
+                return redirect("mass_detail", instance_id=instance.id)
+        except ConcurrentUpdateError:
             messages.error(request, "Esta vaga foi atualizada por outra acao. Recarregue a pagina e tente novamente.")
             return redirect("mass_detail", instance_id=instance.id)
         if assignment.acolyte.user:
@@ -545,8 +578,10 @@ def _handle_slot_assign(request, instance_id, slot_id, action_label):
                 {"assignment_id": assignment.id},
                 idempotency_key=f"manual:{assignment.id}",
             )
+        response = HttpResponse()
+        response["HX-Redirect"] = redirect("mass_detail", instance_id=instance.id).url
         messages.success(request, "Escala atribuida com sucesso.")
-        return redirect("mass_detail", instance_id=instance.id)
+        return response
 
     query = request.GET.get("q", "").strip()
     candidates = _slot_candidate_list(parish, slot, query=query)
@@ -673,6 +708,71 @@ def mass_cancel(request, instance_id):
                 reason_code="manual_cancel",
             )
     return redirect("mass_detail", instance_id=instance.id)
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def move_acolyte(request, instance_id, slot_id):
+    """Move an acolyte from their current slot to a new slot in the same mass."""
+    parish = request.active_parish
+    instance = get_object_or_404(MassInstance, parish=parish, id=instance_id)
+    slot = get_object_or_404(AssignmentSlot, parish=parish, mass_instance=instance, id=slot_id)
+    
+    # Only POST is allowed
+    if request.method != "POST":
+        messages.error(request, "Método não permitido.")
+        return redirect("mass_detail", instance_id=instance.id)
+    
+    current_slot_id = request.POST.get("current_slot_id")
+    acolyte_id = request.POST.get("acolyte_id")
+    
+    if not current_slot_id or not acolyte_id:
+        messages.error(request, "Dados inválidos.")
+        return redirect("mass_detail", instance_id=instance.id)
+    
+    current_slot = get_object_or_404(AssignmentSlot, parish=parish, id=current_slot_id)
+    acolyte = get_object_or_404(parish.acolytes, id=acolyte_id, active=True)
+    
+    # Validate that both slots belong to the same mass
+    if current_slot.mass_instance_id != instance.id:
+        messages.error(request, "Slot atual não pertence a esta missa.")
+        return redirect("mass_detail", instance_id=instance.id)
+    
+    # Validate that we're not moving to the same slot
+    if current_slot.id == slot.id:
+        messages.error(request, "Não é possível mover para o mesmo slot.")
+        return redirect("mass_detail", instance_id=instance.id)
+    
+    try:
+        from core.services.assignments import move_acolyte_to_slot
+        assignment = move_acolyte_to_slot(current_slot, slot, acolyte, actor=request.user)
+        
+        # Send notification if acolyte has a user account
+        if assignment.acolyte.user:
+            enqueue_notification(
+                parish,
+                assignment.acolyte.user,
+                "ASSIGNMENT_PUBLISHED",
+                {"assignment_id": assignment.id},
+                idempotency_key=f"move:{assignment.id}",
+            )
+        
+        messages.success(request, "Acólito movido com sucesso.")
+        
+        # Return appropriate response based on request type
+        if request.headers.get('HX-Request'):
+            # HTMX request
+            response = HttpResponse()
+            response["HX-Redirect"] = redirect("mass_detail", instance_id=instance.id).url
+            return response
+        else:
+            # Normal form submission
+            return redirect("mass_detail", instance_id=instance.id)
+            
+    except ValueError as e:
+        messages.error(request, str(e))
+        return redirect("mass_detail", instance_id=instance.id)
 
 
 @login_required

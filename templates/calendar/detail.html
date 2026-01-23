@@ -155,4 +155,7 @@
     </div>
   </div>
 </div>
+{% if show_conflict_modal %}
+  {% include 'modals/assignment_conflict.html' %}
+{% endif %}
 {% endblock %}
