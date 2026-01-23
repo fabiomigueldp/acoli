@@ -1,0 +1,174 @@
+<!-- Schedule Tab -->
+<div class="space-y-6">
+    <!-- Filters -->
+    <div class="card">
+        <div class="flex flex-wrap items-center gap-4">
+            <div>
+                <label class="label">Período</label>
+                <div class="custom-select">
+                    <input type="hidden" name="time" value="{{ time_filter }}">
+                    <button type="button" class="custom-select-button"
+                            hx-get="{% url 'people_acolyte_detail' acolyte.id %}"
+                            hx-target="#tab-content"
+                            hx-include="[name='time'],[name='status']"
+                            hx-vals='{"tab": "schedule"}'>
+                        <span class="selected-text">
+                            {% if time_filter == "upcoming" %}Futuras{% elif time_filter == "past" %}Passadas{% else %}Todos{% endif %}
+                        </span>
+                    </button>
+                    <div class="custom-select-options">
+                        <button type="button" class="custom-select-option {% if time_filter == "all" %}selected{% endif %}" data-value="all">Todos</button>
+                        <button type="button" class="custom-select-option {% if time_filter == "upcoming" %}selected{% endif %}" data-value="upcoming">Futuras</button>
+                        <button type="button" class="custom-select-option {% if time_filter == "past" %}selected{% endif %}" data-value="past">Passadas</button>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <label class="label">Status</label>
+                <div class="custom-select">
+                    <input type="hidden" name="status" value="{{ status_filter }}">
+                    <button type="button" class="custom-select-button"
+                            hx-get="{% url 'people_acolyte_detail' acolyte.id %}"
+                            hx-target="#tab-content"
+                            hx-include="[name='time'],[name='status']"
+                            hx-vals='{"tab": "schedule"}'>
+                        <span class="selected-text">
+                            {% if status_filter == "active" %}Ativas{% elif status_filter == "ended" %}Encerradas{% else %}Todas{% endif %}
+                        </span>
+                    </button>
+                    <div class="custom-select-options">
+                        <button type="button" class="custom-select-option {% if status_filter == "all" %}selected{% endif %}" data-value="all">Todas</button>
+                        <button type="button" class="custom-select-option {% if status_filter == "active" %}selected{% endif %}" data-value="active">Ativas</button>
+                        <button type="button" class="custom-select-option {% if status_filter == "ended" %}selected{% endif %}" data-value="ended">Encerradas</button>
+                    </div>
+                </div>
+            </div>
+            <div class="flex-1"></div>
+            <button type="button" class="btn-primary"
+                    hx-get="{% url 'acolyte_open_slots' acolyte.id %}"
+                    hx-target="#modal-container"
+                    hx-swap="innerHTML"
+                    onclick="document.getElementById('modal-container').classList.remove('hidden')">
+                + Nova Escala
+            </button>
+        </div>
+    </div>
+    
+    <!-- Assignments List -->
+    <div class="card">
+        {% if assignments %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-sand-200">
+                <thead>
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase tracking-wider">Data/Hora</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase tracking-wider">Comunidade</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase tracking-wider">Funcao</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase tracking-wider">Estado</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase tracking-wider">Confirmacao</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase tracking-wider">Atribuido por</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-ink-500 uppercase tracking-wider">Acoes</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-sand-100">
+                    {% for assignment in assignments %}
+                    <tr class="hover:bg-sand-50 {% if not assignment.is_active %}opacity-60{% endif %}">
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <div class="font-medium text-ink-900">{{ assignment.slot.mass_instance.starts_at|date:"d/m/Y" }}</div>
+                            <div class="text-sm text-ink-500">{{ assignment.slot.mass_instance.starts_at|time:"H:i" }}</div>
+                        </td>
+                        <td class="px-4 py-3">
+                            {{ assignment.slot.mass_instance.community.name }}
+                        </td>
+                        <td class="px-4 py-3">
+                            {{ assignment.slot.position_type.name }}
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="badge {% if assignment.assignment_state == 'published' %}badge-green{% elif assignment.assignment_state == 'proposed' %}badge-yellow{% else %}badge-blue{% endif %}">
+                                {{ assignment.get_assignment_state_display }}
+                            </span>
+                            {% if not assignment.is_active %}
+                            <span class="badge badge-gray ml-1">{{ assignment.get_end_reason_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3">
+                            {% if assignment.confirmation %}
+                            <span class="badge {% if assignment.confirmation.status == 'confirmed' %}badge-green{% elif assignment.confirmation.status == 'declined' %}badge-red{% elif assignment.confirmation.status == 'pending' %}badge-yellow{% else %}badge-gray{% endif %}">
+                                {{ assignment.confirmation.get_status_display }}
+                            </span>
+                            {% else %}
+                            <span class="text-ink-400">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-ink-500">
+                            {% if assignment.assigned_by %}
+                            {{ assignment.assigned_by.full_name }}
+                            {% else %}
+                            Sistema
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            {% if assignment.is_active %}
+                            <div class="flex items-center justify-end gap-2">
+                                {% if not assignment.confirmation or assignment.confirmation.status == 'pending' %}
+                                <form method="post" action="{% url 'acolyte_confirm_assignment' acolyte.id assignment.id %}" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="text-moss-600 hover:text-moss-700 text-sm font-medium">
+                                        Confirmar
+                                    </button>
+                                </form>
+                                {% endif %}
+                                <form method="post" action="{% url 'acolyte_remove_assignment' acolyte.id assignment.id %}" class="inline"
+                                      onsubmit="return confirm('Tem certeza que deseja remover esta escala?')">
+                                    {% csrf_token %}
+                                    <button type="submit" class="text-red-600 hover:text-red-700 text-sm font-medium">
+                                        Remover
+                                    </button>
+                                </form>
+                            </div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if assignments.has_other_pages %}
+        <div class="flex justify-center mt-6 gap-2">
+            {% if assignments.has_previous %}
+            <a href="{% url 'people_acolyte_detail' acolyte.id %}?tab=schedule&page={{ assignments.previous_page_number }}&status={{ status_filter }}&time={{ time_filter }}"
+               hx-get="{% url 'people_acolyte_detail' acolyte.id %}?tab=schedule&page={{ assignments.previous_page_number }}&status={{ status_filter }}&time={{ time_filter }}"
+               hx-target="#tab-content"
+               class="btn-secondary">
+                Anterior
+            </a>
+            {% endif %}
+            <span class="px-4 py-2 text-ink-500">
+                Pagina {{ assignments.number }} de {{ assignments.paginator.num_pages }}
+            </span>
+            {% if assignments.has_next %}
+            <a href="{% url 'people_acolyte_detail' acolyte.id %}?tab=schedule&page={{ assignments.next_page_number }}&status={{ status_filter }}&time={{ time_filter }}"
+               hx-get="{% url 'people_acolyte_detail' acolyte.id %}?tab=schedule&page={{ assignments.next_page_number }}&status={{ status_filter }}&time={{ time_filter }}"
+               hx-target="#tab-content"
+               class="btn-secondary">
+                Proxima
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="text-center py-8">
+            <p class="text-ink-500">Nenhuma escala encontrada com os filtros selecionados.</p>
+            <button type="button" class="btn-primary mt-4"
+                    hx-get="{% url 'acolyte_open_slots' acolyte.id %}"
+                    hx-target="#modal-container"
+                    hx-swap="innerHTML"
+                    onclick="document.getElementById('modal-container').classList.remove('hidden')">
+                Criar nova escala
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</div>

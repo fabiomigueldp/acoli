@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ acolyte.display_name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <!-- Header -->
+    <div class="mb-6">
+        <div class="flex items-center gap-2 text-sm text-ink-500 mb-2">
+            <a href="{% url 'people_directory' %}" class="hover:text-ink-700">Pessoas</a>
+            <span>/</span>
+            <span class="text-ink-700">{{ acolyte.display_name }}</span>
+        </div>
+        
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+                <h1 class="text-2xl font-semibold text-ink-900">{{ acolyte.display_name }}</h1>
+                {% if user %}
+                <p class="text-ink-500 text-sm">{{ user.email }}</p>
+                {% endif %}
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if acolyte.active %}bg-moss-100 text-moss-800{% else %}bg-red-100 text-red-800{% endif %}">
+                    {% if acolyte.active %}Ativo{% else %}Inativo{% endif %}
+                </span>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+                    {{ acolyte.get_experience_level_display }}
+                </span>
+                {% if acolyte.scheduling_mode == "reserve" %}
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-sun-100 text-sun-800">
+                    Reserva
+                </span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="border-b border-sand-200 mb-6">
+        <nav class="flex gap-6" aria-label="Tabs">
+            {% for tab in tabs %}
+            <a href="{% url 'people_acolyte_detail' acolyte.id %}?tab={{ tab.id }}"
+               hx-get="{% url 'people_acolyte_detail' acolyte.id %}?tab={{ tab.id }}"
+               hx-target="#tab-content"
+               hx-push-url="true"
+               data-tab="{{ tab.id }}"
+               class="tab-link relative pb-3 text-sm font-medium transition-colors
+                      {% if current_tab == tab.id %}
+                      text-moss-700
+                      {% else %}
+                      text-ink-500 hover:text-ink-700
+                      {% endif %}">
+                {{ tab.label }}
+                {% if tab.id == "schedule" and pending_confirmations > 0 %}
+                <span class="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-xs font-medium text-white bg-sun-500 rounded-full">
+                    {{ pending_confirmations }}
+                </span>
+                {% endif %}
+                {% if tab.id == "swaps" and open_swaps > 0 %}
+                <span class="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-xs font-medium text-white bg-sun-500 rounded-full">
+                    {{ open_swaps }}
+                </span>
+                {% endif %}
+                {% if current_tab == tab.id %}
+                <span class="absolute bottom-0 left-0 right-0 h-0.5 bg-moss-600"></span>
+                {% endif %}
+            </a>
+            {% endfor %}
+        </nav>
+    </div>
+    
+    <!-- Tab Content -->
+    <div id="tab-content">
+        {% if current_tab == "overview" %}
+            {% include "people/acolyte_tabs/overview.html" %}
+        {% elif current_tab == "schedule" %}
+            {% include "people/acolyte_tabs/schedule.html" %}
+        {% elif current_tab == "availability" %}
+            {% include "people/acolyte_tabs/availability.html" %}
+        {% elif current_tab == "preferences" %}
+            {% include "people/acolyte_tabs/preferences.html" %}
+        {% elif current_tab == "qualifications" %}
+            {% include "people/acolyte_tabs/qualifications.html" %}
+        {% elif current_tab == "credits" %}
+            {% include "people/acolyte_tabs/credits.html" %}
+        {% elif current_tab == "swaps" %}
+            {% include "people/acolyte_tabs/swaps.html" %}
+        {% elif current_tab == "notifications" %}
+            {% include "people/acolyte_tabs/notifications.html" %}
+        {% elif current_tab == "audit" %}
+            {% include "people/acolyte_tabs/audit.html" %}
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal Container -->
+<div id="modal-container" class="hidden fixed inset-0 z-50 overflow-y-auto">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="fixed inset-0 bg-ink-900/50 transition-opacity" onclick="document.getElementById('modal-container').classList.add('hidden')"></div>
+        <div class="relative bg-white rounded-lg shadow-xl max-w-lg w-full">
+            <!-- Modal content loaded here via HTMX -->
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        document.getElementById('modal-container').classList.add('hidden');
+    }
+});
+
+document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target.id === 'tab-content') {
+        const url = new URL(window.location.href);
+        const currentTab = url.searchParams.get('tab') || 'overview';
+        
+        document.querySelectorAll('.tab-link').forEach(link => {
+            const linkTab = link.dataset.tab;
+            const indicator = link.querySelector('span.absolute');
+            
+            if (linkTab === currentTab) {
+                link.classList.remove('text-ink-500', 'hover:text-ink-700');
+                link.classList.add('text-moss-700');
+                if (!indicator) {
+                    const span = document.createElement('span');
+                    span.className = 'absolute bottom-0 left-0 right-0 h-0.5 bg-moss-600';
+                    link.appendChild(span);
+                }
+            } else {
+                link.classList.add('text-ink-500', 'hover:text-ink-700');
+                link.classList.remove('text-moss-700');
+                if (indicator) {
+                    indicator.remove();
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

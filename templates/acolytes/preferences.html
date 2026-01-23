@@ -395,31 +395,121 @@
                  </div>
                  {% if preference_form.target_community.errors %}<div class="form-error">{{ preference_form.target_community.errors.0 }}</div>{% endif %}
               </div>
-              <div class="sm:col-span-2 hidden" data-pref-field="target_position">
-                <label class="label">Posicao</label>
-                {{ preference_form.target_position }}
-                {{ preference_form.target_position.errors }}
-              </div>
-              <div class="sm:col-span-2 hidden" data-pref-field="target_function">
-                <label class="label">Funcao</label>
-                {{ preference_form.target_function }}
-                {{ preference_form.target_function.errors }}
-              </div>
-              <div class="sm:col-span-2 hidden" data-pref-field="target_template">
-                <label class="label">Modelo</label>
-                {{ preference_form.target_template }}
-                {{ preference_form.target_template.errors }}
-              </div>
-              <div class="sm:col-span-2 hidden" data-pref-field="target_acolyte">
-                <label class="label">Parceiro</label>
-                {{ preference_form.target_acolyte }}
-                {{ preference_form.target_acolyte.errors }}
-              </div>
-              <div class="hidden" data-pref-field="weekday">
-                <label class="label">Dia da semana</label>
-                {{ preference_form.weekday }}
-                {{ preference_form.weekday.errors }}
-              </div>
+               <div class="sm:col-span-2 hidden" data-pref-field="target_position">
+                 <label class="label">Posição</label>
+                 <div class="custom-select">
+                   <input type="hidden" name="target_position" value="{{ preference_form.target_position.value }}">
+                   <button type="button" class="custom-select-button">
+                     <span class="selected-text">
+                       {% if preference_form.target_position.value %}
+                         {% for choice_value, choice_label in preference_form.target_position.field.choices %}
+                           {% if preference_form.target_position.value == choice_value %}{{ choice_label }}{% endif %}
+                         {% endfor %}
+                       {% else %}
+                         Selecionar...
+                       {% endif %}
+                     </span>
+                   </button>
+                   <div class="custom-select-options">
+                     {% for choice_value, choice_label in preference_form.target_position.field.choices %}
+                       <button type="button" class="custom-select-option {% if preference_form.target_position.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
+                     {% endfor %}
+                   </div>
+                 </div>
+                 {% if preference_form.target_position.errors %}<div class="form-error">{{ preference_form.target_position.errors.0 }}</div>{% endif %}
+               </div>
+               <div class="sm:col-span-2 hidden" data-pref-field="target_function">
+                 <label class="label">Função</label>
+                 <div class="custom-select">
+                   <input type="hidden" name="target_function" value="{{ preference_form.target_function.value }}">
+                   <button type="button" class="custom-select-button">
+                     <span class="selected-text">
+                       {% if preference_form.target_function.value %}
+                         {% for choice_value, choice_label in preference_form.target_function.field.choices %}
+                           {% if preference_form.target_function.value == choice_value %}{{ choice_label }}{% endif %}
+                         {% endfor %}
+                       {% else %}
+                         Selecionar...
+                       {% endif %}
+                     </span>
+                   </button>
+                   <div class="custom-select-options">
+                     {% for choice_value, choice_label in preference_form.target_function.field.choices %}
+                       <button type="button" class="custom-select-option {% if preference_form.target_function.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
+                     {% endfor %}
+                   </div>
+                 </div>
+                 {% if preference_form.target_function.errors %}<div class="form-error">{{ preference_form.target_function.errors.0 }}</div>{% endif %}
+               </div>
+               <div class="sm:col-span-2 hidden" data-pref-field="target_template">
+                 <label class="label">Modelo</label>
+                 <div class="custom-select">
+                   <input type="hidden" name="target_template" value="{{ preference_form.target_template.value }}">
+                   <button type="button" class="custom-select-button">
+                     <span class="selected-text">
+                       {% if preference_form.target_template.value %}
+                         {% for choice_value, choice_label in preference_form.target_template.field.choices %}
+                           {% if preference_form.target_template.value == choice_value %}{{ choice_label }}{% endif %}
+                         {% endfor %}
+                       {% else %}
+                         Selecionar...
+                       {% endif %}
+                     </span>
+                   </button>
+                   <div class="custom-select-options">
+                     {% for choice_value, choice_label in preference_form.target_template.field.choices %}
+                       <button type="button" class="custom-select-option {% if preference_form.target_template.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
+                     {% endfor %}
+                   </div>
+                 </div>
+                 {% if preference_form.target_template.errors %}<div class="form-error">{{ preference_form.target_template.errors.0 }}</div>{% endif %}
+               </div>
+               <div class="sm:col-span-2 hidden" data-pref-field="target_acolyte">
+                 <label class="label">Parceiro</label>
+                 <div class="custom-select">
+                   <input type="hidden" name="target_acolyte" value="{{ preference_form.target_acolyte.value }}">
+                   <button type="button" class="custom-select-button">
+                     <span class="selected-text">
+                       {% if preference_form.target_acolyte.value %}
+                         {% for choice_value, choice_label in preference_form.target_acolyte.field.choices %}
+                           {% if preference_form.target_acolyte.value == choice_value %}{{ choice_label }}{% endif %}
+                         {% endfor %}
+                       {% else %}
+                         Selecionar...
+                       {% endif %}
+                     </span>
+                   </button>
+                   <div class="custom-select-options">
+                     {% for choice_value, choice_label in preference_form.target_acolyte.field.choices %}
+                       <button type="button" class="custom-select-option {% if preference_form.target_acolyte.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
+                     {% endfor %}
+                   </div>
+                 </div>
+                 {% if preference_form.target_acolyte.errors %}<div class="form-error">{{ preference_form.target_acolyte.errors.0 }}</div>{% endif %}
+               </div>
+               <div class="hidden" data-pref-field="weekday">
+                 <label class="label">Dia da semana</label>
+                 <div class="custom-select">
+                   <input type="hidden" name="weekday" value="{{ preference_form.weekday.value }}">
+                   <button type="button" class="custom-select-button">
+                     <span class="selected-text">
+                       {% if preference_form.weekday.value %}
+                         {% for choice_value, choice_label in preference_form.weekday.field.choices %}
+                           {% if preference_form.weekday.value == choice_value %}{{ choice_label }}{% endif %}
+                         {% endfor %}
+                       {% else %}
+                         Selecionar...
+                       {% endif %}
+                     </span>
+                   </button>
+                   <div class="custom-select-options">
+                     {% for choice_value, choice_label in preference_form.weekday.field.choices %}
+                       <button type="button" class="custom-select-option {% if preference_form.weekday.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
+                     {% endfor %}
+                   </div>
+                 </div>
+                 {% if preference_form.weekday.errors %}<div class="form-error">{{ preference_form.weekday.errors.0 }}</div>{% endif %}
+               </div>
               <div class="hidden" data-pref-field="start_time">
                 <label class="label">Horario inicio</label>
                 {{ preference_form.start_time }}

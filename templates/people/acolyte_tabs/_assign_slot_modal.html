@@ -1,0 +1,63 @@
+<!-- Modal for Assigning Acolyte to Slot -->
+<div class="p-6">
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold text-ink-900">Escalar {{ acolyte.display_name }}</h3>
+        <button type="button" class="text-ink-400 hover:text-ink-600"
+                onclick="document.getElementById('modal-container').classList.add('hidden')">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    </div>
+    
+    {% if slots %}
+    <form method="post" action="{% url 'acolyte_assign_to_slot' acolyte.id %}">
+        {% csrf_token %}
+        
+        <div class="mb-4">
+            <label class="label">Selecione um slot disponível</label>
+            <div class="custom-select">
+                <input type="hidden" name="slot" value="">
+                <button type="button" class="custom-select-button">
+                    <span class="selected-text">-- Selecione --</span>
+                </button>
+                <div class="custom-select-options">
+                    <button type="button" class="custom-select-option selected" data-value="">-- Selecione --</button>
+                    {% for slot in slots %}
+                        <button type="button" class="custom-select-option" data-value="{{ slot.id }}">
+                            {{ slot.mass_instance.starts_at|date:"d/m/Y H:i" }}
+                            - {{ slot.mass_instance.community.name }}
+                            - {{ slot.position_type.name }}
+                        </button>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="mb-6">
+            <label class="label">Observacoes (opcional)</label>
+            <textarea name="notes" rows="2" class="input w-full" placeholder="Notas sobre a atribuicao..."></textarea>
+        </div>
+        
+        <div class="flex justify-end gap-3">
+            <button type="button" class="btn-secondary"
+                    onclick="document.getElementById('modal-container').classList.add('hidden')">
+                Cancelar
+            </button>
+            <button type="submit" class="btn-primary">
+                Confirmar Escala
+            </button>
+        </div>
+    </form>
+    {% else %}
+    <div class="text-center py-8">
+        <div class="text-4xl mb-4">&#128532;</div>
+        <p class="text-ink-500 mb-4">Nenhum slot disponivel para as qualificacoes deste acolito.</p>
+        <p class="text-sm text-ink-400">Verifique se o acolito possui qualificacoes e se ha missas com slots abertos.</p>
+        <button type="button" class="btn-secondary mt-4"
+                onclick="document.getElementById('modal-container').classList.add('hidden')">
+            Fechar
+        </button>
+    </div>
+    {% endif %}
+</div>

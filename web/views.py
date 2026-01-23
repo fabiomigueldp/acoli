@@ -22,6 +22,9 @@ from django.utils import timezone
 
 from core.models import (
     AcolyteAvailabilityRule,
+    AcolyteCreditLedger,
+    AcolyteIntent,
+    AcolytePreference,
     AcolyteQualification,
     AcolyteProfile,
     AcolyteStats,
@@ -48,6 +51,7 @@ from core.models import (
     ReplacementRequest,
     SwapRequest,
 )
+from notifications.models import Notification, NotificationPreference
 from core.services.audit import log_audit
 from core.services.calendar_generation import generate_instances_for_parish
 from core.services.event_series import apply_event_occurrences
@@ -74,9 +78,12 @@ from notifications.services import enqueue_notification
 from scheduler.services.quick_fill import build_quick_fill_cache, quick_fill_slot
 from web.forms import (
     AcolyteAvailabilityRuleForm,
+    AcolyteIntentForm,
     AcolyteLinkForm,
     AcolytePreferenceForm,
+    AssignToSlotForm,
     CommunityForm,
+    CreditAdjustmentForm,
     DateAbsenceForm,
     EventOccurrenceForm,
     EventSeriesBasicsForm,
@@ -84,6 +91,7 @@ from web.forms import (
     MassInstanceMoveForm,
     MassInstanceUpdateForm,
     MassTemplateForm,
+    NotificationPreferenceForm,
     ParishSettingsForm,
     PeopleAcolyteForm,
     PeopleCreateForm,
@@ -2478,7 +2486,12 @@ def _handle_member_post(request, parish, user=None, acolyte=None):
     if form_type == "user" and user:
         form = PeopleUserForm(request.POST, instance=user)
         if form.is_valid():
-            form.save()
+            updated_user = form.save(commit=False)
+            if request.user.id == user.id and not updated_user.is_active:
+                # Prevent self-lockout via the profile form.
+                updated_user.is_active = True
+                messages.info(request, "Sua conta nao pode ser desativada por este formulario.")
+            updated_user.save()
             messages.success(request, "Identidade atualizada.")
         else:
             messages.error(request, "Revise os dados de identidade.")
@@ -2612,15 +2625,751 @@ def people_user_detail(request, user_id):
 @require_active_parish
 @require_parish_roles(ADMIN_ROLE_CODES)
 def people_acolyte_detail(request, acolyte_id):
+    """
+    Main admin hub for managing an acolyte. Supports tabbed interface with HTMX.
+    """
+    parish = request.active_parish
+    acolyte = get_object_or_404(
+        AcolyteProfile.objects.select_related("user", "community_of_origin", "family_group"),
+        parish=parish,
+        id=acolyte_id
+    )
+    user = acolyte.user
+    
+    # Handle POST requests
+    if request.method == "POST":
+        _handle_member_post(request, parish, user=user, acolyte=acolyte)
+        # If it's an HTMX request, return to the same tab
+        if request.headers.get("HX-Request"):
+            tab = request.POST.get("current_tab", "overview")
+            return redirect(f"{reverse('people_acolyte_detail', args=[acolyte.id])}?tab={tab}")
+        return redirect("people_acolyte_detail", acolyte_id=acolyte.id)
+    
+    # Determine which tab to show
+    tab = request.GET.get("tab", "overview")
+    valid_tabs = ["overview", "schedule", "availability", "preferences", "qualifications", "credits", "swaps", "notifications", "audit"]
+    if tab not in valid_tabs:
+        tab = "overview"
+    
+    # Build header context (always needed)
+    stats = AcolyteStats.objects.filter(parish=parish, acolyte=acolyte).first()
+    intent = AcolyteIntent.objects.filter(parish=parish, acolyte=acolyte).first()
+    
+    # KPIs for header
+    next_assignment = Assignment.objects.filter(
+        parish=parish,
+        acolyte=acolyte,
+        is_active=True,
+        slot__mass_instance__starts_at__gte=timezone.now()
+    ).select_related("slot__mass_instance__community", "slot__position_type").order_by("slot__mass_instance__starts_at").first()
+    
+    pending_confirmations = Confirmation.objects.filter(
+        parish=parish,
+        assignment__acolyte=acolyte,
+        assignment__is_active=True,
+        status="pending"
+    ).count()
+    
+    open_swaps = SwapRequest.objects.filter(
+        Q(requestor_acolyte=acolyte) | Q(target_acolyte=acolyte),
+        parish=parish,
+        status__in=["pending", "awaiting_approval"]
+    ).count()
+    
+    open_replacements = ReplacementRequest.objects.filter(
+        parish=parish,
+        slot__assignments__acolyte=acolyte,
+        slot__assignments__is_active=True,
+        status="pending"
+    ).count()
+    
+    context = {
+        "acolyte": acolyte,
+        "user": user,
+        "stats": stats,
+        "intent": intent,
+        "current_tab": tab,
+        "next_assignment": next_assignment,
+        "pending_confirmations": pending_confirmations,
+        "open_swaps": open_swaps,
+        "open_replacements": open_replacements,
+        "tabs": [
+            {"id": "overview", "label": "Visao Geral", "icon": "home"},
+            {"id": "schedule", "label": "Escala", "icon": "calendar"},
+            {"id": "availability", "label": "Disponibilidade", "icon": "clock"},
+            {"id": "preferences", "label": "Preferencias", "icon": "heart"},
+            {"id": "qualifications", "label": "Qualificacoes", "icon": "award"},
+            {"id": "credits", "label": "Creditos", "icon": "star"},
+            {"id": "swaps", "label": "Trocas", "icon": "repeat"},
+            {"id": "notifications", "label": "Notificacoes", "icon": "bell"},
+            {"id": "audit", "label": "Auditoria", "icon": "list"},
+        ],
+    }
+    
+    # For HTMX partial requests, only render the tab content
+    if request.headers.get("HX-Request"):
+        tab_context = _get_acolyte_tab_context(request, parish, acolyte, user, tab, stats, intent)
+        context.update(tab_context)
+        return render(request, f"people/acolyte_tabs/{tab}.html", context)
+    
+    # For full page loads, render everything
+    tab_context = _get_acolyte_tab_context(request, parish, acolyte, user, tab, stats, intent)
+    context.update(tab_context)
+    return render(request, "people/acolyte_detail.html", context)
+
+
+def _get_acolyte_tab_context(request, parish, acolyte, user, tab, stats, intent):
+    """Build context for a specific tab."""
+    context = {}
+    
+    if tab == "overview":
+        context.update(_acolyte_overview_context(parish, acolyte, user, stats, intent))
+    elif tab == "schedule":
+        context.update(_acolyte_schedule_context(request, parish, acolyte))
+    elif tab == "availability":
+        context.update(_acolyte_availability_context(parish, acolyte))
+    elif tab == "preferences":
+        context.update(_acolyte_preferences_context(parish, acolyte))
+    elif tab == "qualifications":
+        context.update(_acolyte_qualifications_context(parish, acolyte))
+    elif tab == "credits":
+        context.update(_acolyte_credits_context(request, parish, acolyte, stats))
+    elif tab == "swaps":
+        context.update(_acolyte_swaps_context(request, parish, acolyte))
+    elif tab == "notifications":
+        context.update(_acolyte_notifications_context(request, parish, acolyte, user))
+    elif tab == "audit":
+        context.update(_acolyte_audit_context(request, parish, acolyte))
+    
+    return context
+
+
+def _acolyte_overview_context(parish, acolyte, user, stats, intent):
+    """Context for the Overview tab."""
+    # Status alerts
+    alerts = []
+    if not acolyte.active:
+        alerts.append({"type": "warning", "message": "Acolito inativo - nao sera escalado automaticamente."})
+    if acolyte.scheduling_mode == "reserve":
+        alerts.append({"type": "info", "message": "Modo reserva tecnica - sera escalado apenas quando necessario."})
+    
+    # Check qualification gaps
+    all_positions = PositionType.objects.filter(parish=parish, active=True)
+    qualified_positions = set(AcolyteQualification.objects.filter(
+        parish=parish, acolyte=acolyte, qualified=True
+    ).values_list("position_type_id", flat=True))
+    missing_qualifications = all_positions.exclude(id__in=qualified_positions)
+    if missing_qualifications.exists():
+        alerts.append({
+            "type": "info",
+            "message": f"Falta qualificacao em: {', '.join(p.name for p in missing_qualifications[:3])}"
+            + ("..." if missing_qualifications.count() > 3 else "")
+        })
+    
+    # Check availability issues
+    availability_rules = AcolyteAvailabilityRule.objects.filter(parish=parish, acolyte=acolyte)
+    if not availability_rules.exists():
+        alerts.append({"type": "info", "message": "Nenhuma regra de disponibilidade definida."})
+    
+    # Upcoming assignments (future, active only)
+    now = timezone.now()
+    upcoming_assignments = Assignment.objects.filter(
+        parish=parish,
+        acolyte=acolyte,
+        is_active=True,
+        slot__mass_instance__starts_at__gte=now
+    ).select_related(
+        "slot__mass_instance__community", "slot__position_type", "confirmation"
+    ).order_by("slot__mass_instance__starts_at")[:3]
+    
+    # Past assignments (served - confirmed or attended)
+    past_assignments = Assignment.objects.filter(
+        parish=parish,
+        acolyte=acolyte,
+        is_active=True,
+        slot__mass_instance__starts_at__lt=now
+    ).select_related(
+        "slot__mass_instance__community", "slot__position_type", "confirmation"
+    ).order_by("-slot__mass_instance__starts_at")[:3]
+    
+    recent_audit = AuditEvent.objects.filter(
+        parish=parish,
+        entity_type="AcolyteProfile",
+        entity_id=str(acolyte.id)
+    ).order_by("-timestamp")[:5]
+    
+    # Intent form
+    intent_form = AcolyteIntentForm(instance=intent, parish=parish, acolyte=acolyte)
+    
+    # Forms for the legacy section (profile editing)
+    membership = None
+    if user:
+        membership = ParishMembership.objects.filter(parish=parish, user=user).prefetch_related("roles").first()
+    
+    user_form = PeopleUserForm(instance=user) if user else None
+    membership_form = PeopleMembershipForm(
+        parish=parish,
+        initial={
+            "active": membership.active if membership else True,
+            "roles": membership.roles.all() if membership else [],
+        },
+    )
+    acolyte_form = PeopleAcolyteForm(instance=acolyte, parish=parish)
+    
+    return {
+        "alerts": alerts,
+        "upcoming_assignments": upcoming_assignments,
+        "past_assignments": past_assignments,
+        "recent_audit": recent_audit,
+        "intent_form": intent_form,
+        "membership": membership,
+        "user_form": user_form,
+        "membership_form": membership_form,
+        "acolyte_form": acolyte_form,
+    }
+
+
+def _acolyte_schedule_context(request, parish, acolyte):
+    """Context for the Schedule tab."""
+    # Filters
+    status_filter = request.GET.get("status", "all")
+    time_filter = request.GET.get("time", "all")
+    
+    assignments_qs = Assignment.objects.filter(
+        parish=parish, acolyte=acolyte
+    ).select_related(
+        "slot__mass_instance__community",
+        "slot__position_type",
+        "confirmation",
+        "assigned_by"
+    )
+    
+    # Apply filters
+    now = timezone.now()
+    if time_filter == "upcoming":
+        assignments_qs = assignments_qs.filter(slot__mass_instance__starts_at__gte=now)
+    elif time_filter == "past":
+        assignments_qs = assignments_qs.filter(slot__mass_instance__starts_at__lt=now)
+    
+    if status_filter == "active":
+        assignments_qs = assignments_qs.filter(is_active=True)
+    elif status_filter == "ended":
+        assignments_qs = assignments_qs.filter(is_active=False)
+    
+    assignments_qs = assignments_qs.order_by("-slot__mass_instance__starts_at")
+    
+    # Pagination
+    paginator = Paginator(assignments_qs, 20)
+    page = request.GET.get("page", 1)
+    assignments = paginator.get_page(page)
+    
+    return {
+        "assignments": assignments,
+        "status_filter": status_filter,
+        "time_filter": time_filter,
+    }
+
+
+def _acolyte_availability_context(parish, acolyte):
+    """Context for the Availability tab."""
+    availability = acolyte.acolyteavailabilityrule_set.select_related("community")
+    
+    weekly_rules = availability.filter(
+        start_date__isnull=True, end_date__isnull=True
+    ).order_by("day_of_week", "start_time")
+    
+    date_absences = availability.filter(
+        Q(start_date__isnull=False) | Q(end_date__isnull=False)
+    ).order_by("start_date")
+    
+    # Build weekly grid for visualization
+    weekdays = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"]
+    weekly_grid = {i: [] for i in range(7)}
+    for rule in weekly_rules:
+        if rule.day_of_week is not None:
+            weekly_grid[rule.day_of_week].append(rule)
+    
+    weekly_form = WeeklyAvailabilityForm(acolyte=acolyte)
+    date_absence_form = DateAbsenceForm()
+    
+    return {
+        "weekly_rules": weekly_rules,
+        "date_absences": date_absences,
+        "weekly_grid": weekly_grid,
+        "weekdays": weekdays,
+        "weekly_form": weekly_form,
+        "date_absence_form": date_absence_form,
+    }
+
+
+def _acolyte_preferences_context(parish, acolyte):
+    """Context for the Preferences tab."""
+    preferences = acolyte.acolytepreference_set.select_related(
+        "target_community", "target_position", "target_function", "target_template", "target_acolyte"
+    )
+    
+    # Group preferences by type
+    preference_groups = defaultdict(list)
+    for pref in preferences:
+        preference_groups[pref.preference_type].append(pref)
+    
+    preference_form = AcolytePreferenceForm(parish=parish)
+    
+    # Preference type labels
+    pref_type_labels = dict(AcolytePreference.PREFERENCE_CHOICES)
+    
+    return {
+        "preferences": preferences,
+        "preference_groups": dict(preference_groups),
+        "preference_form": preference_form,
+        "pref_type_labels": pref_type_labels,
+    }
+
+
+def _acolyte_qualifications_context(parish, acolyte):
+    """Context for the Qualifications tab."""
+    all_positions = PositionType.objects.filter(parish=parish, active=True)
+    qualifications = {
+        q.position_type_id: q
+        for q in AcolyteQualification.objects.filter(parish=parish, acolyte=acolyte)
+    }
+    
+    # Build checklist with qualification status
+    checklist = []
+    for position in all_positions:
+        qual = qualifications.get(position.id)
+        checklist.append({
+            "position": position,
+            "qualified": qual.qualified if qual else False,
+            "qualification": qual,
+        })
+    
+    qual_form = PeopleQualificationsForm(
+        parish=parish,
+        initial={
+            "qualifications": [q.position_type_id for q in qualifications.values() if q.qualified]
+        },
+    )
+    
+    return {
+        "checklist": checklist,
+        "qual_form": qual_form,
+    }
+
+
+def _acolyte_credits_context(request, parish, acolyte, stats):
+    """Context for the Credits tab."""
+    # Credit ledger with pagination
+    ledger_qs = AcolyteCreditLedger.objects.filter(
+        parish=parish, acolyte=acolyte
+    ).select_related("related_assignment__slot__mass_instance", "created_by").order_by("-created_at")
+    
+    paginator = Paginator(ledger_qs, 20)
+    page = request.GET.get("page", 1)
+    ledger = paginator.get_page(page)
+    
+    # Credit balance
+    balance = stats.credit_balance if stats else 0
+    
+    # Adjustment form
+    adjustment_form = CreditAdjustmentForm(parish=parish, acolyte=acolyte)
+    
+    # Reason code labels
+    reason_labels = dict(AcolyteCreditLedger.REASON_CHOICES)
+    
+    return {
+        "ledger": ledger,
+        "balance": balance,
+        "adjustment_form": adjustment_form,
+        "reason_labels": reason_labels,
+    }
+
+
+def _acolyte_swaps_context(request, parish, acolyte):
+    """Context for the Swaps & Replacements tab."""
+    # Swap requests
+    swaps_qs = SwapRequest.objects.filter(
+        Q(requestor_acolyte=acolyte) | Q(target_acolyte=acolyte),
+        parish=parish
+    ).select_related(
+        "requestor_acolyte", "target_acolyte",
+        "requestor_assignment__slot__mass_instance__community",
+        "target_assignment__slot__mass_instance__community"
+    ).order_by("-created_at")
+    
+    # Replacement requests - find where acolyte is proposed or where acolyte's slot needs replacement
+    replacements_qs = ReplacementRequest.objects.filter(
+        Q(proposed_acolyte=acolyte) | Q(slot__assignments__acolyte=acolyte, slot__assignments__is_active=True),
+        parish=parish
+    ).select_related(
+        "slot__mass_instance__community",
+        "slot__position_type",
+        "proposed_acolyte"
+    ).order_by("-created_at").distinct()
+    
+    # Pagination for swaps
+    swap_paginator = Paginator(swaps_qs, 10)
+    swap_page = request.GET.get("swap_page", 1)
+    swaps = swap_paginator.get_page(swap_page)
+    
+    # Pagination for replacements
+    repl_paginator = Paginator(replacements_qs, 10)
+    repl_page = request.GET.get("repl_page", 1)
+    replacements = repl_paginator.get_page(repl_page)
+    
+    return {
+        "swaps": swaps,
+        "replacements": replacements,
+    }
+
+
+def _acolyte_notifications_context(request, parish, acolyte, user):
+    """Context for the Notifications tab."""
+    # Notification preferences
+    prefs = None
+    if user:
+        prefs, _ = NotificationPreference.objects.get_or_create(
+            parish=parish, user=user,
+            defaults={"email_enabled": True}
+        )
+    
+    notification_form = NotificationPreferenceForm(instance=prefs, parish=parish, user=user) if prefs else None
+    
+    # Notification delivery log
+    notifications_qs = Notification.objects.none()
+    if user:
+        notifications_qs = Notification.objects.filter(
+            parish=parish, user=user
+        ).order_by("-created_at")
+    
+    paginator = Paginator(notifications_qs, 20)
+    page = request.GET.get("page", 1)
+    notifications = paginator.get_page(page)
+    
+    # Status labels
+    status_labels = dict(Notification.STATUS_CHOICES)
+    channel_labels = dict(Notification.CHANNEL_CHOICES)
+    
+    return {
+        "notification_prefs": prefs,
+        "notification_form": notification_form,
+        "notifications": notifications,
+        "status_labels": status_labels,
+        "channel_labels": channel_labels,
+    }
+
+
+def _acolyte_audit_context(request, parish, acolyte):
+    """Context for the Audit tab."""
+    # All audit events related to this acolyte
+    audit_qs = AuditEvent.objects.filter(
+        parish=parish
+    ).filter(
+        Q(entity_type="AcolyteProfile", entity_id=str(acolyte.id)) |
+        Q(entity_type="Assignment", diff_json__acolyte_id=acolyte.id) |
+        Q(entity_type="AcolyteQualification", diff_json__acolyte_id=acolyte.id) |
+        Q(entity_type="AcolyteAvailabilityRule", diff_json__acolyte_id=acolyte.id) |
+        Q(entity_type="AcolytePreference", diff_json__acolyte_id=acolyte.id) |
+        Q(entity_type="AcolyteCreditLedger", diff_json__acolyte_id=acolyte.id) |
+        Q(entity_type="Confirmation", diff_json__acolyte_id=acolyte.id)
+    ).select_related("actor_user").order_by("-timestamp")
+    
+    paginator = Paginator(audit_qs, 30)
+    page = request.GET.get("page", 1)
+    audit_events = paginator.get_page(page)
+    
+    return {
+        "audit_events": audit_events,
+    }
+
+
+# ============================================================================
+# ACOLYTE HUB ACTION ENDPOINTS
+# ============================================================================
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def acolyte_update_intent(request, acolyte_id):
+    """Update an acolyte's intent (frequency/willingness)."""
+    parish = request.active_parish
+    acolyte = get_object_or_404(AcolyteProfile, parish=parish, id=acolyte_id)
+    
+    if request.method != "POST":
+        return redirect("people_acolyte_detail", acolyte_id=acolyte.id)
+    
+    intent, created = AcolyteIntent.objects.get_or_create(
+        parish=parish, acolyte=acolyte,
+        defaults={"desired_frequency_per_month": None, "willingness_level": "normal"}
+    )
+    
+    form = AcolyteIntentForm(request.POST, instance=intent, parish=parish, acolyte=acolyte)
+    if form.is_valid():
+        form.save()
+        log_audit(
+            parish=parish,
+            actor=request.user,
+            entity_type="AcolyteIntent",
+            entity_id=intent.id,
+            action_type="update",
+            diff={"acolyte_id": acolyte.id, "changes": form.changed_data}
+        )
+        messages.success(request, "Intencoes atualizadas.")
+    else:
+        messages.error(request, "Erro ao atualizar intencoes.")
+    
+    if request.headers.get("HX-Request"):
+        return redirect(f"{reverse('people_acolyte_detail', args=[acolyte.id])}?tab=overview")
+    return redirect("people_acolyte_detail", acolyte_id=acolyte.id)
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def acolyte_adjust_credits(request, acolyte_id):
+    """Manually adjust an acolyte's credit balance."""
+    parish = request.active_parish
+    acolyte = get_object_or_404(AcolyteProfile, parish=parish, id=acolyte_id)
+    
+    if request.method != "POST":
+        return redirect("people_acolyte_detail", acolyte_id=acolyte.id)
+    
+    form = CreditAdjustmentForm(request.POST, parish=parish, acolyte=acolyte)
+    if form.is_valid():
+        delta = form.cleaned_data["delta"]
+        notes = form.cleaned_data["notes"]
+        
+        # Create ledger entry
+        ledger = AcolyteCreditLedger.objects.create(
+            parish=parish,
+            acolyte=acolyte,
+            delta=delta,
+            reason_code="manual_adjustment",
+            notes=notes,
+            created_by=request.user,
+        )
+        
+        # Update stats
+        stats, _ = AcolyteStats.objects.get_or_create(parish=parish, acolyte=acolyte)
+        stats.credit_balance = (stats.credit_balance or 0) + delta
+        stats.save(update_fields=["credit_balance", "updated_at"])
+        
+        log_audit(
+            parish=parish,
+            actor=request.user,
+            entity_type="AcolyteCreditLedger",
+            entity_id=ledger.id,
+            action_type="create",
+            diff={"acolyte_id": acolyte.id, "delta": delta, "notes": notes}
+        )
+        messages.success(request, f"Ajuste de {delta:+d} creditos aplicado.")
+    else:
+        messages.error(request, "Erro ao ajustar creditos.")
+    
+    if request.headers.get("HX-Request"):
+        return redirect(f"{reverse('people_acolyte_detail', args=[acolyte.id])}?tab=credits")
+    return redirect("people_acolyte_detail", acolyte_id=acolyte.id)
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def acolyte_update_notifications(request, acolyte_id):
+    """Update notification preferences for an acolyte's user."""
     parish = request.active_parish
     acolyte = get_object_or_404(AcolyteProfile, parish=parish, id=acolyte_id)
     user = acolyte.user
-    if request.method == "POST":
-        _handle_member_post(request, parish, user=user, acolyte=acolyte)
+    
+    if request.method != "POST" or not user:
         return redirect("people_acolyte_detail", acolyte_id=acolyte.id)
-    context = _people_member_context(parish, user=user, acolyte=acolyte)
-    context.update({"user": user, "acolyte": acolyte})
-    return render(request, "people/detail.html", context)
+    
+    prefs, _ = NotificationPreference.objects.get_or_create(
+        parish=parish, user=user,
+        defaults={"email_enabled": True}
+    )
+    
+    form = NotificationPreferenceForm(request.POST, instance=prefs, parish=parish, user=user)
+    if form.is_valid():
+        form.save()
+        log_audit(
+            parish=parish,
+            actor=request.user,
+            entity_type="NotificationPreference",
+            entity_id=prefs.id,
+            action_type="update",
+            diff={"user_id": user.id, "changes": form.changed_data}
+        )
+        messages.success(request, "Preferencias de notificacao atualizadas.")
+    else:
+        messages.error(request, "Erro ao atualizar preferencias.")
+    
+    if request.headers.get("HX-Request"):
+        return redirect(f"{reverse('people_acolyte_detail', args=[acolyte.id])}?tab=notifications")
+    return redirect("people_acolyte_detail", acolyte_id=acolyte.id)
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def acolyte_resend_notification(request, acolyte_id, notification_id):
+    """Resend a failed notification."""
+    parish = request.active_parish
+    acolyte = get_object_or_404(AcolyteProfile, parish=parish, id=acolyte_id)
+    user = acolyte.user
+    
+    if request.method != "POST" or not user:
+        return redirect("people_acolyte_detail", acolyte_id=acolyte.id)
+    
+    notification = get_object_or_404(Notification, parish=parish, user=user, id=notification_id)
+    
+    if notification.status in ["failed", "skipped"]:
+        notification.status = "pending"
+        notification.error_message = ""
+        notification.save(update_fields=["status", "error_message"])
+        
+        log_audit(
+            parish=parish,
+            actor=request.user,
+            entity_type="Notification",
+            entity_id=notification.id,
+            action_type="resend",
+            diff={"previous_status": notification.status}
+        )
+        messages.success(request, "Notificacao reenfileirada para envio.")
+    else:
+        messages.info(request, "Esta notificacao nao pode ser reenviada.")
+    
+    if request.headers.get("HX-Request"):
+        return redirect(f"{reverse('people_acolyte_detail', args=[acolyte.id])}?tab=notifications")
+    return redirect("people_acolyte_detail", acolyte_id=acolyte.id)
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def acolyte_assign_to_slot(request, acolyte_id):
+    """Quick action to assign acolyte to an open slot."""
+    parish = request.active_parish
+    acolyte = get_object_or_404(AcolyteProfile, parish=parish, id=acolyte_id)
+    
+    if request.method != "POST":
+        return redirect("people_acolyte_detail", acolyte_id=acolyte.id)
+    
+    form = AssignToSlotForm(request.POST, parish=parish, acolyte=acolyte)
+    if form.is_valid():
+        slot = form.cleaned_data["slot"]
+        try:
+            assignment = assign_manual(
+                parish=parish,
+                slot=slot,
+                acolyte=acolyte,
+                user=request.user,
+            )
+            messages.success(request, f"Acolito escalado para {slot.mass_instance} - {slot.position_type.name}.")
+        except ConcurrentUpdateError:
+            messages.error(request, "Este slot ja foi preenchido por outro usuario.")
+        except Exception as e:
+            messages.error(request, f"Erro ao escalar: {str(e)}")
+    else:
+        messages.error(request, "Slot invalido.")
+    
+    if request.headers.get("HX-Request"):
+        return redirect(f"{reverse('people_acolyte_detail', args=[acolyte.id])}?tab=schedule")
+    return redirect("people_acolyte_detail", acolyte_id=acolyte.id)
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def acolyte_remove_assignment(request, acolyte_id, assignment_id):
+    """Remove an assignment from an acolyte."""
+    parish = request.active_parish
+    acolyte = get_object_or_404(AcolyteProfile, parish=parish, id=acolyte_id)
+    assignment = get_object_or_404(Assignment, parish=parish, acolyte=acolyte, id=assignment_id, is_active=True)
+    
+    if request.method != "POST":
+        return redirect("people_acolyte_detail", acolyte_id=acolyte.id)
+    
+    try:
+        deactivate_assignment(assignment, reason="manual_unassign", actor=request.user)
+        messages.success(request, "Escala removida.")
+    except Exception as e:
+        messages.error(request, f"Erro ao remover escala: {str(e)}")
+    
+    if request.headers.get("HX-Request"):
+        return redirect(f"{reverse('people_acolyte_detail', args=[acolyte.id])}?tab=schedule")
+    return redirect("people_acolyte_detail", acolyte_id=acolyte.id)
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def acolyte_confirm_assignment(request, acolyte_id, assignment_id):
+    """Admin action to confirm an assignment on behalf of the acolyte."""
+    parish = request.active_parish
+    acolyte = get_object_or_404(AcolyteProfile, parish=parish, id=acolyte_id)
+    assignment = get_object_or_404(Assignment, parish=parish, acolyte=acolyte, id=assignment_id, is_active=True)
+    
+    if request.method != "POST":
+        return redirect("people_acolyte_detail", acolyte_id=acolyte.id)
+    
+    confirmation, created = Confirmation.objects.get_or_create(
+        parish=parish, assignment=assignment,
+        defaults={"status": "pending"}
+    )
+    
+    confirmation.status = "confirmed"
+    confirmation.updated_by = request.user
+    confirmation.notes = f"Confirmado pelo admin {request.user.full_name}"
+    confirmation.save()
+    
+    log_audit(
+        parish=parish,
+        actor=request.user,
+        entity_type="Confirmation",
+        entity_id=confirmation.id,
+        action_type="admin_confirm",
+        diff={"acolyte_id": acolyte.id, "assignment_id": assignment.id}
+    )
+    messages.success(request, "Presenca confirmada.")
+    
+    if request.headers.get("HX-Request"):
+        return redirect(f"{reverse('people_acolyte_detail', args=[acolyte.id])}?tab=schedule")
+    return redirect("people_acolyte_detail", acolyte_id=acolyte.id)
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def acolyte_open_slots(request, acolyte_id):
+    """HTMX endpoint to get available slots for assigning an acolyte."""
+    parish = request.active_parish
+    acolyte = get_object_or_404(AcolyteProfile, parish=parish, id=acolyte_id)
+    
+    # Get qualified positions
+    qualified_positions = acolyte.qualifications.filter(
+        parish=parish
+    ).values_list("position_type_id", flat=True)
+    
+    # Get open slots
+    slots = AssignmentSlot.objects.filter(
+        parish=parish,
+        status="open",
+        position_type_id__in=qualified_positions,
+        mass_instance__starts_at__gte=timezone.now(),
+        mass_instance__status="scheduled",
+    ).select_related(
+        "mass_instance", "position_type", "mass_instance__community"
+    ).order_by("mass_instance__date", "mass_instance__time")[:50]
+    
+    form = AssignToSlotForm(parish=parish, acolyte=acolyte)
+    
+    return render(request, "people/acolyte_tabs/_assign_slot_modal.html", {
+        "acolyte": acolyte,
+        "slots": slots,
+        "form": form,
+    })
+
 
 @login_required
 @require_active_parish

@@ -1,0 +1,79 @@
+<!-- Qualifications Tab -->
+<div class="space-y-6">
+    <div class="card">
+        <h3 class="text-lg font-semibold text-ink-900 mb-4">Qualificacoes do Acolito</h3>
+        <p class="text-ink-500 mb-6">Marque as funcoes que este acolito esta qualificado para exercer.</p>
+        
+        <form method="post" action="{% url 'people_acolyte_detail' acolyte.id %}">
+            {% csrf_token %}
+            <input type="hidden" name="form_type" value="qualifications">
+            <input type="hidden" name="current_tab" value="qualifications">
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                {% for item in checklist %}
+                <label class="flex items-center gap-3 p-4 rounded-lg border cursor-pointer hover:bg-sand-50 transition-colors
+                              {% if item.qualified %}border-moss-300 bg-moss-50{% else %}border-sand-200{% endif %}">
+                    <input type="checkbox" name="qualifications" value="{{ item.position.id }}"
+                           {% if item.qualified %}checked{% endif %}
+                           class="rounded text-moss-600 focus:ring-moss-500">
+                    <div>
+                        <div class="font-medium text-ink-800">{{ item.position.name }}</div>
+                        <div class="text-xs text-ink-500">{{ item.position.code }}</div>
+                    </div>
+                </label>
+                {% empty %}
+                <p class="text-ink-500 col-span-full text-center py-4">
+                    Nenhuma funcao cadastrada na paroquia.
+                </p>
+                {% endfor %}
+            </div>
+            
+            {% if checklist %}
+            <button type="submit" class="btn-primary">Salvar Qualificacoes</button>
+            {% endif %}
+        </form>
+    </div>
+    
+    <!-- Qualification Analysis -->
+    <div class="card">
+        <h3 class="text-lg font-semibold text-ink-900 mb-4">Analise de Qualificacoes</h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Qualified Functions -->
+            <div>
+                <h4 class="font-medium text-moss-700 mb-3">Funcoes Qualificadas</h4>
+                {% with qualified_count=0 %}
+                <div class="space-y-2">
+                    {% for item in checklist %}
+                    {% if item.qualified %}
+                    <div class="flex items-center gap-2 text-moss-700">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                        </svg>
+                        {{ item.position.name }}
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                {% endwith %}
+            </div>
+            
+            <!-- Missing Functions -->
+            <div>
+                <h4 class="font-medium text-sun-700 mb-3">Funcoes Nao Qualificadas</h4>
+                <div class="space-y-2">
+                    {% for item in checklist %}
+                    {% if not item.qualified %}
+                    <div class="flex items-center gap-2 text-ink-500">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                        </svg>
+                        {{ item.position.name }}
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

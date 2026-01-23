@@ -1,4 +1,5 @@
 from django import template
+import json
 
 register = template.Library()
 
@@ -211,4 +212,20 @@ def job_status_label(value):
         "failed": "Falhou",
     }
     return _map_choice_label(mapping, value)
+
+
+@register.filter
+def pprint(value):
+    """Pretty print JSON data for audit diffs."""
+    if not value:
+        return ""
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            return value
+    try:
+        return json.dumps(value, indent=2, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return str(value)
 

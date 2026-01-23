@@ -1,0 +1,338 @@
+<!-- Overview Tab -->
+<div class="space-y-6">
+    <!-- Status Alerts -->
+    {% if alerts %}
+    <div class="space-y-2">
+        {% for alert in alerts %}
+        <div class="p-4 rounded-lg border {% if alert.type == 'warning' %}bg-sun-50 border-sun-200 text-sun-800{% elif alert.type == 'info' %}bg-slate-50 border-slate-200 text-slate-700{% else %}bg-moss-50 border-moss-200 text-moss-800{% endif %}">
+            {{ alert.message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Left Column -->
+        <div class="space-y-6">
+            <!-- Intent & Load Target -->
+            <div class="card">
+                <h3 class="text-lg font-semibold text-ink-900 mb-4">Intencoes e Disponibilidade</h3>
+                <form method="post" action="{% url 'acolyte_update_intent' acolyte.id %}" class="space-y-4">
+                    {% csrf_token %}
+                    <input type="hidden" name="current_tab" value="overview">
+                    
+                    <div>
+                        <label class="label">{{ intent_form.desired_frequency_per_month.label }}</label>
+                        <input type="number" name="desired_frequency_per_month" 
+                               value="{{ intent_form.instance.desired_frequency_per_month|default:'' }}"
+                               min="0" max="12" class="input w-full"
+                               placeholder="Ex: 2">
+                        <p class="text-xs text-ink-500 mt-1">Quantas vezes por mes o acolito deseja servir</p>
+                    </div>
+                    
+                     <div>
+                         <label class="label">{{ intent_form.willingness_level.label }}</label>
+                         <div class="custom-select">
+                             <input type="hidden" name="willingness_level" value="{{ intent_form.instance.willingness_level }}">
+                             <button type="button" class="custom-select-button">
+                                 <span class="selected-text">
+                                     {% for value, label in intent_form.fields.willingness_level.choices %}
+                                         {% if intent_form.instance.willingness_level == value %}{{ label }}{% endif %}
+                                     {% endfor %}
+                                 </span>
+                             </button>
+                             <div class="custom-select-options">
+                                 {% for value, label in intent_form.fields.willingness_level.choices %}
+                                     <button type="button" class="custom-select-option {% if intent_form.instance.willingness_level == value %}selected{% endif %}" data-value="{{ value }}">{{ label }}</button>
+                                 {% endfor %}
+                             </div>
+                         </div>
+                     </div>
+                    
+                    <button type="submit" class="btn-primary">Salvar Intencoes</button>
+                </form>
+            </div>
+            
+            <!-- Profile Quick Edit -->
+            <div class="card">
+                <h3 class="text-lg font-semibold text-ink-900 mb-4">Perfil do Acolito</h3>
+                <form method="post" action="{% url 'people_acolyte_detail' acolyte.id %}" class="space-y-4">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="acolyte">
+                    <input type="hidden" name="current_tab" value="overview">
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="label">Nome de Exibicao</label>
+                            <input type="text" name="display_name" value="{{ acolyte.display_name }}" class="input w-full">
+                        </div>
+                         <div>
+                             <label class="label">Comunidade de Origem</label>
+                             <div class="custom-select">
+                                 <input type="hidden" name="community_of_origin" value="{{ acolyte.community_of_origin_id }}">
+                                 <button type="button" class="custom-select-button">
+                                     <span class="selected-text">
+                                         {% if acolyte.community_of_origin_id %}
+                                             {% for c in acolyte_form.fields.community_of_origin.queryset %}
+                                                 {% if acolyte.community_of_origin_id == c.id %}{{ c.code }}{% endif %}
+                                             {% endfor %}
+                                         {% else %}
+                                             -
+                                         {% endif %}
+                                     </span>
+                                 </button>
+                                 <div class="custom-select-options">
+                                     <button type="button" class="custom-select-option" data-value="">-</button>
+                                     {% for c in acolyte_form.fields.community_of_origin.queryset %}
+                                         <button type="button" class="custom-select-option {% if acolyte.community_of_origin_id == c.id %}selected{% endif %}" data-value="{{ c.id }}">{{ c.code }}</button>
+                                     {% endfor %}
+                                 </div>
+                             </div>
+                         </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                         <div>
+                             <label class="label">Nível de Experiência</label>
+                             <div class="custom-select">
+                                 <input type="hidden" name="experience_level" value="{{ acolyte.experience_level }}">
+                                 <button type="button" class="custom-select-button">
+                                     <span class="selected-text">
+                                         {% for value, label in acolyte_form.fields.experience_level.choices %}
+                                             {% if acolyte.experience_level == value %}{{ label }}{% endif %}
+                                         {% endfor %}
+                                     </span>
+                                 </button>
+                                 <div class="custom-select-options">
+                                     {% for value, label in acolyte_form.fields.experience_level.choices %}
+                                         <button type="button" class="custom-select-option {% if acolyte.experience_level == value %}selected{% endif %}" data-value="{{ value }}">{{ label }}</button>
+                                     {% endfor %}
+                                 </div>
+                             </div>
+                         </div>
+                         <div>
+                             <label class="label">Modo de Escalação</label>
+                             <div class="custom-select">
+                                 <input type="hidden" name="scheduling_mode" value="{{ acolyte.scheduling_mode }}">
+                                 <button type="button" class="custom-select-button">
+                                     <span class="selected-text">
+                                         {% for value, label in acolyte_form.fields.scheduling_mode.choices %}
+                                             {% if acolyte.scheduling_mode == value %}{{ label }}{% endif %}
+                                         {% endfor %}
+                                     </span>
+                                 </button>
+                                 <div class="custom-select-options">
+                                     {% for value, label in acolyte_form.fields.scheduling_mode.choices %}
+                                         <button type="button" class="custom-select-option {% if acolyte.scheduling_mode == value %}selected{% endif %}" data-value="{{ value }}">{{ label }}</button>
+                                     {% endfor %}
+                                 </div>
+                             </div>
+                         </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-4">
+                        <label class="flex items-center gap-2">
+                            <input type="checkbox" name="active" {% if acolyte.active %}checked{% endif %} class="rounded">
+                            <span>Ativo</span>
+                        </label>
+                    </div>
+                    
+                    <button type="submit" class="btn-primary">Salvar Perfil</button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Right Column -->
+        <div class="space-y-6">
+            <!-- Stats Summary -->
+            {% if stats %}
+            <div class="card">
+                <h3 class="text-lg font-semibold text-ink-900 mb-4">Estatisticas</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="text-center p-3 bg-sand-50 rounded-lg">
+                        <div class="text-2xl font-bold text-ink-900">{{ stats.services_last_30_days }}</div>
+                        <div class="text-xs text-ink-500">Servicos (30 dias)</div>
+                    </div>
+                    <div class="text-center p-3 bg-sand-50 rounded-lg">
+                        <div class="text-2xl font-bold text-ink-900">{{ stats.services_last_90_days }}</div>
+                        <div class="text-xs text-ink-500">Servicos (90 dias)</div>
+                    </div>
+                    <div class="text-center p-3 bg-sand-50 rounded-lg">
+                        <div class="text-2xl font-bold {% if stats.confirmation_rate >= 0.8 %}text-moss-600{% elif stats.confirmation_rate < 0.5 %}text-red-600{% else %}text-sun-600{% endif %}">
+                            {{ stats.confirmation_rate|floatformat:0 }}%
+                        </div>
+                        <div class="text-xs text-ink-500">Taxa Confirmacao</div>
+                    </div>
+                    <div class="text-center p-3 bg-sand-50 rounded-lg">
+                        <div class="text-2xl font-bold {% if stats.reliability_score >= 0.8 %}text-moss-600{% elif stats.reliability_score < 0.5 %}text-red-600{% else %}text-sun-600{% endif %}">
+                            {{ stats.reliability_score|floatformat:0 }}%
+                        </div>
+                        <div class="text-xs text-ink-500">Confiabilidade</div>
+                    </div>
+                    <div class="text-center p-3 bg-sand-50 rounded-lg">
+                        <div class="text-2xl font-bold text-ink-900">{{ stats.no_show_count }}</div>
+                        <div class="text-xs text-ink-500">Faltas</div>
+                    </div>
+                    <div class="text-center p-3 bg-sand-50 rounded-lg">
+                        <div class="text-2xl font-bold {% if stats.credit_balance > 0 %}text-moss-600{% elif stats.credit_balance < 0 %}text-red-600{% else %}text-ink-900{% endif %}">
+                            {{ stats.credit_balance|default:0 }}
+                        </div>
+                        <div class="text-xs text-ink-500">Creditos</div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Upcoming Assignments -->
+            <div class="card">
+                <h3 class="text-lg font-semibold text-ink-900 mb-4">Proximas Escalas</h3>
+                {% if upcoming_assignments %}
+                <div class="space-y-2">
+                    {% for assignment in upcoming_assignments %}
+                    <div class="flex items-center justify-between p-3 rounded-lg {% if assignment.confirmation and assignment.confirmation.status == 'pending' %}bg-sun-50 border border-sun-200{% else %}bg-sand-50{% endif %}">
+                        <div>
+                            <div class="font-medium text-ink-900">
+                                {{ assignment.slot.mass_instance.starts_at|date:"d/m/Y" }} - {{ assignment.slot.mass_instance.starts_at|time:"H:i" }}
+                            </div>
+                            <div class="text-sm text-ink-500">
+                                {{ assignment.slot.position_type.name }} - {{ assignment.slot.mass_instance.community.name }}
+                            </div>
+                        </div>
+                        <div>
+                            {% if assignment.confirmation %}
+                                {% if assignment.confirmation.status == 'confirmed' %}
+                                <span class="badge badge-green">Confirmado</span>
+                                {% elif assignment.confirmation.status == 'pending' %}
+                                <span class="badge badge-yellow">Aguardando confirmacao</span>
+                                {% else %}
+                                <span class="badge badge-gray">{{ assignment.confirmation.get_status_display }}</span>
+                                {% endif %}
+                            {% else %}
+                            <span class="badge badge-gray">Sem confirmacao</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <a href="{% url 'people_acolyte_detail' acolyte.id %}?tab=schedule&time=upcoming" 
+                   hx-get="{% url 'people_acolyte_detail' acolyte.id %}?tab=schedule&time=upcoming"
+                   hx-target="#tab-content"
+                   hx-push-url="true"
+                   class="block mt-4 text-center text-moss-600 hover:text-moss-700 font-medium">
+                    Ver todas as escalas futuras
+                </a>
+                {% else %}
+                <p class="text-ink-500 text-center py-4">Nenhuma escala futura agendada.</p>
+                {% endif %}
+            </div>
+            
+            <!-- Past Assignments -->
+            <div class="card">
+                <h3 class="text-lg font-semibold text-ink-900 mb-4">Ultimas Escalas Servidas</h3>
+                {% if past_assignments %}
+                <div class="space-y-2">
+                    {% for assignment in past_assignments %}
+                    <div class="flex items-center justify-between p-2 rounded-lg hover:bg-sand-50">
+                        <div>
+                            <div class="font-medium text-ink-900">
+                                {{ assignment.slot.mass_instance.starts_at|date:"d/m/Y" }} - {{ assignment.slot.mass_instance.starts_at|time:"H:i" }}
+                            </div>
+                            <div class="text-sm text-ink-500">
+                                {{ assignment.slot.position_type.name }} - {{ assignment.slot.mass_instance.community.name }}
+                            </div>
+                        </div>
+                        <div>
+                            {% if assignment.confirmation %}
+                                {% if assignment.confirmation.status == 'confirmed' %}
+                                <span class="badge badge-green">Compareceu</span>
+                                {% elif assignment.confirmation.status == 'no_show' %}
+                                <span class="badge badge-red">Faltou</span>
+                                {% else %}
+                                <span class="badge badge-gray">{{ assignment.confirmation.get_status_display }}</span>
+                                {% endif %}
+                            {% else %}
+                            <span class="badge badge-gray">-</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <a href="{% url 'people_acolyte_detail' acolyte.id %}?tab=schedule&time=past" 
+                   hx-get="{% url 'people_acolyte_detail' acolyte.id %}?tab=schedule&time=past"
+                   hx-target="#tab-content"
+                   hx-push-url="true"
+                   class="block mt-4 text-center text-moss-600 hover:text-moss-700 font-medium">
+                    Ver historico completo
+                </a>
+                {% else %}
+                <p class="text-ink-500 text-center py-4">Nenhuma escala passada.</p>
+                {% endif %}
+            </div>
+            
+            <!-- Recent Audit -->
+            <div class="card">
+                <h3 class="text-lg font-semibold text-ink-900 mb-4">Atividade Recente</h3>
+                {% if recent_audit %}
+                <div class="space-y-2">
+                    {% for event in recent_audit %}
+                    <div class="flex items-start gap-2 p-2 text-sm">
+                        <div class="text-ink-400">{{ event.timestamp|date:"d/m H:i" }}</div>
+                        <div class="flex-1">
+                            <span class="font-medium">{{ event.action_type }}</span>
+                            {% if event.actor_user %}
+                            <span class="text-ink-500">por {{ event.actor_user.full_name }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <a href="{% url 'people_acolyte_detail' acolyte.id %}?tab=audit" 
+                   hx-get="{% url 'people_acolyte_detail' acolyte.id %}?tab=audit"
+                   hx-target="#tab-content"
+                   hx-push-url="true"
+                   class="block mt-4 text-center text-moss-600 hover:text-moss-700 font-medium">
+                    Ver auditoria completa
+                </a>
+                {% else %}
+                <p class="text-ink-500 text-center py-4">Nenhuma atividade registrada.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- User Identity Section (if has user) -->
+    {% if user %}
+    <div class="card">
+        <h3 class="text-lg font-semibold text-ink-900 mb-4">Identidade do Usuario</h3>
+        <form method="post" action="{% url 'people_acolyte_detail' acolyte.id %}" class="space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="form_type" value="user">
+            <input type="hidden" name="current_tab" value="overview">
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="label">Nome Completo</label>
+                    <input type="text" name="full_name" value="{{ user.full_name }}" class="input w-full">
+                </div>
+                <div>
+                    <label class="label">Email</label>
+                    <input type="email" name="email" value="{{ user.email }}" class="input w-full" readonly>
+                </div>
+                <div>
+                    <label class="label">Telefone</label>
+                    <input type="text" name="phone" value="{{ user.phone|default:'' }}" class="input w-full">
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" name="is_active" {% if user.is_active %}checked{% endif %} class="rounded">
+                    <span>Conta ativa</span>
+                </label>
+            </div>
+            
+            <button type="submit" class="btn-primary">Salvar Identidade</button>
+        </form>
+    </div>
+    {% endif %}
+</div>

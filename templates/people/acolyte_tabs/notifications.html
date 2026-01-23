@@ -1,0 +1,141 @@
+{% load extras %}
+<!-- Notifications Tab -->
+<div class="space-y-6">
+    {% if user %}
+    <!-- Notification Preferences -->
+    <div class="card">
+        <h3 class="text-lg font-semibold text-ink-900 mb-4">Preferencias de Notificacao</h3>
+        
+        <form method="post" action="{% url 'acolyte_update_notifications' acolyte.id %}" class="space-y-4">
+            {% csrf_token %}
+            
+            <div class="space-y-3">
+                <label class="flex items-center gap-3 p-4 rounded-lg border border-sand-200 hover:bg-sand-50 cursor-pointer">
+                    <input type="checkbox" name="email_enabled" 
+                           {% if notification_prefs.email_enabled %}checked{% endif %}
+                           class="rounded text-moss-600 focus:ring-moss-500">
+                    <div>
+                        <div class="font-medium text-ink-800">Receber notificacoes por email</div>
+                        <div class="text-sm text-ink-500">Receba alertas de escalas, confirmacoes e alteracoes por email</div>
+                    </div>
+                </label>
+                
+                <label class="flex items-center gap-3 p-4 rounded-lg border border-sand-200 hover:bg-sand-50 cursor-pointer">
+                    <input type="checkbox" name="email_digest" 
+                           {% if notification_prefs.email_digest %}checked{% endif %}
+                           class="rounded text-moss-600 focus:ring-moss-500">
+                    <div>
+                        <div class="font-medium text-ink-800">Resumo diario por email</div>
+                        <div class="text-sm text-ink-500">Ao inves de notificacoes individuais, receba um resumo diario</div>
+                    </div>
+                </label>
+                
+                <label class="flex items-center gap-3 p-4 rounded-lg border border-sand-200 hover:bg-sand-50 cursor-pointer">
+                    <input type="checkbox" name="whatsapp_enabled" 
+                           {% if notification_prefs.whatsapp_enabled %}checked{% endif %}
+                           class="rounded text-moss-600 focus:ring-moss-500">
+                    <div>
+                        <div class="font-medium text-ink-800">Receber notificacoes por WhatsApp</div>
+                        <div class="text-sm text-ink-500">Receba alertas importantes via WhatsApp (requer numero cadastrado)</div>
+                    </div>
+                </label>
+            </div>
+            
+            <button type="submit" class="btn-primary">Salvar Preferencias</button>
+        </form>
+    </div>
+    
+    <!-- Notification Log -->
+    <div class="card">
+        <h3 class="text-lg font-semibold text-ink-900 mb-4">Historico de Notificacoes</h3>
+        
+        {% if notifications %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-sand-200">
+                <thead>
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Data</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Canal</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Tipo</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Erro</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-ink-500 uppercase">Acoes</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-sand-100">
+                    {% for notif in notifications %}
+                    <tr class="hover:bg-sand-50">
+                        <td class="px-4 py-3 whitespace-nowrap text-sm">
+                            {{ notif.created_at|date:"d/m/Y H:i" }}
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="badge {% if notif.channel == 'email' %}badge-blue{% else %}badge-green{% endif %}">
+                                {{ channel_labels|get_item:notif.channel|default:notif.channel }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-sm">
+                            {{ notif.template_code }}
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="badge {% if notif.status == 'sent' %}badge-green{% elif notif.status == 'failed' %}badge-red{% elif notif.status == 'pending' or notif.status == 'processing' %}badge-yellow{% else %}badge-gray{% endif %}">
+                                {{ status_labels|get_item:notif.status|default:notif.status }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-red-600 max-w-xs truncate">
+                            {{ notif.error_message|default:"-" }}
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            {% if notif.status == 'failed' or notif.status == 'skipped' %}
+                            <form method="post" action="{% url 'acolyte_resend_notification' acolyte.id notif.id %}" class="inline">
+                                {% csrf_token %}
+                                <button type="submit" class="text-moss-600 hover:text-moss-700 text-sm font-medium">
+                                    Reenviar
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if notifications.has_other_pages %}
+        <div class="flex justify-center mt-6 gap-2">
+            {% if notifications.has_previous %}
+            <a href="{% url 'people_acolyte_detail' acolyte.id %}?tab=notifications&page={{ notifications.previous_page_number }}"
+               hx-get="{% url 'people_acolyte_detail' acolyte.id %}?tab=notifications&page={{ notifications.previous_page_number }}"
+               hx-target="#tab-content"
+               class="btn-secondary">
+                Anterior
+            </a>
+            {% endif %}
+            <span class="px-4 py-2 text-ink-500">
+                Pagina {{ notifications.number }} de {{ notifications.paginator.num_pages }}
+            </span>
+            {% if notifications.has_next %}
+            <a href="{% url 'people_acolyte_detail' acolyte.id %}?tab=notifications&page={{ notifications.next_page_number }}"
+               hx-get="{% url 'people_acolyte_detail' acolyte.id %}?tab=notifications&page={{ notifications.next_page_number }}"
+               hx-target="#tab-content"
+               class="btn-secondary">
+                Proxima
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% else %}
+        <p class="text-ink-500 text-center py-8">Nenhuma notificacao enviada para este usuario.</p>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="card">
+        <div class="text-center py-12">
+            <div class="text-6xl mb-4">&#9888;</div>
+            <h3 class="text-lg font-semibold text-ink-900 mb-2">Usuario nao vinculado</h3>
+            <p class="text-ink-500">Este acolito nao possui um usuario vinculado, portanto nao pode receber notificacoes.</p>
+            <p class="text-ink-500 mt-2">Para habilitar notificacoes, vincule um usuario a este perfil de acolito.</p>
+        </div>
+    </div>
+    {% endif %}
+</div>

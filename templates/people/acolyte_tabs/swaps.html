@@ -1,0 +1,182 @@
+<!-- Swaps & Replacements Tab -->
+<div class="space-y-6">
+    <!-- Swap Requests -->
+    <div class="card">
+        <h3 class="text-lg font-semibold text-ink-900 mb-4">Solicitacoes de Troca</h3>
+        
+        {% if swaps %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-sand-200">
+                <thead>
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Data</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Tipo</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Solicitante</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Alvo</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Escala Origem</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Status</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-ink-500 uppercase">Acoes</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-sand-100">
+                    {% for swap in swaps %}
+                    <tr class="hover:bg-sand-50">
+                        <td class="px-4 py-3 whitespace-nowrap text-sm">
+                            {{ swap.created_at|date:"d/m/Y H:i" }}
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="badge badge-blue">{{ swap.get_swap_type_display }}</span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="{% if swap.requestor_acolyte_id == acolyte.id %}font-bold{% endif %}">
+                                {{ swap.requestor_acolyte.display_name }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3">
+                            {% if swap.target_acolyte %}
+                            <span class="{% if swap.target_acolyte_id == acolyte.id %}font-bold{% endif %}">
+                                {{ swap.target_acolyte.display_name }}
+                            </span>
+                            {% else %}
+                            <span class="text-ink-400">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-sm">
+                            {% if swap.requestor_assignment %}
+                            {{ swap.requestor_assignment.slot.mass_instance.starts_at|date:"d/m" }}
+                            {{ swap.requestor_assignment.slot.mass_instance.community.name }}
+                            {% else %}
+                            <span class="text-ink-400">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="badge {% if swap.status == 'accepted' %}badge-green{% elif swap.status == 'rejected' or swap.status == 'canceled' %}badge-red{% elif swap.status == 'pending' or swap.status == 'awaiting_approval' %}badge-yellow{% else %}badge-gray{% endif %}">
+                                {{ swap.get_status_display }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            {% if swap.status == 'pending' or swap.status == 'awaiting_approval' %}
+                            <a href="{% url 'swap_requests' %}" class="text-moss-600 hover:text-moss-700 text-sm font-medium">
+                                Gerenciar
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if swaps.has_other_pages %}
+        <div class="flex justify-center mt-6 gap-2">
+            {% if swaps.has_previous %}
+            <a href="{% url 'people_acolyte_detail' acolyte.id %}?tab=swaps&swap_page={{ swaps.previous_page_number }}"
+               hx-get="{% url 'people_acolyte_detail' acolyte.id %}?tab=swaps&swap_page={{ swaps.previous_page_number }}"
+               hx-target="#tab-content"
+               class="btn-secondary">
+                Anterior
+            </a>
+            {% endif %}
+            <span class="px-4 py-2 text-ink-500">
+                Pagina {{ swaps.number }} de {{ swaps.paginator.num_pages }}
+            </span>
+            {% if swaps.has_next %}
+            <a href="{% url 'people_acolyte_detail' acolyte.id %}?tab=swaps&swap_page={{ swaps.next_page_number }}"
+               hx-get="{% url 'people_acolyte_detail' acolyte.id %}?tab=swaps&swap_page={{ swaps.next_page_number }}"
+               hx-target="#tab-content"
+               class="btn-secondary">
+                Proxima
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% else %}
+        <p class="text-ink-500 text-center py-8">Nenhuma solicitacao de troca encontrada.</p>
+        {% endif %}
+    </div>
+    
+    <!-- Replacement Requests -->
+    <div class="card">
+        <h3 class="text-lg font-semibold text-ink-900 mb-4">Solicitacoes de Substituicao</h3>
+        
+        {% if replacements %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-sand-200">
+                <thead>
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Data</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Escala Original</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Funcao</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Substituto</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Status</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-ink-500 uppercase">Acoes</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-sand-100">
+                    {% for repl in replacements %}
+                    <tr class="hover:bg-sand-50">
+                        <td class="px-4 py-3 whitespace-nowrap text-sm">
+                            {{ repl.created_at|date:"d/m/Y H:i" }}
+                        </td>
+                        <td class="px-4 py-3">
+                            {{ repl.slot.mass_instance.starts_at|date:"d/m/Y H:i" }}
+                            - {{ repl.slot.mass_instance.community.name }}
+                        </td>
+                        <td class="px-4 py-3">
+                            {{ repl.slot.position_type.name }}
+                        </td>
+                        <td class="px-4 py-3">
+                            {% if repl.proposed_acolyte %}
+                            {{ repl.proposed_acolyte.display_name }}
+                            {% else %}
+                            <span class="text-ink-400">Pendente</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="badge {% if repl.status == 'assigned' %}badge-green{% elif repl.status == 'canceled' or repl.status == 'resolved' %}badge-gray{% elif repl.status == 'pending' %}badge-yellow{% else %}badge-blue{% endif %}">
+                                {{ repl.get_status_display }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            {% if repl.status == 'pending' %}
+                            <a href="{% url 'replacement_center' %}" class="text-moss-600 hover:text-moss-700 text-sm font-medium">
+                                Gerenciar
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if replacements.has_other_pages %}
+        <div class="flex justify-center mt-6 gap-2">
+            {% if replacements.has_previous %}
+            <a href="{% url 'people_acolyte_detail' acolyte.id %}?tab=swaps&repl_page={{ replacements.previous_page_number }}"
+               hx-get="{% url 'people_acolyte_detail' acolyte.id %}?tab=swaps&repl_page={{ replacements.previous_page_number }}"
+               hx-target="#tab-content"
+               class="btn-secondary">
+                Anterior
+            </a>
+            {% endif %}
+            <span class="px-4 py-2 text-ink-500">
+                Pagina {{ replacements.number }} de {{ replacements.paginator.num_pages }}
+            </span>
+            {% if replacements.has_next %}
+            <a href="{% url 'people_acolyte_detail' acolyte.id %}?tab=swaps&repl_page={{ replacements.next_page_number }}"
+               hx-get="{% url 'people_acolyte_detail' acolyte.id %}?tab=swaps&repl_page={{ replacements.next_page_number }}"
+               hx-target="#tab-content"
+               class="btn-secondary">
+                Proxima
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% else %}
+        <p class="text-ink-500 text-center py-8">Nenhuma solicitacao de substituicao encontrada.</p>
+        {% endif %}
+    </div>
+</div>

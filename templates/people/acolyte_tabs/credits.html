@@ -1,0 +1,138 @@
+{% load extras %}
+<!-- Credits Tab -->
+<div class="space-y-6">
+    <!-- Balance Summary -->
+    <div class="card">
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h3 class="text-lg font-semibold text-ink-900">Saldo de Creditos</h3>
+                <p class="text-ink-500">Creditos sao usados para priorizar acolitos em escalas disputadas.</p>
+            </div>
+            <div class="text-center">
+                <div class="text-4xl font-bold {% if balance > 0 %}text-moss-600{% elif balance < 0 %}text-red-600{% else %}text-ink-900{% endif %}">
+                    {{ balance|default:0 }}
+                </div>
+                <div class="text-sm text-ink-500">creditos</div>
+            </div>
+        </div>
+        
+        <!-- Adjustment Form -->
+        <div class="border-t border-sand-200 pt-4">
+            <h4 class="font-medium text-ink-800 mb-3">Ajuste Manual</h4>
+            <form method="post" action="{% url 'acolyte_adjust_credits' acolyte.id %}" class="space-y-4">
+                {% csrf_token %}
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="label">Valor do Ajuste</label>
+                        <input type="number" name="delta" class="input w-full" placeholder="Ex: 10 ou -5" required>
+                        <p class="text-xs text-ink-500 mt-1">Positivo para adicionar, negativo para remover</p>
+                    </div>
+                    <div>
+                        <label class="label">Justificativa</label>
+                        <input type="text" name="notes" class="input w-full" placeholder="Motivo do ajuste..." required>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn-primary">Aplicar Ajuste</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Credit Ledger -->
+    <div class="card">
+        <h3 class="text-lg font-semibold text-ink-900 mb-4">Historico de Creditos</h3>
+        
+        {% if ledger %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-sand-200">
+                <thead>
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Data</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Motivo</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Escala Relacionada</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Notas</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Por</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-ink-500 uppercase">Valor</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-sand-100">
+                    {% for entry in ledger %}
+                    <tr class="hover:bg-sand-50">
+                        <td class="px-4 py-3 whitespace-nowrap text-sm">
+                            {{ entry.created_at|date:"d/m/Y H:i" }}
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="badge badge-gray">
+                                {{ reason_labels|get_item:entry.reason_code|default:entry.reason_code }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-sm">
+                            {% if entry.related_assignment %}
+                            {{ entry.related_assignment.slot.mass_instance.starts_at|date:"d/m/Y" }}
+                            - {{ entry.related_assignment.slot.position_type.name }}
+                            {% else %}
+                            <span class="text-ink-400">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-ink-500">
+                            {{ entry.notes|default:"-" }}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-ink-500">
+                            {% if entry.created_by %}
+                            {{ entry.created_by.full_name }}
+                            {% else %}
+                            Sistema
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-right font-medium {% if entry.delta > 0 %}text-moss-600{% else %}text-red-600{% endif %}">
+                            {% if entry.delta > 0 %}+{% endif %}{{ entry.delta }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if ledger.has_other_pages %}
+        <div class="flex justify-center mt-6 gap-2">
+            {% if ledger.has_previous %}
+            <a href="{% url 'people_acolyte_detail' acolyte.id %}?tab=credits&page={{ ledger.previous_page_number }}"
+               hx-get="{% url 'people_acolyte_detail' acolyte.id %}?tab=credits&page={{ ledger.previous_page_number }}"
+               hx-target="#tab-content"
+               class="btn-secondary">
+                Anterior
+            </a>
+            {% endif %}
+            <span class="px-4 py-2 text-ink-500">
+                Pagina {{ ledger.number }} de {{ ledger.paginator.num_pages }}
+            </span>
+            {% if ledger.has_next %}
+            <a href="{% url 'people_acolyte_detail' acolyte.id %}?tab=credits&page={{ ledger.next_page_number }}"
+               hx-get="{% url 'people_acolyte_detail' acolyte.id %}?tab=credits&page={{ ledger.next_page_number }}"
+               hx-target="#tab-content"
+               class="btn-secondary">
+                Proxima
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% else %}
+        <p class="text-ink-500 text-center py-8">Nenhuma movimentacao de creditos registrada.</p>
+        {% endif %}
+    </div>
+    
+    <!-- Reason Code Legend -->
+    <div class="card">
+        <h3 class="text-lg font-semibold text-ink-900 mb-4">Legenda de Motivos</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% for code, label in reason_labels.items %}
+            <div class="flex items-center gap-2">
+                <span class="badge badge-gray">{{ label }}</span>
+                <span class="text-sm text-ink-500">{{ code }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>

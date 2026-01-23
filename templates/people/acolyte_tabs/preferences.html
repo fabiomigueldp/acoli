@@ -1,0 +1,245 @@
+{% load extras %}
+<!-- Preferences Tab -->
+<div class="space-y-6">
+    <!-- Add Preference Form -->
+    <div class="card">
+        <h3 class="text-lg font-semibold text-ink-900 mb-4">Adicionar Preferencia</h3>
+        <form method="post" action="{% url 'people_acolyte_detail' acolyte.id %}" class="space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="form_type" value="preference">
+            <input type="hidden" name="current_tab" value="preferences">
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                 <div>
+                     <label class="label">Tipo de Preferência</label>
+                     <div class="custom-select">
+                         <input type="hidden" name="preference_type" value="" onchange="togglePreferenceFields(this.value)">
+                         <button type="button" class="custom-select-button" id="pref-type-select" onclick="togglePreferenceFields(document.querySelector('input[name=preference_type]').value)">
+                             <span class="selected-text">Selecionar...</span>
+                         </button>
+                         <div class="custom-select-options">
+                             {% for value, label in preference_form.fields.preference_type.choices %}
+                                 <button type="button" class="custom-select-option" data-value="{{ value }}" onclick="togglePreferenceFields('{{ value }}')">{{ label }}</button>
+                             {% endfor %}
+                         </div>
+                     </div>
+                 </div>
+                <div id="pref-community-field">
+                    <label class="label">Comunidade</label>
+                    <div class="custom-select">
+                        <input type="hidden" name="target_community" value="">
+                        <button type="button" class="custom-select-button">
+                            <span class="selected-text">-</span>
+                        </button>
+                        <div class="custom-select-options">
+                            <button type="button" class="custom-select-option selected" data-value="">-</button>
+                            {% for c in preference_form.fields.target_community.queryset %}
+                                <button type="button" class="custom-select-option" data-value="{{ c.id }}">{{ c.code }}</button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <div id="pref-position-field" style="display: none;">
+                    <label class="label">Função</label>
+                    <div class="custom-select">
+                        <input type="hidden" name="target_position" value="">
+                        <button type="button" class="custom-select-button">
+                            <span class="selected-text">-</span>
+                        </button>
+                        <div class="custom-select-options">
+                            <button type="button" class="custom-select-option selected" data-value="">-</button>
+                            {% for p in preference_form.fields.target_position.queryset %}
+                                <button type="button" class="custom-select-option" data-value="{{ p.id }}">{{ p.name }}</button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <div id="pref-function-field" style="display: none;">
+                    <label class="label">Função Base</label>
+                    <div class="custom-select">
+                        <input type="hidden" name="target_function" value="">
+                        <button type="button" class="custom-select-button">
+                            <span class="selected-text">-</span>
+                        </button>
+                        <div class="custom-select-options">
+                            <button type="button" class="custom-select-option selected" data-value="">-</button>
+                            {% for f in preference_form.fields.target_function.queryset %}
+                                <button type="button" class="custom-select-option" data-value="{{ f.id }}">{{ f.name }}</button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <div id="pref-template-field" style="display: none;">
+                    <label class="label">Modelo de Missa</label>
+                    <div class="custom-select">
+                        <input type="hidden" name="target_template" value="">
+                        <button type="button" class="custom-select-button">
+                            <span class="selected-text">-</span>
+                        </button>
+                        <div class="custom-select-options">
+                            <button type="button" class="custom-select-option selected" data-value="">-</button>
+                            {% for t in preference_form.fields.target_template.queryset %}
+                                <button type="button" class="custom-select-option" data-value="{{ t.id }}">{{ t.title }}</button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <div id="pref-acolyte-field" style="display: none;">
+                    <label class="label">Acólito Parceiro</label>
+                    <div class="custom-select">
+                        <input type="hidden" name="target_acolyte" value="">
+                        <button type="button" class="custom-select-button">
+                            <span class="selected-text">-</span>
+                        </button>
+                        <div class="custom-select-options">
+                            <button type="button" class="custom-select-option selected" data-value="">-</button>
+                            {% for a in preference_form.fields.target_acolyte.queryset %}
+                                <button type="button" class="custom-select-option" data-value="{{ a.id }}">{{ a.display_name }}</button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <div id="pref-weight-field">
+                    <label class="label">Peso (1-100)</label>
+                    <input type="number" name="weight" value="50" min="1" max="100" class="input w-full">
+                    <p class="text-xs text-ink-500 mt-1">Maior peso = maior prioridade</p>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn-primary">Adicionar Preferencia</button>
+        </form>
+    </div>
+    
+    <!-- Preferences by Group -->
+    {% if preference_groups %}
+    {% for pref_type, prefs in preference_groups.items %}
+    <div class="card">
+        <h3 class="text-lg font-semibold text-ink-900 mb-4">
+            {{ pref_type_labels|get_item:pref_type|default:pref_type }}
+        </h3>
+        <div class="space-y-2">
+            {% for pref in prefs %}
+            <div class="flex items-center justify-between p-3 bg-sand-50 rounded-lg">
+                <div class="flex items-center gap-3">
+                    <span class="badge {% if 'avoid' in pref.preference_type %}badge-red{% else %}badge-green{% endif %}">
+                        {% if 'avoid' in pref.preference_type %}Evitar{% else %}Preferir{% endif %}
+                    </span>
+                    <span class="font-medium text-ink-800">
+                        {% if pref.target_community %}{{ pref.target_community.name }}{% endif %}
+                        {% if pref.target_position %}{{ pref.target_position.name }}{% endif %}
+                        {% if pref.target_function %}{{ pref.target_function.name }}{% endif %}
+                        {% if pref.target_template %}{{ pref.target_template.title }}{% endif %}
+                        {% if pref.target_acolyte %}{{ pref.target_acolyte.display_name }}{% endif %}
+                        {% if pref.weekday is not None %}Dia {{ pref.weekday }}{% endif %}
+                        {% if pref.start_time %}{{ pref.start_time|time:"H:i" }}{% endif %}
+                    </span>
+                    <span class="text-sm text-ink-500">Peso: {{ pref.weight }}</span>
+                </div>
+                <form method="post" action="{% url 'people_acolyte_detail' acolyte.id %}" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="delete_preference">
+                    <input type="hidden" name="pref_id" value="{{ pref.id }}">
+                    <input type="hidden" name="current_tab" value="preferences">
+                    <button type="submit" class="text-red-600 hover:text-red-700 text-sm">
+                        Remover
+                    </button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="card">
+        <p class="text-ink-500 text-center py-8">Nenhuma preferencia cadastrada.</p>
+    </div>
+    {% endif %}
+    
+    <!-- All Preferences Table -->
+    {% if preferences %}
+    <div class="card">
+        <h3 class="text-lg font-semibold text-ink-900 mb-4">Todas as Preferencias</h3>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-sand-200">
+                <thead>
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Tipo</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Alvo</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Peso</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-ink-500 uppercase">Acoes</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-sand-100">
+                    {% for pref in preferences %}
+                    <tr class="hover:bg-sand-50">
+                        <td class="px-4 py-3">
+                            <span class="badge {% if 'avoid' in pref.preference_type %}badge-red{% else %}badge-green{% endif %}">
+                                {{ pref.get_preference_type_display }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3">
+                            {% if pref.target_community %}{{ pref.target_community.name }}{% endif %}
+                            {% if pref.target_position %}{{ pref.target_position.name }}{% endif %}
+                            {% if pref.target_function %}{{ pref.target_function.name }}{% endif %}
+                            {% if pref.target_template %}{{ pref.target_template.title }}{% endif %}
+                            {% if pref.target_acolyte %}{{ pref.target_acolyte.display_name }}{% endif %}
+                        </td>
+                        <td class="px-4 py-3">{{ pref.weight }}</td>
+                        <td class="px-4 py-3 text-right">
+                            <form method="post" action="{% url 'people_acolyte_detail' acolyte.id %}" class="inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="form_type" value="delete_preference">
+                                <input type="hidden" name="pref_id" value="{{ pref.id }}">
+                                <input type="hidden" name="current_tab" value="preferences">
+                                <button type="submit" class="text-red-600 hover:text-red-700 text-sm">Remover</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function togglePreferenceFields(type) {
+    const fields = {
+        'community': ['preferred_community', 'avoid_community'],
+        'position': ['preferred_position', 'avoid_position'],
+        'function': ['preferred_function', 'avoid_function'],
+        'template': ['preferred_mass_template'],
+        'acolyte': ['preferred_partner', 'avoid_partner'],
+        'timeslot': ['preferred_timeslot'],
+    };
+    
+    // Hide all optional fields
+    document.getElementById('pref-community-field').style.display = 'none';
+    document.getElementById('pref-position-field').style.display = 'none';
+    document.getElementById('pref-function-field').style.display = 'none';
+    document.getElementById('pref-template-field').style.display = 'none';
+    document.getElementById('pref-acolyte-field').style.display = 'none';
+    
+    // Show relevant field based on type
+    if (type.includes('community')) {
+        document.getElementById('pref-community-field').style.display = 'block';
+    } else if (type.includes('position')) {
+        document.getElementById('pref-position-field').style.display = 'block';
+    } else if (type.includes('function')) {
+        document.getElementById('pref-function-field').style.display = 'block';
+    } else if (type.includes('template')) {
+        document.getElementById('pref-template-field').style.display = 'block';
+    } else if (type.includes('partner')) {
+        document.getElementById('pref-acolyte-field').style.display = 'block';
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const select = document.getElementById('pref-type-select');
+    if (select) {
+        togglePreferenceFields(select.value);
+    }
+});
+</script>

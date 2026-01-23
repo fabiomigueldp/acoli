@@ -1,0 +1,98 @@
+{% load extras %}
+<!-- Audit Tab -->
+<div class="space-y-6">
+    <div class="card">
+        <h3 class="text-lg font-semibold text-ink-900 mb-4">Historico de Auditoria</h3>
+        <p class="text-ink-500 mb-6">Todas as acoes relacionadas a este acolito registradas no sistema.</p>
+        
+        {% if audit_events %}
+        <div class="space-y-3">
+            {% for event in audit_events %}
+            <div class="flex items-start gap-4 p-4 bg-sand-50 rounded-lg">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center">
+                    {% if event.actor_user %}
+                    <span class="text-sm font-medium text-slate-700">
+                        {{ event.actor_user.full_name|slice:":1"|upper }}
+                    </span>
+                    {% else %}
+                    <span class="text-sm font-medium text-slate-500">S</span>
+                    {% endif %}
+                </div>
+                <div class="flex-1">
+                    <div class="flex items-center justify-between mb-1">
+                        <div class="font-medium text-ink-900">
+                            {{ event.action_type }}
+                            <span class="font-normal text-ink-500">em</span>
+                            {{ event.entity_type }}
+                        </div>
+                        <div class="text-sm text-ink-500">
+                            {{ event.timestamp|date:"d/m/Y H:i" }}
+                        </div>
+                    </div>
+                    <div class="text-sm text-ink-500 mb-2">
+                        {% if event.actor_user %}
+                        Por {{ event.actor_user.full_name }}
+                        {% else %}
+                        Acao do sistema
+                        {% endif %}
+                    </div>
+                    {% if event.diff_json %}
+                    <details class="mt-2">
+                        <summary class="text-sm text-moss-600 cursor-pointer hover:text-moss-700">
+                            Ver detalhes
+                        </summary>
+                        <pre class="mt-2 p-3 bg-white rounded border border-sand-200 text-xs overflow-x-auto">{{ event.diff_json|pprint }}</pre>
+                    </details>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Pagination -->
+        {% if audit_events.has_other_pages %}
+        <div class="flex justify-center mt-6 gap-2">
+            {% if audit_events.has_previous %}
+            <a href="{% url 'people_acolyte_detail' acolyte.id %}?tab=audit&page={{ audit_events.previous_page_number }}"
+               hx-get="{% url 'people_acolyte_detail' acolyte.id %}?tab=audit&page={{ audit_events.previous_page_number }}"
+               hx-target="#tab-content"
+               class="btn-secondary">
+                Anterior
+            </a>
+            {% endif %}
+            <span class="px-4 py-2 text-ink-500">
+                Pagina {{ audit_events.number }} de {{ audit_events.paginator.num_pages }}
+            </span>
+            {% if audit_events.has_next %}
+            <a href="{% url 'people_acolyte_detail' acolyte.id %}?tab=audit&page={{ audit_events.next_page_number }}"
+               hx-get="{% url 'people_acolyte_detail' acolyte.id %}?tab=audit&page={{ audit_events.next_page_number }}"
+               hx-target="#tab-content"
+               class="btn-secondary">
+                Proxima
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% else %}
+        <p class="text-ink-500 text-center py-8">Nenhum evento de auditoria encontrado para este acolito.</p>
+        {% endif %}
+    </div>
+    
+    <!-- Audit Legend -->
+    <div class="card">
+        <h3 class="text-lg font-semibold text-ink-900 mb-4">Sobre a Auditoria</h3>
+        <div class="text-sm text-ink-600 space-y-2">
+            <p>O historico de auditoria registra todas as alteracoes importantes relacionadas a este acolito:</p>
+            <ul class="list-disc list-inside space-y-1 ml-4">
+                <li>Alteracoes no perfil (nome, comunidade, nivel de experiencia)</li>
+                <li>Mudancas de status (ativo/inativo)</li>
+                <li>Adicao/remocao de qualificacoes</li>
+                <li>Alteracoes em regras de disponibilidade</li>
+                <li>Adicao/remocao de preferencias</li>
+                <li>Escalas (atribuicao, confirmacao, cancelamento)</li>
+                <li>Ajustes de creditos</li>
+                <li>Solicitacoes de troca e substituicao</li>
+            </ul>
+        </div>
+    </div>
+</div>

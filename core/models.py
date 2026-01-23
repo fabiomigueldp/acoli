@@ -486,12 +486,15 @@ class AcolyteCreditLedger(TimeStampedModel):
         ("accepted_last_minute_substitution", "Aceitou substituicao de ultima hora"),
         ("high_attendance_streak", "Boa sequencia de presencas"),
         ("received_high_demand_assignment", "Recebeu funcao disputada"),
+        ("manual_adjustment", "Ajuste manual"),
     ]
     parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
     acolyte = models.ForeignKey(AcolyteProfile, on_delete=models.CASCADE)
     delta = models.IntegerField()
     reason_code = models.CharField(max_length=40, choices=REASON_CHOICES)
     related_assignment = models.ForeignKey(Assignment, on_delete=models.SET_NULL, null=True, blank=True)
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
 
 
 class AcolyteStats(TimeStampedModel):

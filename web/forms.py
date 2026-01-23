@@ -9,6 +9,8 @@ from django.contrib.auth import get_user_model
 
 from core.models import (
     AcolyteAvailabilityRule,
+    AcolyteCreditLedger,
+    AcolyteIntent,
     AcolytePreference,
     AcolyteProfile,
     AcolyteQualification,
@@ -26,6 +28,7 @@ from core.models import (
     RequirementProfilePosition,
     PositionType,
 )
+from notifications.models import NotificationPreference
 
 import json
 
@@ -957,4 +960,101 @@ class PeopleCreateForm(forms.Form):
         if not is_acolyte:
             cleaned["qualifications"] = []
         return cleaned
+
+
+class AcolyteIntentForm(forms.ModelForm):
+    """Form to edit an acolyte's intent (desired frequency and willingness level)."""
+    
+    class Meta:
+        model = AcolyteIntent
+        fields = ["desired_frequency_per_month", "willingness_level"]
+        widgets = {
+            "desired_frequency_per_month": forms.NumberInput(attrs={"min": 0, "max": 12}),
+            "willingness_level": forms.Select(),
+        }
+        labels = {
+            "desired_frequency_per_month": "Frequencia desejada (por mes)",
+            "willingness_level": "Nivel de disponibilidade",
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.parish = kwargs.pop("parish", None)
+        self.acolyte = kwargs.pop("acolyte", None)
+        super().__init__(*args, **kwargs)
+
+
+class CreditAdjustmentForm(forms.Form):
+    """Form to manually adjust an acolyte's credit balance."""
+    
+    delta = forms.IntegerField(
+        label="Valor do ajuste",
+        help_text="Use valores positivos para adicionar creditos, negativos para remover.",
+        widget=forms.NumberInput(attrs={"class": "input", "placeholder": "Ex: 10 ou -5"}),
+    )
+    notes = forms.CharField(
+        label="Justificativa",
+        required=True,
+        widget=forms.Textarea(attrs={"rows": 3, "class": "input", "placeholder": "Motivo do ajuste..."}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.parish = kwargs.pop("parish", None)
+        self.acolyte = kwargs.pop("acolyte", None)
+        super().__init__(*args, **kwargs)
+
+    def clean_delta(self):
+        delta = self.cleaned_data.get("delta")
+        if delta == 0:
+            raise forms.ValidationError("O valor do ajuste deve ser diferente de zero.")
+        return delta
+
+
+class NotificationPreferenceForm(forms.ModelForm):
+    """Form to edit notification preferences for a user."""
+    
+    class Meta:
+        model = NotificationPreference
+        fields = ["email_enabled", "email_digest", "whatsapp_enabled"]
+        labels = {
+            "email_enabled": "Receber notificacoes por email",
+            "email_digest": "Receber resumo diario (em vez de notificacoes individuais)",
+            "whatsapp_enabled": "Receber notificacoes por WhatsApp",
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.parish = kwargs.pop("parish", None)
+        self.user = kwargs.pop("user", None)
+        super().__init__(*args, **kwargs)
+
+
+class AssignToSlotForm(forms.Form):
+    """Form to assign an acolyte to a specific slot."""
+    
+    slot = forms.ModelChoiceField(
+        queryset=AssignmentSlot.objects.none(),
+        label="Slot disponivel",
+        widget=forms.Select(attrs={"class": "custom-select"}),
+    )
+    notes = forms.CharField(
+        label="Observacoes",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 2, "class": "input"}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.parish = kwargs.pop("parish", None)
+        self.acolyte = kwargs.pop("acolyte", None)
+        super().__init__(*args, **kwargs)
+        if self.parish and self.acolyte:
+            # Get open slots for positions the acolyte is qualified for
+            qualified_positions = self.acolyte.qualifications.filter(
+                parish=self.parish
+            ).values_list("position_type_id", flat=True)
+            self.fields["slot"].queryset = AssignmentSlot.objects.filter(
+                parish=self.parish,
+                status="open",
+                position_type_id__in=qualified_positions,
+            ).select_related(
+                "mass_instance", "position_type", "mass_instance__community"
+            ).order_by("mass_instance__date", "mass_instance__time")
 
