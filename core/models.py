@@ -454,6 +454,7 @@ class SwapRequest(TimeStampedModel):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     notes = models.TextField(blank=True)
     open_to_admin = models.BooleanField(default=False)
+    group_id = models.UUIDField(null=True, blank=True, db_index=True)
 
 
 class ReplacementRequest(TimeStampedModel):

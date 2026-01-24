@@ -543,7 +543,7 @@ class ParishSettingsForm(forms.Form):
         "rotation_penalty": 3,
         "reserve_penalty": 1000,
     }
-    consolidation_days = forms.IntegerField(min_value=7, max_value=21)
+    consolidation_days = forms.IntegerField(min_value=7, max_value=90)
     horizon_days = forms.IntegerField(min_value=30, max_value=90)
     default_mass_duration_minutes = forms.IntegerField(min_value=45, max_value=120)
     min_rest_minutes_between_masses = forms.IntegerField(min_value=0, max_value=60)

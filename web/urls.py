@@ -94,6 +94,7 @@ urlpatterns = [
     path("swap-requests/<int:swap_id>/accept/", views.swap_request_accept, name="swap_request_accept"),
     path("swap-requests/<int:swap_id>/reject/", views.swap_request_reject, name="swap_request_reject"),
     path("swap-requests/<int:swap_id>/approve/", views.swap_request_approve, name="swap_request_approve"),
+    path("swap-requests/<int:swap_id>/cancel/", views.swap_request_cancel, name="swap_request_cancel"),
     path("events/interest/", views.event_interest, name="event_interest"),
     path("settings/", views.parish_settings, name="parish_settings"),
     path("assignments/<int:assignment_id>/confirm/", views.confirm_assignment, name="confirm_assignment"),

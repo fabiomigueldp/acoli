@@ -1,60 +1,80 @@
 {% load extras %}
-<div class="border border-black/8 rounded-xl p-5 hover:bg-sand/20 hover:border-moss/20 transition-all duration-200 hover:shadow-sm group" id="assignment-{{ assignment.id }}">
-  <div class="flex flex-wrap items-start justify-between gap-4">
-    <div class="flex items-start gap-4">
-      <div class="w-12 h-12 bg-slate rounded-full flex items-center justify-center text-white font-serif text-sm font-bold flex-shrink-0">
-        {{ assignment.slot.mass_instance.community.code|slice:":1" }}
+<div class="border border-sand-200 rounded-lg p-4 hover:border-sand-300 transition-colors" id="assignment-{{ assignment.id }}">
+  <div class="flex items-start justify-between gap-4">
+    <!-- Info principal -->
+    <div class="flex-1 min-w-0">
+      <div class="flex items-baseline gap-2 mb-1">
+        <time class="text-ink font-medium">{{ assignment.slot.mass_instance.starts_at|date:"H:i" }}</time>
+        <span class="text-ink-400">•</span>
+        <span class="text-ink-600 text-sm">{{ assignment.slot.mass_instance.community.code }}</span>
+        <span class="text-ink-400">•</span>
+        <span class="text-ink-500 text-sm">{{ assignment.slot.mass_instance.starts_at|date:"d/m/Y" }}</span>
       </div>
-      <div>
-        <div class="text-sm text-slate font-medium mb-1">{{ assignment.slot.mass_instance.starts_at|date:"l, d/m/Y" }}</div>
-        <div class="font-semibold text-lg text-ink group-hover:text-moss transition-colors">{{ assignment.slot.mass_instance.starts_at|date:"H:i" }} • {{ assignment.slot.mass_instance.community.code }}</div>
-        <div class="text-slate font-medium">{{ assignment.slot.position_type.name }}</div>
-        {% with team=team_names_map|get_item:assignment.slot.mass_instance_id %}
-          {% if team %}
-            <div class="text-xs text-slate mt-2 bg-sand/50 rounded-lg px-2 py-1 inline-block">Equipe: {{ team }}</div>
-          {% endif %}
-        {% endwith %}
-      </div>
+      
+      <div class="text-sm text-ink-700 mb-1">{{ assignment.slot.position_type.name }}</div>
+      
+      {% with team=team_names_map|get_item:assignment.slot.mass_instance_id %}
+        {% if team %}
+          <div class="text-xs text-ink-400">{{ team }}</div>
+        {% endif %}
+      {% endwith %}
     </div>
-    <div class="flex flex-wrap items-center gap-3">
+    
+    <!-- Status e Ações -->
+    <div class="flex flex-col items-end gap-2 flex-shrink-0">
+      {# Status #}
       {% if assignment.confirmation %}
-      <span class="badge">{{ assignment.confirmation.status|confirmation_status_label }}</span>
-        {% if assignment.confirmation.status == "pending" %}
-          <div class="flex gap-2">
-            <button 
-              hx-post="{% url 'confirm_assignment' assignment.id %}"
-              hx-target="#assignment-{{ assignment.id }}"
-              hx-swap="outerHTML"
-              class="btn-primary text-sm px-4 py-2" 
-              type="button">
-              Confirmar
-            </button>
-            <button 
-              hx-post="{% url 'decline_assignment' assignment.id %}"
-              hx-target="#assignment-{{ assignment.id }}"
-              hx-swap="outerHTML"
-              hx-confirm="Tem certeza que deseja recusar esta escala?"
-              class="btn-secondary text-sm px-4 py-2" 
-              type="button">
-              Recusar
-            </button>
-          </div>
-        {% elif assignment.confirmation.status == "confirmed" %}
-          <button 
-            hx-post="{% url 'cancel_assignment' assignment.id %}"
+        {% if assignment.confirmation.status == "confirmed" %}
+          <span class="text-xs text-moss-600">Confirmada</span>
+        {% elif assignment.confirmation.status == "pending" %}
+          <span class="text-xs text-amber-600">Aguardando confirmacao</span>
+        {% endif %}
+      {% else %}
+        <span class="text-xs text-ink-400">Proposta</span>
+      {% endif %}
+      
+      {# Buttons #}
+      <div class="flex flex-wrap items-center gap-2">
+        {# Confirmar - mostrar se não confirmado ainda #}
+        {% if not assignment.confirmation or assignment.confirmation.status != "confirmed" %}
+          <button
+            hx-post="{% url 'confirm_assignment' assignment.id %}"
             hx-target="#assignment-{{ assignment.id }}"
             hx-swap="outerHTML"
-            hx-confirm="Tem certeza que deseja cancelar esta escala?"
-            class="btn-secondary text-sm px-4 py-2" 
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[#0f5e4d] bg-[#0f5e4d]/10 hover:bg-[#0f5e4d]/20 border border-[#0f5e4d]/30 rounded-lg transition-colors"
             type="button">
-            Cancelar
+            Confirmar
           </button>
         {% endif %}
-        <a class="btn-secondary text-sm px-4 py-2" href="{% url 'swap_request_create' assignment.id %}">Solicitar troca</a>
-      {% else %}
-      <span class="badge">{{ assignment.assignment_state|assignment_state_label }}</span>
-        <a class="btn-secondary text-sm px-4 py-2" href="{% url 'swap_request_create' assignment.id %}">Solicitar troca</a>
-      {% endif %}
+        
+        {# Trocar função - se missa tem múltiplos slots e não há troca pendente #}
+        {% with has_multiple=mass_has_multiple_slots|get_item:assignment.slot.mass_instance_id %}
+          {% with has_pending_swap=pending_swaps_by_slot|get_item:assignment.slot_id %}
+            {% if has_pending_swap %}
+              <span class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg">
+                Troca pendente
+              </span>
+            {% elif has_multiple %}
+              <a
+                href="{% url 'swap_request_create' assignment.id %}"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-ink-600 bg-sand-50 hover:bg-sand-100 border border-sand-200 rounded-lg transition-colors">
+                Trocar funcao
+              </a>
+            {% endif %}
+          {% endwith %}
+        {% endwith %}
+        
+        {# Rejeitar #}
+        <button
+          hx-post="{% url 'decline_assignment' assignment.id %}"
+          hx-target="#assignment-{{ assignment.id }}"
+          hx-swap="outerHTML"
+          hx-confirm="Tem certeza que deseja rejeitar esta escala?"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-500 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors"
+          type="button">
+          Rejeitar
+        </button>
+      </div>
     </div>
   </div>
 </div>

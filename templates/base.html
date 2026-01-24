@@ -32,8 +32,8 @@
   <link rel="stylesheet" href="{% static 'css/app.css' %}" />
   <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 </head>
-<body class="bg-sand text-ink min-h-screen" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
-  <div class="absolute inset-0 bg-gradient-to-br from-sand via-white to-[#f2f7f1] pointer-events-none"></div>
+<body class="bg-white text-ink min-h-screen" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+  <div class="absolute inset-0 pointer-events-none"></div>
   <div class="relative">
     <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-black/8 shadow-soft">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

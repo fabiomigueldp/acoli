@@ -1,46 +1,110 @@
 {% load extras %}
-<div class="border border-black/5 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3" id="swap-{{ swap.id }}">
-  <div>
-    <div class="font-medium">{{ swap.mass_instance.starts_at|date:"d/m H:i" }}</div>
-    <div class="text-sm text-slate">
-      {{ swap.swap_type|swap_type_label}} -
-      {% if swap.open_to_admin %}Aguardando coordenacao{% else %}{{ swap.status|swap_status_label }}{% endif %}
+<div class="border border-sand-200 rounded-lg p-4 hover:border-sand-300 transition-colors" id="swap-{{ swap.id }}">
+  {# Header: Date, time, community #}
+  <div class="flex flex-wrap items-start justify-between gap-2 mb-2">
+    <div>
+      <div class="font-medium">
+        {{ swap.mass_instance.starts_at|date:"H:i" }} · {{ swap.mass_instance.community.short_name|default:swap.mass_instance.community.name }} · {{ swap.mass_instance.starts_at|date:"d/m/Y" }}
+      </div>
+      <div class="text-sm text-ink-500 mt-1">
+        {% if swap.swap_type == "role_swap" %}
+          Trocar funcao: {{ swap.from_slot.position_type.name }} &rarr; {{ swap.to_slot.position_type.name }}
+        {% else %}
+          Trocar com: {% if swap.target_acolyte %}{% if swap.target_acolyte.user %}{{ swap.target_acolyte.user.first_name }}{% else %}{{ swap.target_acolyte.display_name }}{% endif %}{% elif swap.open_to_admin %}(a definir){% else %}—{% endif %}
+        {% endif %}
+
+      </div>
+    </div>
+    {# Status badge #}
+    <div>
+      {% if swap.open_to_admin and swap.status == "pending" %}
+        <span class="text-xs text-amber-600">Aguardando coordenacao</span>
+      {% elif swap.status == "pending" %}
+        <span class="text-xs text-amber-600">Pendente</span>
+      {% elif swap.status == "awaiting_approval" %}
+        <span class="text-xs text-amber-600">Aguardando aprovacao</span>
+      {% elif swap.status == "accepted" %}
+        <span class="text-xs text-moss-600">Aceita</span>
+      {% elif swap.status == "rejected" %}
+        <span class="text-xs text-ink-400">Recusada</span>
+      {% elif swap.status == "canceled" %}
+        <span class="text-xs text-ink-400">Cancelada</span>
+      {% endif %}
     </div>
   </div>
-  <div class="flex items-center gap-2">
-    {% if swap.open_to_admin %}
-      {% if can_manage_parish %}
-        <a class="btn-secondary" href="{% url 'swap_request_assign' swap.id %}">Atribuir</a>
-      {% else %}
-        <span class="text-xs text-slate">Aguardando coordenacao</span>
-      {% endif %}
-    {% elif swap.target_acolyte and swap.target_acolyte.user_id == request.user.id and swap.status == "pending" %}
-      <button 
+
+  {# Notes if present #}
+  {% if swap.notes %}
+    <p class="text-sm text-ink-500 mb-3">{{ swap.notes }}</p>
+  {% endif %}
+
+  {# Actions #}
+  <div class="flex flex-wrap items-center gap-2">
+    {# Target can accept/reject if pending #}
+    {% if swap.target_acolyte and swap.target_acolyte.user_id == request.user.id and swap.status == "pending" %}
+      <button
         hx-post="{% url 'swap_request_accept' swap.id %}"
         hx-target="#swap-{{ swap.id }}"
         hx-swap="outerHTML"
-        class="btn-secondary" 
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-moss-600 hover:bg-moss-700 rounded-lg transition-colors"
         type="button">
         Aceitar
       </button>
-      <button 
+      <button
         hx-post="{% url 'swap_request_reject' swap.id %}"
         hx-target="#swap-{{ swap.id }}"
         hx-swap="outerHTML"
         hx-confirm="Tem certeza que deseja recusar esta troca?"
-        class="btn-secondary" 
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
         type="button">
         Recusar
       </button>
     {% endif %}
+
+    {# Admin can approve if awaiting_approval #}
     {% if can_manage_parish and swap.status == "awaiting_approval" %}
-      <button 
+      <button
         hx-post="{% url 'swap_request_approve' swap.id %}"
         hx-target="#swap-{{ swap.id }}"
         hx-swap="outerHTML"
-        class="btn-secondary" 
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-moss-600 hover:bg-moss-700 rounded-lg transition-colors"
         type="button">
         Aprovar
+      </button>
+    {% endif %}
+
+    {# Admin can assign if open_to_admin #}
+    {% if swap.open_to_admin and can_manage_parish %}
+      <a
+        href="{% url 'swap_request_assign' swap.id %}"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-ink-600 bg-sand-100 hover:bg-sand-200 rounded-lg transition-colors">
+        Atribuir acolito
+      </a>
+    {% endif %}
+
+    {# Requestor can cancel if pending #}
+    {% if swap.requestor_acolyte.user_id == request.user.id and swap.status == "pending" %}
+      <button
+        hx-post="{% url 'swap_request_cancel' swap.id %}"
+        hx-target="#swap-{{ swap.id }}"
+        hx-swap="outerHTML"
+        hx-confirm="Tem certeza que deseja cancelar esta solicitacao?"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+        type="button">
+        Cancelar
+      </button>
+    {% endif %}
+
+    {# Admin can also cancel any pending swap #}
+    {% if can_manage_parish and swap.status == "pending" and swap.requestor_acolyte.user_id != request.user.id %}
+      <button
+        hx-post="{% url 'swap_request_cancel' swap.id %}"
+        hx-target="#swap-{{ swap.id }}"
+        hx-swap="outerHTML"
+        hx-confirm="Tem certeza que deseja cancelar esta solicitacao?"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+        type="button">
+        Cancelar
       </button>
     {% endif %}
   </div>

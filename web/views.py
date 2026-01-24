@@ -3412,12 +3412,23 @@ def my_assignments(request):
         calendar_feed_url = request.build_absolute_uri(
             f"{reverse('calendar_feed')}?token={feed_token.token}"
         )
-    assignments = Assignment.objects.filter(parish=parish, acolyte__user=request.user, is_active=True).select_related(
-        "slot__mass_instance", "slot__position_type", "confirmation"
-    )
+    
+    # Filtrar escalas do dia atual em diante (início do dia atual)
+    today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    assignments = Assignment.objects.filter(
+        parish=parish, 
+        acolyte__user=request.user, 
+        is_active=True,
+        slot__mass_instance__starts_at__gte=today_start
+    ).select_related(
+        "slot__mass_instance__community", "slot__position_type", "confirmation"
+    ).order_by("slot__mass_instance__starts_at")
     mass_ids = list(assignments.values_list("slot__mass_instance_id", flat=True))
     team_map = {}
     team_names_map = {}
+    mass_has_multiple_slots = {}
+    
     if mass_ids:
         teammates = (
             Assignment.objects.filter(
@@ -3425,7 +3436,7 @@ def my_assignments(request):
                 is_active=True,
                 slot__mass_instance_id__in=mass_ids,
             )
-            .select_related("acolyte", "slot__mass_instance")
+            .select_related("acolyte", "slot__mass_instance", "slot__position_type")
             .order_by("slot__mass_instance_id", "slot__position_type__name")
         )
         for assignment in teammates:
@@ -3433,6 +3444,20 @@ def my_assignments(request):
         for mass_id, items in team_map.items():
             names = [item.acolyte.display_name for item in items]
             team_names_map[mass_id] = ", ".join(names)
+            # Missa tem múltiplos slots se tem mais de 1 acólito ativo
+            mass_has_multiple_slots[mass_id] = len(items) > 1
+    
+    # Check for pending swap requests for user's assignments
+    acolyte = AcolyteProfile.objects.filter(parish=parish, user=request.user).first()
+    pending_swaps_by_slot = {}
+    if acolyte:
+        pending_swaps = SwapRequest.objects.filter(
+            parish=parish,
+            requestor_acolyte=acolyte,
+            status="pending",
+            from_slot__isnull=False
+        ).values_list("from_slot_id", flat=True)
+        pending_swaps_by_slot = {slot_id: True for slot_id in pending_swaps}
 
     return render(
         request,
@@ -3441,6 +3466,8 @@ def my_assignments(request):
             "assignments": assignments,
             "team_map": team_map,
             "team_names_map": team_names_map,
+            "mass_has_multiple_slots": mass_has_multiple_slots,
+            "pending_swaps_by_slot": pending_swaps_by_slot,
             "calendar_feed_url": calendar_feed_url,
         },
     )
@@ -3790,81 +3817,143 @@ def delete_preference(request, pref_id):
 @require_active_parish
 def swap_requests(request):
     parish = request.active_parish
-    swaps = SwapRequest.objects.filter(parish=parish).select_related("mass_instance", "requestor_acolyte", "target_acolyte")
-    if not user_has_role(request.user, parish, ADMIN_ROLE_CODES):
+    swaps = SwapRequest.objects.filter(parish=parish).exclude(status="canceled").select_related(
+        "mass_instance__community",
+        "requestor_acolyte",
+        "target_acolyte",
+        "from_slot__position_type",
+        "to_slot__position_type"
+    ).order_by("-created_at")
+    
+    can_manage_parish = user_has_role(request.user, parish, ADMIN_ROLE_CODES)
+    
+    if not can_manage_parish:
         swaps = (
             swaps.filter(requestor_acolyte__user=request.user)
             | swaps.filter(target_acolyte__user=request.user)
         ).distinct()
-    return render(request, "acolytes/swaps.html", {"swaps": swaps})
+    
+    return render(request, "acolytes/swaps.html", {
+        "swaps": swaps,
+        "can_manage_parish": can_manage_parish,
+    })
 
 
 @login_required
 @require_active_parish
 def swap_request_create(request, assignment_id):
+    """Simplified swap request - only for role swaps within the same mass."""
     parish = request.active_parish
-    assignment = get_object_or_404(Assignment, parish=parish, id=assignment_id)
+    assignment = get_object_or_404(
+        Assignment.objects.select_related(
+            "slot__mass_instance__community", 
+            "slot__position_type",
+            "acolyte"
+        ),
+        parish=parish, 
+        id=assignment_id
+    )
+    
     if not assignment.is_active:
+        messages.info(request, "Esta escala não está mais ativa.")
         return redirect("my_assignments")
+    
     if assignment.acolyte.user_id != request.user.id and not user_has_role(
         request.user, parish, ADMIN_ROLE_CODES
     ):
         return redirect("my_assignments")
-    slots_qs = (
-        assignment.slot.mass_instance.slots.exclude(id=assignment.slot_id)
+    
+    mass_instance = assignment.slot.mass_instance
+    
+    # Get other slots in the same mass with active assignments
+    other_slots = (
+        mass_instance.slots
+        .exclude(id=assignment.slot_id)
         .filter(assignments__is_active=True)
-        .distinct()
+        .select_related("position_type")
+        .prefetch_related(
+            Prefetch(
+                "assignments",
+                queryset=Assignment.objects.filter(is_active=True).select_related("acolyte"),
+                to_attr="active_assignments"
+            )
+        )
     )
-    acolytes_qs = parish.acolytes.filter(active=True)
+    
+    # Build list of swap options
+    swap_options = []
+    for slot in other_slots:
+        active_assignment = slot.active_assignments[0] if slot.active_assignments else None
+        if active_assignment:
+            swap_options.append({
+                "slot": slot,
+                "position_name": slot.position_type.name,
+                "acolyte": active_assignment.acolyte,
+            })
+    
     if request.method == "POST":
-        form = SwapRequestForm(request.POST, acolytes_qs=acolytes_qs, slots_qs=slots_qs)
-        if form.is_valid():
-            swap_type = form.cleaned_data["swap_type"]
-            target_acolyte = form.cleaned_data.get("target_acolyte")
-            to_slot = form.cleaned_data.get("to_slot")
-            if swap_type == "role_swap" and not to_slot:
-                return redirect("swap_request_create", assignment_id=assignment.id)
-            open_to_admin = False
-            if swap_type == "role_swap" and to_slot:
-                to_assignment = to_slot.get_active_assignment()
-                if to_assignment:
-                    target_acolyte = to_assignment.acolyte
-            if swap_type == "acolyte_swap" and not target_acolyte:
-                open_to_admin = True
+        target_slot_ids = request.POST.getlist("target_slots")
+        notes = request.POST.get("notes", "").strip()
+        
+        if not target_slot_ids:
+            messages.error(request, "Selecione pelo menos uma função para trocar.")
+            return redirect("swap_request_create", assignment_id=assignment.id)
+        
+        # Generate a group_id if multiple targets selected
+        group_id = uuid4() if len(target_slot_ids) > 1 else None
+        
+        created_swaps = []
+        for target_slot_id in target_slot_ids:
+            to_slot = AssignmentSlot.objects.filter(parish=parish, id=target_slot_id).first()
+            if not to_slot:
+                continue
+            
+            to_assignment = to_slot.get_active_assignment()
+            if not to_assignment:
+                continue
+            
             swap = SwapRequest.objects.create(
                 parish=parish,
-                swap_type=swap_type,
+                swap_type="role_swap",
                 requestor_acolyte=assignment.acolyte,
-                target_acolyte=target_acolyte,
-                mass_instance=assignment.slot.mass_instance,
+                target_acolyte=to_assignment.acolyte,
+                mass_instance=mass_instance,
                 from_slot=assignment.slot,
                 to_slot=to_slot,
                 status="pending",
-                notes=form.cleaned_data.get("notes", ""),
-                open_to_admin=open_to_admin,
+                notes=notes,
+                open_to_admin=False,
+                group_id=group_id,
             )
-            log_audit(parish, request.user, "SwapRequest", swap.id, "create", {"swap_type": swap.swap_type})
-            if target_acolyte and target_acolyte.user:
+            
+            log_audit(parish, request.user, "SwapRequest", swap.id, "create", {"swap_type": "role_swap", "group_id": str(group_id) if group_id else None})
+            
+            if to_assignment.acolyte.user:
                 enqueue_notification(
                     parish,
-                    target_acolyte.user,
+                    to_assignment.acolyte.user,
                     "SWAP_REQUESTED",
                     {"swap_id": swap.id},
                     idempotency_key=f"swap:{swap.id}:request",
                 )
-            if open_to_admin:
-                for user in users_with_roles(parish, ADMIN_ROLE_CODES):
-                    enqueue_notification(
-                        parish,
-                        user,
-                        "SWAP_REQUESTED",
-                        {"swap_id": swap.id},
-                        idempotency_key=f"swap:{swap.id}:admin:{user.id}",
-                    )
-            return redirect("swap_requests")
-    else:
-        form = SwapRequestForm(acolytes_qs=acolytes_qs, slots_qs=slots_qs)
-    return render(request, "acolytes/swap_form.html", {"form": form, "assignment": assignment})
+            
+            created_swaps.append(swap)
+        
+        if not created_swaps:
+            messages.error(request, "Não foi possível criar a solicitação de troca.")
+            return redirect("swap_request_create", assignment_id=assignment.id)
+        
+        if len(created_swaps) == 1:
+            messages.success(request, "Solicitação de troca enviada.")
+        else:
+            messages.success(request, f"Solicitações de troca enviadas para {len(created_swaps)} acólitos.")
+        return redirect("my_assignments")
+    
+    return render(request, "acolytes/swap_form.html", {
+        "assignment": assignment,
+        "mass_instance": mass_instance,
+        "swap_options": swap_options,
+    })
 
 
 @login_required
@@ -3976,6 +4065,15 @@ def swap_request_accept(request, swap_id):
     if applied:
         swap.status = "accepted"
         swap.save(update_fields=["status", "updated_at"])
+        
+        # Cancel other pending swaps in the same group
+        if swap.group_id:
+            other_swaps = SwapRequest.objects.filter(
+                group_id=swap.group_id,
+                status="pending"
+            ).exclude(id=swap.id)
+            other_swaps.update(status="canceled")
+        
         if swap.requestor_acolyte.user:
             enqueue_notification(
                 parish,
@@ -4041,6 +4139,46 @@ def swap_request_reject(request, swap_id):
         "swap_requests",
         "Troca recusada."
     )
+
+
+@login_required
+@require_active_parish
+def swap_request_cancel(request, swap_id):
+    """Cancel a swap request (by the requestor)."""
+    if request.method != "POST":
+        return redirect("swap_requests")
+    parish = request.active_parish
+    swap = get_object_or_404(SwapRequest, parish=parish, id=swap_id)
+    
+    # Only the requestor or admin can cancel
+    is_requestor = swap.requestor_acolyte.user_id == request.user.id
+    is_admin = user_has_role(request.user, parish, ADMIN_ROLE_CODES)
+    
+    if not is_requestor and not is_admin:
+        return redirect("swap_requests")
+    
+    # Can only cancel pending or awaiting_approval swaps
+    if swap.status not in ("pending", "awaiting_approval"):
+        if request.headers.get("HX-Request"):
+            response = HttpResponse(status=204)
+            response["HX-Success-Message"] = "Esta solicitação não pode ser cancelada."
+            return response
+        messages.info(request, "Esta solicitação não pode ser cancelada.")
+        return redirect("swap_requests")
+    
+    swap.status = "canceled"
+    swap.save(update_fields=["status", "updated_at"])
+    
+    log_audit(parish, request.user, "SwapRequest", swap.id, "cancel", {"status": "canceled"})
+    
+    # For HTMX, return empty response to remove the card
+    if request.headers.get("HX-Request"):
+        response = HttpResponse("")
+        response["HX-Success-Message"] = "Solicitação cancelada."
+        return response
+    
+    messages.success(request, "Solicitação cancelada.")
+    return redirect("swap_requests")
 
 
 @login_required
@@ -4214,8 +4352,7 @@ def confirm_assignment(request, assignment_id):
         request,
         "acolytes/_partials/assignment_card.html",
         {"assignment": assignment, "team_names_map": team_names_map},
-        "my_assignments",
-        "Escala confirmada com sucesso."
+        "my_assignments"
     )
 
 
@@ -4290,7 +4427,7 @@ def decline_assignment(request, assignment_id):
     # For HTMX, return empty response with success message (will remove the card)
     if request.headers.get("HX-Request"):
         response = HttpResponse("")
-        response["HX-Success-Message"] = "Escala recusada."
+        response["HX-Success-Message"] = "Escala rejeitada."
         # Tell HTMX to remove the element by swapping with empty content
         return response
     return redirect("my_assignments")
