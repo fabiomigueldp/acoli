@@ -139,10 +139,42 @@
                     
                     <button type="submit" class="btn-primary">Salvar Perfil</button>
                 </form>
-            </div>
-        </div>
-        
-        <!-- Right Column -->
+             </div>
+
+             <!-- Create Login (if no user) -->
+             {% if not user %}
+             <div class="card">
+                 <h3 class="text-lg font-semibold text-ink-900 mb-4">Criar Credenciais de Login</h3>
+                 <form method="post" action="{% url 'people_acolyte_detail' acolyte.id %}" class="space-y-4">
+                     {% csrf_token %}
+                     <input type="hidden" name="form_type" value="login">
+                     <input type="hidden" name="current_tab" value="overview">
+
+                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <div>
+                             <label class="label">Email</label>
+                             <input type="email" name="email" class="input w-full" required>
+                         </div>
+                         <div>
+                             <label class="label">Senha</label>
+                             <input type="password" name="password" class="input w-full" required>
+                         </div>
+                     </div>
+
+                     <div class="flex items-center gap-4">
+                         <label class="flex items-center gap-2">
+                             <input type="checkbox" name="send_invite" class="rounded">
+                             <span>Enviar convite por email</span>
+                         </label>
+                     </div>
+
+                      <button type="submit" class="btn-primary">Criar Login</button>
+                  </form>
+              </div>
+             {% endif %}
+ </div>
+
+         <!-- Right Column -->
         <div class="space-y-6">
             <!-- Stats Summary -->
             {% if stats %}
@@ -324,15 +356,33 @@
                 </div>
             </div>
 
-            <div class="flex items-center gap-4">
-                <label class="flex items-center gap-2">
-                    <input type="checkbox" name="is_active" {% if user.is_active %}checked{% endif %} class="rounded">
-                    <span>Conta ativa</span>
-                </label>
-            </div>
-            
-            <button type="submit" class="btn-primary">Salvar Identidade</button>
-        </form>
-    </div>
-    {% endif %}
+             <div class="grid grid-cols-1 gap-4">
+                 <div>
+                     <label class="label">Papeis na Paroquia</label>
+                     <div class="space-y-2">
+                         {% for role in membership_form.fields.roles.queryset %}
+                             <label class="flex items-center gap-2">
+                                 <input type="checkbox" name="roles" value="{{ role.id }}" {% if role in membership_form.initial.roles %}checked{% endif %} class="rounded">
+                                 <span>{{ role.name }}</span>
+                             </label>
+                         {% endfor %}
+                     </div>
+                 </div>
+             </div>
+
+             <div class="flex items-center gap-4">
+                 <label class="flex items-center gap-2">
+                     <input type="checkbox" name="is_active" {% if user.is_active %}checked{% endif %} class="rounded">
+                     <span>Conta ativa</span>
+                 </label>
+                 <label class="flex items-center gap-2">
+                     <input type="checkbox" name="active" {% if membership_form.initial.active %}checked{% endif %} class="rounded">
+                     <span>Membro ativo</span>
+                 </label>
+             </div>
+
+             <button type="submit" class="btn-primary">Salvar Identidade e Papeis</button>
+         </form>
+     </div>
+     {% endif %}
 </div>

@@ -2,31 +2,53 @@
 {% load extras %}
 {% block title %}Minhas escalas{% endblock %}
 {% block content %}
-<div class="space-y-6">
-  <div class="card">
-    <h2 class="font-serif text-xl mb-2">Minhas escalas</h2>
-    <p class="text-sm text-slate">Consulte suas escalas e confirme com antecedencia.</p>
+<div class="space-y-8">
+  <!-- Header Section -->
+  <div class="bg-white rounded-xl p-6 shadow-soft border border-sand-200">
+    <div class="flex items-center gap-4 mb-4">
+      <div class="w-12 h-12 bg-moss-50 rounded-xl flex items-center justify-center">
+        <svg class="w-6 h-6 text-moss" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+        </svg>
+      </div>
+      <div>
+        <h1 class="font-serif text-2xl text-ink">Minhas escalas</h1>
+        <p class="text-slate mt-1">Consulte suas escalas e confirme com antecedência</p>
+      </div>
+    </div>
     {% include 'acolytes/_partials/calendar_feed_section.html' %}
   </div>
 
-   <div class="card">
+  <!-- Assignments Section -->
+  <div class="bg-white rounded-xl p-6 shadow-soft border border-sand-200">
     <div class="mb-6">
-      <h3 class="font-semibold text-xl text-ink">Próximas escalas</h3>
-      <p class="text-sm text-slate">Suas atribuições litúrgicas agendadas</p>
+      <div class="flex items-center gap-3 mb-2">
+        <svg class="w-5 h-5 text-moss" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <h2 class="font-semibold text-xl text-ink">Próximas escalas</h2>
+      </div>
+      <p class="text-slate">Suas atribuições litúrgicas agendadas</p>
     </div>
     <div class="space-y-4">
       {% for assignment in assignments %}
         {% include "acolytes/_partials/assignment_card.html" with assignment=assignment %}
       {% empty %}
-        <div class="text-center py-12">
-          <div class="w-16 h-16 bg-sand rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg class="w-8 h-8 text-slate" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="text-center py-16">
+          <div class="w-20 h-20 bg-sand-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <svg class="w-10 h-10 text-slate" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
             </svg>
           </div>
-          <p class="text-slate font-medium text-lg">Nenhuma escala atribuída</p>
-          <p class="text-sm text-slate mt-2">Suas próximas atribuições aparecerão aqui quando forem agendadas.</p>
-          <a href="{% url 'my_preferences' %}" class="btn-secondary mt-4 inline-block">Atualizar preferências</a>
+          <h3 class="text-slate font-semibold text-xl mb-2">Nenhuma escala atribuída</h3>
+          <p class="text-slate-600 mb-6 max-w-md mx-auto">Suas próximas atribuições aparecerão aqui quando forem agendadas. Mantenha suas preferências atualizadas para receber mais convites.</p>
+          <a href="{% url 'my_preferences' %}" class="btn-primary inline-flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            </svg>
+            Atualizar preferências
+          </a>
         </div>
       {% endfor %}
     </div>

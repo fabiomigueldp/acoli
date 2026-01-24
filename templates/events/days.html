@@ -28,12 +28,12 @@
               {% endfor %}
             </select>
             <button type="button" class="custom-select-button">
-              <span class="selected-text">--</span>
+              <span class="selected-text">{{ formset.0.community.field.choices|choice_label:formset.0.community.value|slice:":3"|default:"--" }}</span>
             </button>
             <div class="custom-select-options">
-              <button type="button" class="custom-select-option selected" data-value="">--</button>
+              <button type="button" class="custom-select-option{% if not formset.0.community.value %} selected{% endif %}" data-value="">--</button>
               {% for option in formset.0.community %}
-                <button type="button" class="custom-select-option" data-value="{{ option.data.value }}">{{ option.data.label }}</button>
+                <button type="button" class="custom-select-option{% if formset.0.community.value|stringformat:"s" == option.data.value|stringformat:"s" %} selected{% endif %}" data-value="{{ option.data.value }}">{{ option.data.label|slice:":3" }}</button>
               {% endfor %}
             </div>
           </div>
@@ -48,12 +48,12 @@
               {% endfor %}
             </select>
             <button type="button" class="custom-select-button">
-              <span class="selected-text">--</span>
+              <span class="selected-text">{{ formset.0.requirement_profile.field.choices|choice_label:formset.0.requirement_profile.value|default:"--" }}</span>
             </button>
             <div class="custom-select-options">
-              <button type="button" class="custom-select-option selected" data-value="">--</button>
+              <button type="button" class="custom-select-option{% if not formset.0.requirement_profile.value %} selected{% endif %}" data-value="">--</button>
               {% for option in formset.0.requirement_profile %}
-                <button type="button" class="custom-select-option" data-value="{{ option.data.value }}">{{ option.data.label }}</button>
+                <button type="button" class="custom-select-option{% if formset.0.requirement_profile.value|stringformat:"s" == option.data.value|stringformat:"s" %} selected{% endif %}" data-value="{{ option.data.value }}">{{ option.data.label }}</button>
               {% endfor %}
             </div>
           </div>
@@ -94,17 +94,17 @@
              <div>
                <label class="label">Comunidade</label>
                <div class="custom-select">
-                 <select class="hidden" name="{{ form.community.name }}">
+                 <select class="hidden" name="{{ form.community.html_name }}">
                    {% for option in form.community %}
                      {{ option }}
                    {% endfor %}
                  </select>
                  <button type="button" class="custom-select-button">
-                   <span class="selected-text">{{ form.community.value|default:"--" }}</span>
+                   <span class="selected-text">{{ form.community.field.choices|choice_label:form.community.value|slice:":3"|default:"--" }}</span>
                  </button>
                  <div class="custom-select-options">
                    {% for option in form.community %}
-                     <button type="button" class="custom-select-option" data-value="{{ option.data.value }}">{{ option.data.value|slice:":3" }}</button>
+                     <button type="button" class="custom-select-option{% if form.community.value|stringformat:"s" == option.data.value|stringformat:"s" %} selected{% endif %}" data-value="{{ option.data.value }}">{{ option.data.label|slice:":3" }}</button>
                    {% endfor %}
                  </div>
                </div>
@@ -112,17 +112,17 @@
              <div>
                <label class="label">Perfil</label>
                <div class="custom-select">
-                 <select class="hidden" name="{{ form.requirement_profile.name }}">
+                 <select class="hidden" name="{{ form.requirement_profile.html_name }}">
                    {% for option in form.requirement_profile %}
                      {{ option }}
                    {% endfor %}
                  </select>
                  <button type="button" class="custom-select-button">
-                   <span class="selected-text">{{ form.requirement_profile.value|default:"--" }}</span>
+                   <span class="selected-text">{{ form.requirement_profile.field.choices|choice_label:form.requirement_profile.value|default:"--" }}</span>
                  </button>
                  <div class="custom-select-options">
                    {% for option in form.requirement_profile %}
-                     <button type="button" class="custom-select-option" data-value="{{ option.data.value }}">{{ option.data.label }}</button>
+                     <button type="button" class="custom-select-option{% if form.requirement_profile.value|stringformat:"s" == option.data.value|stringformat:"s" %} selected{% endif %}" data-value="{{ option.data.value }}">{{ option.data.label }}</button>
                    {% endfor %}
                  </div>
                </div>
@@ -130,17 +130,17 @@
              <div>
                <label class="label">Conflito</label>
                <div class="custom-select">
-                 <select class="hidden" name="{{ form.conflict_action.name }}">
+                 <select class="hidden" name="{{ form.conflict_action.html_name }}">
                    {% for option in form.conflict_action %}
                      {{ option }}
                    {% endfor %}
                  </select>
                  <button type="button" class="custom-select-button">
-                   <span class="selected-text">{{ form.conflict_action.value|default:"--" }}</span>
+                   <span class="selected-text">{{ form.conflict_action.field.choices|choice_label:form.conflict_action.value|default:"--" }}</span>
                  </button>
                  <div class="custom-select-options">
                    {% for option in form.conflict_action %}
-                     <button type="button" class="custom-select-option" data-value="{{ option.data.value }}">{{ option.data.label }}</button>
+                     <button type="button" class="custom-select-option{% if form.conflict_action.value|stringformat:"s" == option.data.value|stringformat:"s" %} selected{% endif %}" data-value="{{ option.data.value }}">{{ option.data.label }}</button>
                    {% endfor %}
                  </div>
                </div>

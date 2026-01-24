@@ -37,7 +37,11 @@
     <div class="check-grid">
       <label class="check-item">
         {{ form.swap_requires_approval }}
-        <span class="text-sm">Trocas exigem aprovacao</span>
+        <span class="text-sm">Exigir aprovacao da coordenacao para trocas</span>
+      </label>
+      <label class="check-item">
+        {{ form.claim_require_coordination }}
+        <span class="text-sm">Exigir aprovacao da coordenacao para transferencias</span>
       </label>
       <label class="check-item">
         {{ form.notify_on_cancellation }}
@@ -47,6 +51,18 @@
         {{ form.auto_assign_on_decline }}
         <span class="text-sm">Auto atribuir substituto ao recusar</span>
       </label>
+      <label class="check-item">
+        {{ form.claim_auto_approve_enabled }}
+        <span class="text-sm">Auto aprovar solicitacoes sem resposta</span>
+      </label>
+    </div>
+
+    <div class="grid sm:grid-cols-2 gap-4">
+      <div>
+        <label class="label">Auto aprovar antes da missa (horas)</label>
+        {{ form.claim_auto_approve_hours }}
+        <p class="text-xs text-slate mt-1">Se o titular nao confirmar ate este prazo.</p>
+      </div>
     </div>
 
     <div class="grid sm:grid-cols-2 gap-4">

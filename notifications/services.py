@@ -4,7 +4,7 @@ from django.urls import reverse
 from django.utils import timezone
 from datetime import timedelta
 
-from core.models import Assignment, AssignmentSlot, SwapRequest
+from core.models import Assignment, AssignmentSlot, PositionClaimRequest, SwapRequest
 from notifications.models import Notification, NotificationPreference
 
 
@@ -109,6 +109,15 @@ def _render_payload(template_code, parish, payload):
             "mass_instance__community", "from_slot__position_type"
         ).filter(parish=parish, id=payload["swap_id"]).first()
 
+    claim = payload.get("claim")
+    if not claim and payload.get("claim_id"):
+        claim = PositionClaimRequest.objects.select_related(
+            "slot__mass_instance__community",
+            "slot__position_type",
+            "requestor_acolyte",
+            "target_assignment__acolyte",
+        ).filter(parish=parish, id=payload["claim_id"]).first()
+
     if assignment:
         mass = assignment.slot.mass_instance
         context = {
@@ -169,6 +178,36 @@ def _render_payload(template_code, parish, payload):
             return {
                 "subject": "Troca recusada",
                 "body": f"A troca para {context['date']} ({context['community']}) foi recusada. Ver detalhes: {context['url']}",
+            }
+
+    if claim:
+        mass = claim.slot.mass_instance
+        context = {
+            "date": _format_datetime(mass.starts_at),
+            "community": mass.community.code,
+            "position": claim.slot.position_type.name,
+            "requestor": claim.requestor_acolyte.display_name,
+            "url": _absolute_url(reverse("mass_detail", args=[mass.id])),
+        }
+        if template_code == "POSITION_CLAIM_REQUESTED":
+            return {
+                "subject": "Solicitacao de posicao",
+                "body": f"{context['requestor']} solicitou sua posicao em {context['date']} ({context['community']}) - {context['position']}. Ver detalhes: {context['url']}",
+            }
+        if template_code == "POSITION_CLAIM_APPROVED":
+            return {
+                "subject": "Solicitacao aprovada",
+                "body": f"Sua solicitacao para {context['date']} ({context['community']}) - {context['position']} foi aprovada. Ver detalhes: {context['url']}",
+            }
+        if template_code == "POSITION_CLAIM_REJECTED":
+            return {
+                "subject": "Solicitacao recusada",
+                "body": f"Sua solicitacao para {context['date']} ({context['community']}) - {context['position']} foi recusada. Ver detalhes: {context['url']}",
+            }
+        if template_code == "POSITION_CLAIM_COORDINATION_REQUIRED":
+            return {
+                "subject": "Solicitacao aguardando aprovacao",
+                "body": f"Solicitacao de {context['requestor']} para {context['date']} ({context['community']}) - {context['position']} aguardando aprovacao. Ver detalhes: {context['url']}",
             }
 
     return {"subject": "Acoli", "body": "Voce tem uma nova atualizacao no sistema."}

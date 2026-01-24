@@ -1,0 +1,50 @@
+{% load extras %}
+<div id="assignment-{{ confirmation.assignment.id }}" class="flex flex-col gap-4 py-4 sm:flex-row sm:items-start sm:justify-between">
+  <div class="flex flex-col gap-2">
+    <div class="text-xs uppercase tracking-[0.2em] text-slate">Escala pendente</div>
+    <div class="flex items-center gap-3">
+      <div class="text-sm text-slate">{{ confirmation.assignment.slot.mass_instance.starts_at|date:"D, d M • H:i" }}</div>
+      <div class="text-base text-ink font-medium">{{ confirmation.assignment.slot.position_type.name }}</div>
+    </div>
+  </div>
+
+  <div class="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[280px]">
+    {% with claims=claims_by_slot|get_item:confirmation.assignment.slot_id %}
+      {% if claims %}
+        <div class="rounded-lg bg-sand-50 px-3 py-3">
+          <div class="text-[11px] uppercase tracking-[0.2em] text-slate">Solicitacoes</div>
+          <div class="mt-2 space-y-2">
+            {% for claim in claims %}
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-sm text-ink">{{ claim.requestor_acolyte.display_name }}</span>
+                <button
+                  hx-post="{% url 'position_claim_choose' claim.id %}"
+                  hx-target="#assignment-{{ confirmation.assignment.id }}"
+                  hx-swap="outerHTML"
+                  hx-vals='{"return": "dashboard_pending"}'
+                  class="btn-secondary btn-compact"
+                  type="button">
+                  Ceder
+                </button>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% if confirmation.status == "confirmed" %}
+      <span class="text-xs font-medium uppercase tracking-[0.2em] text-moss">Confirmado</span>
+    {% else %}
+      <button
+        hx-post="{% url 'confirm_assignment' confirmation.assignment.id %}"
+        hx-target="#assignment-{{ confirmation.assignment.id }}"
+        hx-swap="outerHTML"
+        hx-vals='{"return": "dashboard_pending"}'
+        class="text-sm px-4 py-2 bg-sand-100 text-ink rounded-lg hover:bg-sand-200 transition-colors"
+        type="button">
+        Confirmar
+      </button>
+    {% endif %}
+  </div>
+</div>

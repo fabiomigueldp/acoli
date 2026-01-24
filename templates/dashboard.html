@@ -10,58 +10,205 @@
 {% elif missing_parish %}
   <div class="card">Nenhuma paroquia ativa. Contate o administrador.</div>
 {% else %}
-  <div class="grid gap-8">
-    <div class="card">
-      <div class="flex items-center justify-between mb-6">
-        <div>
-          <h2 class="font-serif text-2xl mb-1 text-moss">Proximas missas</h2>
-          <p class="text-sm text-slate">Visualize os proximos eventos liturgicos agendados.</p>
+  {% if dashboard_view == "admin" %}
+    <!-- Admin View -->
+    <div class="space-y-8">
+      <!-- Risk Radar -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="card text-center">
+          <div class="text-4xl font-serif text-moss mb-2">{{ open_slots_count }}</div>
+          <div class="text-sm text-ink font-medium">Vagas abertas (14 dias)</div>
+          <div class="text-xs text-slate mt-1">Posicoes essenciais ainda vazias</div>
         </div>
-        <div class="hidden sm:flex items-center gap-2">
-          <div class="w-3 h-3 bg-moss rounded-full"></div>
-          <span class="text-xs text-slate font-medium">{{ upcoming|length }} evento{{ upcoming|length|pluralize }}</span>
+        <div class="card text-center">
+          <div class="text-4xl font-serif text-moss mb-2">{{ pending_replacements }}</div>
+          <div class="text-sm text-ink font-medium">Substituicoes pendentes</div>
+          <div class="text-xs text-slate mt-1">Solicitacoes de reposicao aguardando</div>
         </div>
-      </div>
-      <div class="space-y-4">
-        {% for mass in upcoming %}
-          <div class="flex items-center justify-between p-4 border border-black/5 rounded-xl hover:bg-sand/30 transition-all duration-200 hover:shadow-sm">
-            <div class="flex items-center gap-4">
-               <div class="w-10 h-10 bg-slate rounded-full flex items-center justify-center text-white font-serif text-sm font-bold">
-                 {{ mass.community.code|slice:":1" }}
-               </div>
-              <div>
-                <div class="text-sm text-slate font-medium">{{ mass.starts_at|date:"d/m/Y" }} as {{ mass.starts_at|date:"H:i" }}</div>
-                <div class="font-semibold text-ink">{{ mass.community.code }} - {{ mass.liturgy_label|default:"Missa" }}</div>
+        <div class="card text-center">
+          <div class="text-4xl font-serif text-moss mb-2">{{ pending_swaps }}</div>
+          <div class="text-sm text-ink font-medium">Trocas pendentes</div>
+          <div class="text-xs text-slate mt-1">Solicitacoes de troca aguardando aprovacao</div>
+        </div>
+       </div>
+
+       <!-- Pending Swap Approvals -->
+       {% if pending_swap_approvals %}
+       <div class="card">
+         <div class="mb-6">
+           <h3 class="text-xl font-serif text-moss">Trocas aguardando aprovação</h3>
+           <p class="text-sm text-slate mt-2">Trocas aceitas pelos acólitos que precisam da sua aprovação para serem efetivadas.</p>
+         </div>
+         <div class="space-y-3">
+            {% for swap in pending_swap_approvals %}
+              <div id="dashboard-swap-{{ swap.id }}" class="flex items-start justify-between gap-4 p-4 border border-sand-200 rounded-lg">
+                <div class="flex-1 min-w-0">
+                  <div class="text-sm text-ink-600 mb-1">
+                    {{ swap.mass_instance.starts_at|date:"H:i" }} · {{ swap.mass_instance.community.short_name|default:swap.mass_instance.community.name }} · {{ swap.mass_instance.starts_at|date:"d/m/Y" }}
+                  </div>
+                  <div class="text-base font-medium text-ink mb-1">
+                    {% if swap.swap_type == "role_swap" %}
+                      Trocar {{ swap.from_slot.position_type.name }} → {{ swap.to_slot.position_type.name }}
+                    {% else %}
+                      Troca de acólito
+                    {% endif %}
+                  </div>
+                  <div class="text-sm text-ink-600">
+                    Aprovado por {{ swap.target_acolyte.user.full_name|default:swap.target_acolyte.display_name }} · Solicitado por {{ swap.requestor_acolyte.user.full_name|default:swap.requestor_acolyte.display_name }}
+                  </div>
+                </div>
+                <div class="flex gap-2">
+                  <button
+                    hx-post="{% url 'swap_request_approve' swap.id %}"
+                    hx-target="#dashboard-swap-{{ swap.id }}"
+                    hx-swap="outerHTML"
+                    class="btn-primary text-sm px-3 py-2">
+                    Aprovar
+                  </button>
+                  <button
+                    hx-post="{% url 'swap_request_cancel' swap.id %}"
+                    hx-target="#dashboard-swap-{{ swap.id }}"
+                    hx-swap="outerHTML"
+                    hx-confirm="Tem certeza que deseja cancelar esta troca?"
+                    class="btn-danger text-sm px-3 py-2">
+                    Cancelar
+                  </button>
+                </div>
               </div>
-            </div>
-            <a class="btn-secondary text-xs px-3 py-1.5" href="{% url 'mass_detail' mass.id %}">Ver detalhes</a>
-          </div>
-        {% empty %}
-          <div class="text-center py-8">
-            <div class="w-12 h-12 bg-sand rounded-full flex items-center justify-center mx-auto mb-3 text-slate">...</div>
-            <p class="text-slate font-medium">Nenhum evento proximo</p>
-            <p class="text-sm text-slate mt-1">Os proximos eventos aparecerao aqui quando forem agendados.</p>
-          </div>
-        {% endfor %}
-      </div>
-    </div>
-    <div class="grid sm:grid-cols-2 gap-6">
-      <div class="card text-center">
-         <div class="text-4xl font-serif text-moss mb-4">{{ unfilled }}</div>
-        <div class="text-sm text-slate font-medium">Vagas abertas</div>
-        <div class="text-xs text-slate mt-1">Posicoes disponiveis para agendamento</div>
-      </div>
+           {% empty %}
+             <div class="text-center py-6 text-slate">Nenhuma troca aguardando aprovação</div>
+           {% endfor %}
+         </div>
+         <div class="mt-4 text-center">
+           <a href="{% url 'swap_requests' %}?all=true" class="text-sm text-ink-600 hover:text-ink-800 underline">Ver todas as trocas</a>
+         </div>
+       </div>
+       {% endif %}
+
+       <!-- Upcoming Masses -->
       <div class="card">
-        <div class="mb-4">
-          <div class="text-sm text-slate font-medium">Acoes rapidas</div>
-          <div class="text-xs text-slate">Ferramentas de gerenciamento</div>
+        <div class="mb-6">
+          <h3 class="text-xl font-serif text-moss">Proximas missas</h3>
+          <p class="text-sm text-slate mt-2">Alertas de escala incompleta e confirmacoes pendentes.</p>
         </div>
-        <div class="space-y-3">
-          <a class="btn-primary w-full justify-center" href="{% url 'scheduling_dashboard' %}">Recalcular escala</a>
-          <a class="btn-secondary w-full justify-center" href="{% url 'template_list' %}">Gerenciar modelos</a>
+        <div class="space-y-4">
+          {% for mass in upcoming_masses %}
+            <a href="{% url 'mass_detail' mass.id %}" class="group block rounded-xl border border-black/5 bg-white/80 p-5 transition-all hover:bg-white hover:shadow-soft">
+              <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div class="space-y-2">
+                  <div class="text-xs uppercase tracking-wide text-slate">{{ mass.starts_at|date:"l, d/m/Y" }}</div>
+                  <div class="text-base font-medium text-ink">{{ mass.community.code }} - {{ mass.liturgy_label|default:"Missa" }}</div>
+                  <div class="flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate">
+                    {% if mass.open_slots_count %}
+                      <div class="flex items-center gap-2">
+                        <span class="h-2 w-2 rounded-full bg-sun"></span>
+                        <span>Escala incompleta: <span class="font-medium text-ink">{{ mass.open_slots_count }} vaga{{ mass.open_slots_count|pluralize }}</span></span>
+                      </div>
+                    {% endif %}
+                    {% if mass.active_assignments_count %}
+                      <div class="flex items-center gap-2">
+                        <span class="h-2 w-2 rounded-full bg-moss"></span>
+                        <span>Confirmacoes: <span class="font-medium text-ink">{{ mass.confirmed_assignments_count }}/{{ mass.active_assignments_count }}</span></span>
+                      </div>
+                    {% else %}
+                      <div class="flex items-center gap-2">
+                        <span class="h-2 w-2 rounded-full bg-slate"></span>
+                        <span>Sem acolitos escalados</span>
+                      </div>
+                    {% endif %}
+                    {% if mass.pending_confirmations_count %}
+                      <div class="flex items-center gap-2">
+                        <span class="h-2 w-2 rounded-full bg-sun"></span>
+                        <span>Confirmacoes pendentes: <span class="font-medium text-ink">{{ mass.pending_confirmations_count }}</span></span>
+                      </div>
+                    {% endif %}
+                    {% if mass.is_soon and mass.open_slots_count %}
+                      <div class="flex items-center gap-2">
+                        <span class="h-2 w-2 rounded-full bg-sun"></span>
+                        <span class="font-medium text-ink">Missa proxima sem escala</span>
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+                <div class="text-2xl font-serif text-moss">{{ mass.starts_at|date:"H:i" }}</div>
+              </div>
+            </a>
+          {% empty %}
+            <div class="text-center py-8 text-slate">Nenhuma missa proxima agendada</div>
+          {% endfor %}
         </div>
       </div>
     </div>
-  </div>
+  {% else %}
+    <!-- Acolyte View -->
+    <div class="space-y-8">
+
+      <!-- Hero Assignment -->
+      {% if hero_assignment %}
+        {% include "acolytes/_partials/dashboard_hero_assignment.html" %}
+      {% else %}
+        <div class="rounded-2xl bg-white/80 p-10 text-center shadow-soft border border-white/70">
+          <div class="text-lg text-ink font-medium">Nenhuma escala proxima</div>
+          <div class="text-sm text-slate mt-2">Suas proximas atribuicoes aparecem aqui</div>
+        </div>
+      {% endif %}
+
+      <!-- Pending Actions (Inbox) -->
+      {% if pending_confirmations or incoming_swaps %}
+        <div class="rounded-2xl bg-sun-50/70 p-6 shadow-soft border border-sun-100">
+          <div class="mb-6 space-y-2">
+            <div class="text-xs uppercase tracking-[0.2em] text-slate">Acoes pendentes</div>
+            <h2 class="font-serif text-2xl text-ink">Resolva antes de fechar</h2>
+          </div>
+          <div class="space-y-3">
+            {% for confirmation in pending_confirmations %}
+              {% include "acolytes/_partials/dashboard_pending_row.html" %}
+            {% endfor %}
+            {% for swap in incoming_swaps %}
+              <div id="swap-{{ swap.id }}" class="flex flex-col gap-3 rounded-xl bg-white/80 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div class="space-y-1">
+                  <div class="text-sm text-slate">{{ swap.mass_instance.starts_at|date:"D, d M • H:i" }}</div>
+                  <div class="text-base text-ink font-medium">Troca solicitada</div>
+                  <div class="text-sm text-slate">{{ swap.requested_position.name }}</div>
+                </div>
+                <div class="flex w-full gap-2 sm:w-auto">
+                  <button hx-post="{% url 'swap_request_accept' swap.id %}" hx-target="#swap-{{ swap.id }}" hx-swap="outerHTML" class="btn-primary flex-1 sm:flex-none">Aceitar</button>
+                  <button hx-post="{% url 'swap_request_reject' swap.id %}" hx-target="#swap-{{ swap.id }}" hx-swap="outerHTML" class="btn-secondary flex-1 sm:flex-none">Recusar</button>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+
+      <!-- Future Assignments (Horizon) -->
+      {% if horizon_assignments %}
+        <div class="rounded-2xl bg-white/80 p-6 shadow-soft border border-white/70">
+          <div class="mb-6 flex items-center justify-between">
+            <h2 class="font-serif text-2xl text-ink">Agenda futura</h2>
+            <span class="text-xs uppercase tracking-[0.2em] text-slate">Proximas semanas</span>
+          </div>
+          <div class="divide-y divide-sand-100">
+            {% for assignment in horizon_assignments %}
+              <div class="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex items-center gap-4">
+                  <div class="text-sm font-medium text-ink">{{ assignment.slot.mass_instance.starts_at|date:"d M" }}</div>
+                  <div>
+                    <div class="text-base text-ink font-medium">{{ assignment.slot.mass_instance.community.code }} - {{ assignment.slot.position_type.name }}</div>
+                    <div class="text-sm text-slate">{{ assignment.slot.mass_instance.starts_at|date:"H:i" }}</div>
+                  </div>
+                </div>
+                {% if assignment.confirmation.status == 'confirmed' %}
+                  <span class="text-xs font-medium uppercase tracking-[0.2em] text-moss">Confirmado</span>
+                {% else %}
+                  <span class="text-xs font-medium uppercase tracking-[0.2em] text-sun">Pendente</span>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
 {% endif %}
 {% endblock %}

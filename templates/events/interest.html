@@ -9,19 +9,33 @@
   {% else %}
     <form method="post" class="space-y-3">
       {% csrf_token %}
-      {% for item in series %}
-        <label class="check-row">
-          <div>
-            <div class="font-medium">{{ item.title }}</div>
-            <div class="text-sm text-slate">{{ item.start_date }} a {{ item.end_date }}</div>
+      <div class="space-y-4">
+        {% for item in series %}
+          <div class="border border-black/5 rounded-lg p-3 space-y-2">
+            <div>
+              <div class="font-medium">{{ item.title }}</div>
+              <div class="text-sm text-slate">{{ item.start_date }} a {{ item.end_date }}</div>
+            </div>
+            <div class="space-y-2">
+              {% for mass in item.upcoming_masses %}
+                <label class="check-row">
+                  <div>
+                    <div class="font-medium">{{ mass.starts_at|date:"d/m/Y" }} as {{ mass.starts_at|date:"H:i" }}</div>
+                    <div class="text-sm text-slate">{{ mass.community.code }} · {{ mass.liturgy_label|default:item.title }}</div>
+                  </div>
+                  {% with interest=interests|get_item:mass.id %}
+                    <input type="checkbox" name="masses" value="{{ mass.id }}" {% if interest and interest.interested %}checked{% endif %} />
+                  {% endwith %}
+                </label>
+              {% empty %}
+                <p class="text-sm text-slate">Nenhuma missa futura para este evento.</p>
+              {% endfor %}
+            </div>
           </div>
-          {% with interest=interests|get_item:item.id %}
-            <input type="checkbox" name="series" value="{{ item.id }}" {% if interest and interest.interested %}checked{% endif %} />
-          {% endwith %}
-        </label>
-      {% empty %}
-        <p class="text-sm text-slate">Nenhum evento cadastrado.</p>
-      {% endfor %}
+        {% empty %}
+          <p class="text-sm text-slate">Nenhum evento cadastrado.</p>
+        {% endfor %}
+      </div>
       {% if series %}
         <button class="btn-primary">Salvar interesse</button>
       {% endif %}

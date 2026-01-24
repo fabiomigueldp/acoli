@@ -559,6 +559,9 @@ class ParishSettingsForm(forms.Form):
     rotation_penalty = forms.IntegerField(min_value=0, max_value=20, required=False)
     rotation_days = forms.IntegerField(min_value=0, max_value=120, required=False)
     reserve_penalty = forms.IntegerField(min_value=0, max_value=10000, required=False)
+    claim_auto_approve_enabled = forms.BooleanField(required=False)
+    claim_auto_approve_hours = forms.IntegerField(min_value=0, max_value=168, required=False)
+    claim_require_coordination = forms.BooleanField(required=False)
     schedule_weights_json = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 4}))
 
     def __init__(self, *args, **kwargs):
@@ -573,6 +576,9 @@ class ParishSettingsForm(forms.Form):
             self.fields["swap_requires_approval"].initial = parish.swap_requires_approval
             self.fields["notify_on_cancellation"].initial = parish.notify_on_cancellation
             self.fields["auto_assign_on_decline"].initial = parish.auto_assign_on_decline
+            self.fields["claim_auto_approve_enabled"].initial = parish.claim_auto_approve_enabled
+            self.fields["claim_auto_approve_hours"].initial = parish.claim_auto_approve_hours
+            self.fields["claim_require_coordination"].initial = parish.claim_require_coordination
             self.fields["stability_penalty"].initial = weights.get("stability_penalty", 10)
             self.fields["fairness_penalty"].initial = weights.get("fairness_penalty", 1)
             self.fields["credit_weight"].initial = weights.get("credit_weight", 1)
@@ -606,6 +612,10 @@ class ParishSettingsForm(forms.Form):
         parish.swap_requires_approval = self.cleaned_data["swap_requires_approval"]
         parish.notify_on_cancellation = self.cleaned_data["notify_on_cancellation"]
         parish.auto_assign_on_decline = self.cleaned_data["auto_assign_on_decline"]
+        parish.claim_auto_approve_enabled = self.cleaned_data.get("claim_auto_approve_enabled") or False
+        if self.cleaned_data.get("claim_auto_approve_hours") is not None:
+            parish.claim_auto_approve_hours = self.cleaned_data.get("claim_auto_approve_hours")
+        parish.claim_require_coordination = self.cleaned_data.get("claim_require_coordination") or False
 
         weights = parish.schedule_weights or {}
         if "schedule_weights" in self.cleaned_data:
@@ -634,6 +644,9 @@ class ParishSettingsForm(forms.Form):
                 "swap_requires_approval",
                 "notify_on_cancellation",
                 "auto_assign_on_decline",
+                "claim_auto_approve_enabled",
+                "claim_auto_approve_hours",
+                "claim_require_coordination",
                 "schedule_weights",
                 "updated_at",
             ]
@@ -801,6 +814,19 @@ class AcolyteLinkForm(forms.Form):
         if not user_exists and (not full_name or not password):
             raise forms.ValidationError("Informe nome e senha para criar o usuario.")
         return cleaned
+
+
+class AcolyteCreateLoginForm(forms.Form):
+    email = forms.EmailField()
+    password = forms.CharField(widget=forms.PasswordInput)
+    send_invite = forms.BooleanField(required=False)
+
+    def clean_email(self):
+        email = self.cleaned_data['email']
+        User = get_user_model()
+        if User.objects.filter(email=email).exists():
+            raise forms.ValidationError("Este email ja esta em uso.")
+        return email
 
 
 class ReplacementResolveForm(forms.Form):

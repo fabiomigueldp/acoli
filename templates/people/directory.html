@@ -3,116 +3,145 @@
 {% block title %}Pessoas{% endblock %}
 {% block content %}
 <div class="space-y-6">
-  <div class="card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-    <div>
-      <h2 class="font-serif text-xl">Pessoas</h2>
-      <p class="text-sm text-slate">Gerencie membros, acessos e perfis de acolitos em um unico lugar.</p>
-    </div>
-    <a class="btn-primary" href="{% url 'people_create' %}">Nova pessoa</a>
-  </div>
-
-  <form method="get" class="card grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-    <div class="sm:col-span-2 lg:col-span-2">
-      <label class="label" for="search">Busca</label>
-      <input id="search" name="q" placeholder="Nome, email ou telefone" value="{{ filters.q }}" />
-    </div>
+   <div class="card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
      <div>
-       <label class="label">Comunidade</label>
-       <div class="custom-select">
-         <input type="hidden" name="community" value="{{ filters.community }}">
-         <button type="button" class="custom-select-button">
-           <span class="selected-text">
-             {% if filters.community %}
+       <h2 class="font-serif text-xl">Pessoas</h2>
+       <p class="text-sm text-slate">Gerencie membros, acessos e perfis de acolitos em um unico lugar.</p>
+     </div>
+     <a class="btn-primary" href="{% url 'people_create' %}">Nova pessoa</a>
+   </div>
+
+   <!-- Search and Filters Section -->
+   <div class="card space-y-4">
+     <!-- Search Bar -->
+     <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+       <form method="get" class="flex-1 max-w-md">
+         <input
+           id="search"
+           name="q"
+           placeholder="Buscar pessoas..."
+           value="{{ filters.q }}"
+           class="w-full px-3 py-2 border border-sand-200 rounded-lg focus:ring-2 focus:ring-moss-500 focus:border-transparent"
+           hx-get="{% url 'people_directory' %}"
+           hx-trigger="input changed delay:500ms"
+           hx-target="#people-list"
+           hx-swap="innerHTML"
+         />
+       </form>
+       <button
+         class="btn-secondary flex items-center gap-2"
+         onclick="document.getElementById('advanced-filters').classList.toggle('hidden')"
+         type="button"
+       >
+         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
+         </svg>
+         Filtros avançados
+       </button>
+       <a class="btn-secondary" href="{% url 'people_directory' %}">Limpar</a>
+     </div>
+
+     <!-- Advanced Filters (Hidden by default) -->
+     <div id="advanced-filters" class="hidden">
+       <form method="get" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+         <input type="hidden" name="q" value="{{ filters.q }}" />
+         <div>
+           <label class="label">Comunidade</label>
+           <div class="custom-select">
+             <input type="hidden" name="community" value="{{ filters.community }}">
+             <button type="button" class="custom-select-button">
+               <span class="selected-text">
+                 {% if filters.community %}
+                   {% for community in communities %}
+                     {% if filters.community == community.id|stringformat:"s" %}{{ community.code }}{% endif %}
+                   {% endfor %}
+                 {% else %}
+                   Todas
+                 {% endif %}
+               </span>
+             </button>
+             <div class="custom-select-options">
+               <button type="button" class="custom-select-option {% if not filters.community %}selected{% endif %}" data-value="">Todas</button>
                {% for community in communities %}
-                 {% if filters.community == community.id|stringformat:"s" %}{{ community.code }}{% endif %}
+                 <button type="button" class="custom-select-option {% if filters.community == community.id|stringformat:"s" %}selected{% endif %}" data-value="{{ community.id }}">{{ community.code }}</button>
                {% endfor %}
-             {% else %}
-               Todas
-             {% endif %}
-           </span>
-         </button>
-         <div class="custom-select-options">
-           <button type="button" class="custom-select-option {% if not filters.community %}selected{% endif %}" data-value="">Todas</button>
-           {% for community in communities %}
-             <button type="button" class="custom-select-option {% if filters.community == community.id|stringformat:"s" %}selected{% endif %}" data-value="{{ community.id }}">{{ community.code }}</button>
-           {% endfor %}
+             </div>
+           </div>
          </div>
-       </div>
-     </div>
-     <div>
-       <label class="label">Experiencia</label>
-       <div class="custom-select">
-         <input type="hidden" name="experience" value="{{ filters.experience }}">
-         <button type="button" class="custom-select-button">
-           <span class="selected-text">
-             {% for value,label in experience_choices %}
-               {% if filters.experience == value %}{{ label }}{% endif %}
-             {% empty %}
-               Todas
-             {% endfor %}
-           </span>
-         </button>
-         <div class="custom-select-options">
-           <button type="button" class="custom-select-option {% if not filters.experience %}selected{% endif %}" data-value="">Todas</button>
-           {% for value,label in experience_choices %}
-             <button type="button" class="custom-select-option {% if filters.experience == value %}selected{% endif %}" data-value="{{ value }}">{{ label }}</button>
-           {% endfor %}
+         <div>
+           <label class="label">Experiencia</label>
+           <div class="custom-select">
+             <input type="hidden" name="experience" value="{{ filters.experience }}">
+             <button type="button" class="custom-select-button">
+               <span class="selected-text">
+                 {% for value,label in experience_choices %}
+                   {% if filters.experience == value %}{{ label }}{% endif %}
+                 {% endfor %}
+                 {% if not filters.experience %}Todas{% endif %}
+               </span>
+             </button>
+             <div class="custom-select-options">
+               <button type="button" class="custom-select-option {% if not filters.experience %}selected{% endif %}" data-value="">Todas</button>
+               {% for value,label in experience_choices %}
+                 <button type="button" class="custom-select-option {% if filters.experience == value %}selected{% endif %}" data-value="{{ value }}">{{ label }}</button>
+               {% endfor %}
+             </div>
+           </div>
          </div>
-       </div>
-     </div>
-     <div>
-       <label class="label">Status</label>
-       <div class="custom-select">
-         <input type="hidden" name="status" value="{{ filters.status }}">
-         <button type="button" class="custom-select-button">
-           <span class="selected-text">
-             {% if filters.status == "active" %}Ativo{% elif filters.status == "inactive" %}Inativo{% else %}Todos{% endif %}
-           </span>
-         </button>
-         <div class="custom-select-options">
-           <button type="button" class="custom-select-option {% if not filters.status %}selected{% endif %}" data-value="">Todos</button>
-           <button type="button" class="custom-select-option {% if filters.status == "active" %}selected{% endif %}" data-value="active">Ativo</button>
-           <button type="button" class="custom-select-option {% if filters.status == "inactive" %}selected{% endif %}" data-value="inactive">Inativo</button>
+         <div>
+           <label class="label">Status</label>
+           <div class="custom-select">
+             <input type="hidden" name="status" value="{{ filters.status }}">
+             <button type="button" class="custom-select-button">
+               <span class="selected-text">
+                 {% if filters.status == "active" %}Ativo{% elif filters.status == "inactive" %}Inativo{% else %}Todos{% endif %}
+               </span>
+             </button>
+             <div class="custom-select-options">
+               <button type="button" class="custom-select-option {% if not filters.status %}selected{% endif %}" data-value="">Todos</button>
+               <button type="button" class="custom-select-option {% if filters.status == "active" %}selected{% endif %}" data-value="active">Ativo</button>
+               <button type="button" class="custom-select-option {% if filters.status == "inactive" %}selected{% endif %}" data-value="inactive">Inativo</button>
+             </div>
+           </div>
          </div>
-       </div>
-     </div>
-     <div>
-       <label class="label">Papel</label>
-       <div class="custom-select">
-         <input type="hidden" name="role" value="{{ filters.role }}">
-         <button type="button" class="custom-select-button">
-           <span class="selected-text">
-             {% if filters.role %}
+         <div>
+           <label class="label">Papel</label>
+           <div class="custom-select">
+             <input type="hidden" name="role" value="{{ filters.role }}">
+             <button type="button" class="custom-select-button">
+               <span class="selected-text">
+                 {% if filters.role %}
+                   {% for role in roles %}
+                     {% if filters.role == role.code %}{{ role.name }}{% endif %}
+                   {% endfor %}
+                 {% else %}
+                   Todos
+                 {% endif %}
+               </span>
+             </button>
+             <div class="custom-select-options">
+               <button type="button" class="custom-select-option {% if not filters.role %}selected{% endif %}" data-value="">Todos</button>
                {% for role in roles %}
-                 {% if filters.role == role.code %}{{ role.name }}{% endif %}
+                 <button type="button" class="custom-select-option {% if filters.role == role.code %}selected{% endif %}" data-value="{{ role.code }}">{{ role.name }}</button>
                {% endfor %}
-             {% else %}
-               Todos
-             {% endif %}
-           </span>
-         </button>
-         <div class="custom-select-options">
-           <button type="button" class="custom-select-option {% if not filters.role %}selected{% endif %}" data-value="">Todos</button>
-           {% for role in roles %}
-             <button type="button" class="custom-select-option {% if filters.role == role.code %}selected{% endif %}" data-value="{{ role.code }}">{{ role.name }}</button>
-           {% endfor %}
+             </div>
+           </div>
          </div>
-       </div>
+         <div class="flex items-end">
+           <button class="btn-primary" type="submit">Aplicar</button>
+         </div>
+       </form>
      </div>
-    <div class="flex items-center gap-2 sm:col-span-2 lg:col-span-5">
-      <button class="btn-primary" type="submit">Aplicar filtros</button>
-      <a class="btn-secondary" href="{% url 'people_directory' %}">Limpar</a>
-    </div>
-  </form>
+   </div>
 
-  <div class="space-y-3">
-    {% for member in members %}
+   <div id="people-list" class="space-y-3">
+     {% for member in members %}
       <a class="block card hover:shadow-soft transition" href="{{ member.detail_url }}">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div class="flex items-center gap-3">
-            <div class="h-11 w-11 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center font-semibold">
-              {{ member.name|initials }}
-            </div>
+             <div class="h-11 w-11 rounded-full bg-sand-100 text-ink flex items-center justify-center font-semibold">
+               {{ member.name|initials }}
+             </div>
             <div>
               <div class="font-medium">{{ member.name }}</div>
               <div class="text-sm text-slate">
@@ -169,9 +198,9 @@
                 <div class="h-full bg-moss" style="width: {{ member.stats.reliability_score }}%;"></div>
               </div>
               <div>{{ member.stats.reliability_score }}%</div>
-            {% else %}
-              <div>n/d</div>
-            {% endif %}
+             {% else %}
+               <div>n/d</div>
+             {% endif %}
           </div>
           <div class="flex flex-col gap-1 text-xs text-slate">
             <div>30 dias: <span class="text-ink font-medium">{{ member.stats.services_last_30_days|default:"n/d" }}</span></div>
@@ -179,9 +208,9 @@
           </div>
         </div>
       </a>
-    {% empty %}
-      <div class="card text-sm text-slate">Nenhuma pessoa encontrada com os filtros atuais.</div>
-    {% endfor %}
+     {% empty %}
+       <div class="card text-sm text-slate">Nenhuma pessoa encontrada com os filtros atuais.</div>
+     {% endfor %}
   </div>
 </div>
 {% endblock %}

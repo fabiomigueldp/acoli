@@ -26,6 +26,9 @@ class Parish(TimeStampedModel):
     swap_requires_approval = models.BooleanField(default=True)
     notify_on_cancellation = models.BooleanField(default=True)
     auto_assign_on_decline = models.BooleanField(default=False)
+    claim_auto_approve_enabled = models.BooleanField(default=False)
+    claim_auto_approve_hours = models.PositiveIntegerField(default=48)
+    claim_require_coordination = models.BooleanField(default=False)
 
     def __str__(self):
         return self.name
@@ -335,6 +338,17 @@ class MassInstance(TimeStampedModel):
         return f"{self.community.code} - {self.starts_at}"
 
 
+class MassInterest(TimeStampedModel):
+    parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
+    mass_instance = models.ForeignKey(MassInstance, on_delete=models.CASCADE)
+    acolyte = models.ForeignKey(AcolyteProfile, on_delete=models.CASCADE)
+    interested = models.BooleanField(default=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        unique_together = ("mass_instance", "acolyte")
+
+
 class MassOverride(TimeStampedModel):
     OVERRIDE_CHOICES = [
         ("cancel_instance", "Cancelar missa"),
@@ -388,6 +402,7 @@ class Assignment(TimeStampedModel):
         ("manual_unassign", "Removido manualmente"),
         ("moved_to_another_slot", "Movido para outra posicao"),
         ("swap", "Trocado"),
+        ("claim_transfer", "Transferido por solicitacao"),
     ]
     STATE_CHOICES = [
         ("proposed", "Proposta"),
@@ -455,6 +470,54 @@ class SwapRequest(TimeStampedModel):
     notes = models.TextField(blank=True)
     open_to_admin = models.BooleanField(default=False)
     group_id = models.UUIDField(null=True, blank=True, db_index=True)
+
+
+class PositionClaimRequest(TimeStampedModel):
+    STATUS_CHOICES = [
+        ("pending_target", "Aguardando titular"),
+        ("pending_coordination", "Aguardando coordenacao"),
+        ("scheduled_auto_approve", "Aguardando prazo"),
+        ("approved", "Aprovada"),
+        ("rejected", "Recusada"),
+        ("expired", "Expirada"),
+    ]
+    APPROVAL_CHOICES = [
+        ("target", "Titular"),
+        ("coordination", "Coordenacao"),
+        ("auto", "Automatica"),
+    ]
+    RESOLUTION_CHOICES = [
+        ("holder_approved", "Titular aprovou"),
+        ("holder_confirmed", "Titular confirmou"),
+        ("holder_rejected", "Titular recusou"),
+        ("holder_selected_other", "Outro solicitante escolhido"),
+        ("coordination_approved", "Aprovada pela coordenacao"),
+        ("coordination_rejected", "Recusada pela coordenacao"),
+        ("auto_approved", "Aprovada pelo prazo"),
+        ("auto_expired", "Expirada pelo prazo"),
+        ("requestor_canceled", "Cancelada pelo solicitante"),
+        ("assignment_changed", "Escala alterada"),
+    ]
+    parish = models.ForeignKey(Parish, on_delete=models.CASCADE)
+    slot = models.ForeignKey(AssignmentSlot, on_delete=models.CASCADE, related_name="position_claims")
+    requestor_acolyte = models.ForeignKey(
+        AcolyteProfile, on_delete=models.CASCADE, related_name="position_claim_requests"
+    )
+    target_assignment = models.ForeignKey(
+        Assignment, on_delete=models.SET_NULL, null=True, blank=True, related_name="position_claims"
+    )
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="pending_target")
+    approval_mode = models.CharField(max_length=30, choices=APPROVAL_CHOICES, blank=True)
+    resolution_reason = models.CharField(max_length=40, choices=RESOLUTION_CHOICES, blank=True)
+    auto_approve_at = models.DateTimeField(null=True, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["slot", "status"]),
+            models.Index(fields=["requestor_acolyte", "status"]),
+        ]
 
 
 class ReplacementRequest(TimeStampedModel):

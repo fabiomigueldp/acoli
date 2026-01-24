@@ -94,7 +94,7 @@
     </div>
     <div class="space-y-4">
       {% for instance in instances %}
-        <a class="block border border-black/8 rounded-xl p-4 hover:bg-sand/40 hover:border-moss/20 transition-all duration-200 hover:shadow-sm group" href="{% url 'mass_detail' instance.id %}">
+        <a class="block border border-black/8 rounded-xl p-4 hover:bg-sand/40 hover:border-moss/20 transition-all duration-200 hover:shadow-sm group {% if instance.id in my_confirmed_ids %}bg-moss-50/70 border-moss-200{% elif instance.id in my_pending_ids %}bg-sun-50/70 border-sun-200{% elif instance.id in pending_confirmation_ids %}bg-sun-50/30 border-sun-200{% endif %}" href="{% url 'mass_detail' instance.id %}">
           <div class="flex items-center justify-between mb-2">
             <div class="flex items-center gap-3">
               <div class="w-10 h-10 bg-slate rounded-full flex items-center justify-center text-white font-serif text-sm font-bold">
@@ -142,7 +142,7 @@
             <div class="text-sm font-medium text-ink mb-2">{{ day|date:"d" }}</div>
             <div class="space-y-2">
               {% for instance in instances_by_day|get_list_item:day %}
-                <a class="block text-xs rounded-lg border border-black/8 px-3 py-2 hover:bg-moss/5 hover:border-moss/20 transition-all duration-200 group" href="{% url 'mass_detail' instance.id %}">
+                <a class="block text-xs rounded-lg border border-black/8 px-3 py-2 hover:bg-moss/5 hover:border-moss/20 transition-all duration-200 group {% if instance.id in my_confirmed_ids %}bg-moss-50/70 border-moss-200{% elif instance.id in my_pending_ids %}bg-sun-50/70 border-sun-200{% elif instance.id in pending_confirmation_ids %}bg-sun-50/30 border-sun-200{% endif %}" href="{% url 'mass_detail' instance.id %}">
                   <div class="font-semibold text-ink group-hover:text-moss transition-colors">{{ instance.starts_at|date:"H:i" }}</div>
                   <div class="text-slate font-medium">{{ instance.community.code }}</div>
                   <div class="text-slate text-xs mt-0.5">{{ instance.liturgy_label|default:"Missa" }}</div>

@@ -14,7 +14,7 @@ from core.models import (
     AcolyteStats,
     Assignment,
     AssignmentSlot,
-    EventInterest,
+    MassInterest,
 )
 from core.services.audit import log_audit
 from django.db import transaction
@@ -72,7 +72,7 @@ def _build_candidate_map(slots, acolytes, qualifications, interest_map=None):
         event_series = slot.mass_instance.event_series
         pool_ids = None
         if event_series and getattr(event_series, "candidate_pool", "all") == "interested_only":
-            pool_ids = interest_map.get(event_series.id, set()) if interest_map else set()
+            pool_ids = interest_map.get(slot.mass_instance_id, set()) if interest_map else set()
         for acolyte in acolytes:
             if not qualified_map.get((acolyte.id, slot.position_type_id)):
                 continue
@@ -132,8 +132,8 @@ def solve_schedule(parish, instances, consolidation_days, weights, allow_changes
         pref_by_acolyte[pref.acolyte_id].append(pref)
 
     interest_map = defaultdict(set)
-    for interest in EventInterest.objects.filter(parish=parish, interested=True):
-        interest_map[interest.event_series_id].add(interest.acolyte_id)
+    for interest in MassInterest.objects.filter(parish=parish, interested=True):
+        interest_map[interest.mass_instance_id].add(interest.acolyte_id)
     candidates = _build_candidate_map(decision_slots, acolytes, qualifications, interest_map=interest_map)
     max_candidates = weights.get("max_candidates_per_slot")
     reserve_penalty = int(weights.get("reserve_penalty", 1000))

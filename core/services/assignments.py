@@ -62,6 +62,10 @@ def deactivate_assignment(assignment, reason, actor=None):
         "deactivate",
         {"reason": reason, "slot_id": assignment.slot_id},
     )
+    if reason != "claim_transfer":
+        from core.services.claims import expire_claims_for_assignment
+
+        expire_claims_for_assignment(assignment, "assignment_changed", actor=actor)
     return assignment
 
 

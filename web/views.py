@@ -36,9 +36,9 @@ from core.models import (
     Confirmation,
     EventOccurrence,
     EventSeries,
-    EventInterest,
     FamilyGroup,
     FunctionType,
+    MassInterest,
     MassInstance,
     MassTemplate,
     MassOverride,
@@ -46,6 +46,7 @@ from core.models import (
     ParishMembership,
     PositionType,
     PositionTypeFunction,
+    PositionClaimRequest,
     RequirementProfile,
     RequirementProfilePosition,
     ReplacementRequest,
@@ -56,12 +57,21 @@ from core.services.audit import log_audit
 from core.services.calendar_generation import generate_instances_for_parish
 from core.services.event_series import apply_event_occurrences
 from core.services.assignments import ConcurrentUpdateError, assign_manual, deactivate_assignment
+from core.services.claims import (
+    choose_claim,
+    create_position_claim,
+    expire_claims_for_assignment,
+    reject_claim,
+    cancel_claim,
+    approve_claim,
+)
 from core.services.publishing import publish_assignments
 from core.services.slots import sync_slots_for_instance
 from core.services.permissions import (
     ADMIN_ROLE_CODES,
     require_active_parish,
     require_parish_roles,
+    request_has_role,
     user_has_role,
     users_with_roles,
 )
@@ -80,6 +90,7 @@ from web.forms import (
     AcolyteAvailabilityRuleForm,
     AcolyteIntentForm,
     AcolyteLinkForm,
+    AcolyteCreateLoginForm,
     AcolytePreferenceForm,
     AssignToSlotForm,
     CommunityForm,
@@ -115,17 +126,173 @@ def dashboard(request):
     parish = request.active_parish
     if not parish:
         return render(request, "dashboard.html", {"missing_parish": True})
-    upcoming = MassInstance.objects.filter(parish=parish, starts_at__gte=timezone.now()).order_by("starts_at")[:5]
-    unfilled = AssignmentSlot.objects.filter(parish=parish, status="open", required=True).count()
-    return render(
-        request,
-        "dashboard.html",
-        {
-            "parish": parish,
-            "upcoming": upcoming,
-            "unfilled": unfilled,
-        },
-)
+
+    is_admin = request_has_role(request, ADMIN_ROLE_CODES)
+    acolyte = parish.acolytes.filter(user=request.user).first()
+    dashboard_view = "admin" if is_admin else "acolyte"
+    requested_view = request.GET.get("view")
+    if is_admin:
+        if requested_view == "acolyte" and acolyte:
+            dashboard_view = "acolyte"
+        elif requested_view == "admin":
+            dashboard_view = "admin"
+
+    context = {
+        "parish": parish,
+        "is_admin": is_admin,
+        "acolyte": acolyte,
+        "dashboard_view": dashboard_view,
+    }
+
+    if dashboard_view == "admin":
+        # Management by Exception
+        now = timezone.now()
+        cutoff = now + timedelta(days=14)
+        soon_cutoff = now + timedelta(days=2)
+        open_slots_count = AssignmentSlot.objects.filter(
+            parish=parish,
+            status="open",
+            required=True,
+            mass_instance__starts_at__gte=now,
+            mass_instance__starts_at__lte=cutoff,
+        ).count()
+        pending_swaps = SwapRequest.objects.filter(
+            parish=parish,
+            status__in=["pending", "awaiting_approval"]
+        ).count()
+        pending_swap_approvals = SwapRequest.objects.filter(
+            parish=parish,
+            status="awaiting_approval"
+        ).select_related(
+            "mass_instance__community",
+            "requestor_acolyte",
+            "target_acolyte",
+            "from_slot__position_type",
+            "to_slot__position_type"
+        ).order_by("mass_instance__starts_at")[:5]  # Limit to 5 most recent
+        pending_replacements = ReplacementRequest.objects.filter(
+            parish=parish,
+            status="pending"
+        ).count()
+        upcoming_masses = (
+            MassInstance.objects.filter(parish=parish, starts_at__gte=now)
+            .select_related("community")
+            .annotate(
+                open_slots_count=Count(
+                    "slots",
+                    filter=Q(slots__status="open", slots__required=True),
+                    distinct=True,
+                ),
+                active_assignments_count=Count(
+                    "slots__assignments",
+                    filter=Q(slots__assignments__is_active=True),
+                    distinct=True,
+                ),
+                confirmed_assignments_count=Count(
+                    "slots__assignments__confirmation",
+                    filter=Q(
+                        slots__assignments__is_active=True,
+                        slots__assignments__confirmation__status="confirmed",
+                    ),
+                    distinct=True,
+                ),
+                pending_confirmations_count=Count(
+                    "slots__assignments",
+                    filter=Q(slots__assignments__is_active=True)
+                    & (
+                        Q(slots__assignments__confirmation__status="pending")
+                        | Q(slots__assignments__confirmation__isnull=True)
+                    ),
+                    distinct=True,
+                ),
+            )
+            .order_by("starts_at")[:5]
+        )
+        upcoming_masses = list(upcoming_masses)
+        for mass in upcoming_masses:
+            mass.is_soon = mass.starts_at <= soon_cutoff
+        context.update({
+            "open_slots_count": open_slots_count,
+            "pending_swaps": pending_swaps,
+            "pending_swap_approvals": pending_swap_approvals,
+            "pending_replacements": pending_replacements,
+            "upcoming_masses": upcoming_masses,
+        })
+    else:
+        # Acolyte context
+        if acolyte:
+            # Hero: Next future assignment
+            hero_assignment = Assignment.objects.filter(
+                parish=parish,
+                acolyte=acolyte,
+                is_active=True,
+                assignment_state__in=["published", "locked"],
+                slot__mass_instance__starts_at__gte=timezone.now(),
+            ).select_related(
+                "slot__mass_instance__community",
+                "slot__position_type",
+            ).order_by("slot__mass_instance__starts_at").first()
+
+            # Inbox: Pending confirmations and incoming swaps (excluding next assignment)
+            pending_confirmations = Confirmation.objects.filter(
+                parish=parish,
+                assignment__acolyte=acolyte,
+                assignment__is_active=True,
+                assignment__assignment_state__in=["published", "locked"],
+                assignment__slot__mass_instance__status="scheduled",
+                status="pending",
+            ).select_related(
+                "assignment__slot__mass_instance",
+                "assignment__slot__position_type",
+            ).order_by("assignment__slot__mass_instance__starts_at")
+
+            incoming_swaps = SwapRequest.objects.filter(
+                parish=parish,
+                target_acolyte=acolyte,
+                status="awaiting_approval"
+            ).select_related("mass_instance")
+
+            # Exclude next assignment from pending confirmations if it exists
+            if hero_assignment:
+                pending_confirmations = pending_confirmations.exclude(assignment=hero_assignment)
+
+            claim_slot_ids = set()
+            if hero_assignment:
+                claim_slot_ids.add(hero_assignment.slot_id)
+            claim_slot_ids.update(
+                pending_confirmations.values_list("assignment__slot_id", flat=True)
+            )
+            claims_by_slot = _claim_map_for_slots(parish, claim_slot_ids)
+
+            # Horizon: Next 4 confirmed assignments after hero
+            horizon_assignments = Assignment.objects.filter(
+                parish=parish,
+                acolyte=acolyte,
+                is_active=True,
+                assignment_state__in=["published", "locked"],
+                slot__mass_instance__starts_at__gte=timezone.now(),
+            ).select_related(
+                "slot__mass_instance__community",
+                "slot__position_type",
+            ).order_by("slot__mass_instance__starts_at")
+
+            if hero_assignment:
+                horizon_assignments = horizon_assignments.exclude(id=hero_assignment.id)[:4]
+            else:
+                horizon_assignments = horizon_assignments[:4]
+
+            context.update({
+                "acolyte": acolyte,
+                "hero_assignment": hero_assignment,
+                "pending_confirmations": pending_confirmations,
+                "incoming_swaps": incoming_swaps,
+                "horizon_assignments": horizon_assignments,
+                "claims_by_slot": claims_by_slot,
+            })
+        else:
+            context["acolyte"] = None
+
+    return render(request, "dashboard.html", context)
 
 
 def _htmx_or_redirect(request, template_name, context, redirect_url, success_message=None):
@@ -176,6 +343,27 @@ def calendar_month(request):
     for instance in instances:
         instances_by_day.setdefault(instance.starts_at.date(), []).append(instance)
 
+    my_confirmed_ids = set()
+    my_pending_ids = set()
+    pending_confirmation_ids = set()
+    acolyte = parish.acolytes.filter(user=request.user).first()
+    instance_ids = [instance.id for instance in instances]
+    if instance_ids:
+        assignments = Assignment.objects.filter(
+            parish=parish,
+            slot__mass_instance_id__in=instance_ids,
+            is_active=True,
+        ).select_related("confirmation")
+        for assignment in assignments:
+            confirmation = getattr(assignment, "confirmation", None)
+            if not confirmation or confirmation.status == "pending":
+                pending_confirmation_ids.add(assignment.slot.mass_instance_id)
+            if acolyte and assignment.acolyte_id == acolyte.id:
+                if confirmation and confirmation.status == "confirmed":
+                    my_confirmed_ids.add(assignment.slot.mass_instance_id)
+                else:
+                    my_pending_ids.add(assignment.slot.mass_instance_id)
+
     month_grid = cal.Calendar(firstweekday=6).monthdatescalendar(year, month)
     prev_month = month_start - timedelta(days=1)
     next_month = month_end + timedelta(days=1)
@@ -193,6 +381,9 @@ def calendar_month(request):
             "instances_by_day": instances_by_day,
             "instances": instances,
             "communities": communities,
+            "my_confirmed_ids": my_confirmed_ids,
+            "my_pending_ids": my_pending_ids,
+            "pending_confirmation_ids": pending_confirmation_ids,
             "filters": {"community": community_id or "", "status": status or "", "kind": kind or ""},
             "prev_month": {"year": prev_month.year, "month": prev_month.month},
             "next_month": {"year": next_month.year, "month": next_month.month},
@@ -481,7 +672,7 @@ def mass_detail(request, instance_id):
     parish = request.active_parish
     instance = get_object_or_404(MassInstance, parish=parish, id=instance_id)
     sync_slots_for_instance(instance)
-    slots_context = _build_slots_context(parish, instance)
+    slots_context = _build_slots_context(parish, instance, request.user)
     update_form = MassInstanceUpdateForm(instance=instance, parish=parish)
     move_form = MassInstanceMoveForm(
         parish=parish,
@@ -535,13 +726,13 @@ def _slot_candidate_list(parish, slot, query=None):
     return [acolyte for acolyte in acolytes if is_acolyte_available(acolyte, slot.mass_instance)]
 
 
-def _build_slots_context(parish, instance):
+def _build_slots_context(parish, instance, user=None):
     """Build the context needed for rendering the slots section."""
     slots = list(
         instance.slots.select_related("position_type").prefetch_related(
             Prefetch(
                 "assignments",
-                queryset=Assignment.objects.filter(is_active=True).select_related("acolyte"),
+                queryset=Assignment.objects.filter(is_active=True).select_related("acolyte", "confirmation"),
                 to_attr="active_assignments",
             ),
         )
@@ -570,7 +761,188 @@ def _build_slots_context(parish, instance):
         )
         for slot in slots
     }
-    return {"instance": instance, "slots": slots, "slot_suggestions": slot_suggestions}
+    claims_by_slot = defaultdict(list)
+    user_claims_by_slot = {}
+    user_acolyte = None
+    user_has_assignment_in_instance = False
+    if user:
+        user_acolyte = parish.acolytes.filter(user=user).first()
+        if user_acolyte:
+            user_has_assignment_in_instance = user_acolyte.id in assigned_acolyte_ids
+    claim_statuses = ["pending_target", "scheduled_auto_approve", "pending_coordination"]
+    actionable_statuses = {"pending_target", "scheduled_auto_approve"}
+    claims = PositionClaimRequest.objects.filter(
+        parish=parish,
+        slot__mass_instance=instance,
+        status__in=claim_statuses,
+    ).select_related("requestor_acolyte", "target_assignment").order_by("created_at")
+    for claim in claims:
+        if claim.status in actionable_statuses:
+            claims_by_slot[claim.slot_id].append(claim)
+        if user_acolyte and claim.requestor_acolyte_id == user_acolyte.id:
+            user_claims_by_slot[claim.slot_id] = claim
+    return {
+        "instance": instance,
+        "slots": slots,
+        "slot_suggestions": slot_suggestions,
+        "claims_by_slot": claims_by_slot,
+        "user_claims_by_slot": user_claims_by_slot,
+        "user_acolyte": user_acolyte,
+        "user_has_assignment_in_instance": user_has_assignment_in_instance,
+        "claim_auto_approve_enabled": parish.claim_auto_approve_enabled,
+        "claim_auto_approve_hours": parish.claim_auto_approve_hours,
+    }
+
+
+def _claim_map_for_slots(parish, slot_ids, statuses=None):
+    if not slot_ids:
+        return {}
+    status_filter = statuses or ["pending_target", "scheduled_auto_approve"]
+    claims = PositionClaimRequest.objects.filter(
+        parish=parish,
+        slot_id__in=slot_ids,
+        status__in=status_filter,
+    ).select_related("requestor_acolyte").order_by("created_at")
+    claims_by_slot = defaultdict(list)
+    for claim in claims:
+        claims_by_slot[claim.slot_id].append(claim)
+    return claims_by_slot
+
+
+def _assignment_card_context(parish, assignment):
+    mass_id = assignment.slot.mass_instance_id
+    team_members = Assignment.objects.filter(
+        parish=parish,
+        is_active=True,
+        slot__mass_instance_id=mass_id,
+    ).select_related("acolyte").order_by("acolyte__display_name")
+    team_names_map = {}
+    mass_has_multiple_slots = {}
+    if team_members:
+        names = [member.acolyte.display_name for member in team_members]
+        team_names_map[mass_id] = ", ".join(names)
+        mass_has_multiple_slots[mass_id] = len(names) > 1
+    pending_swaps = SwapRequest.objects.filter(
+        parish=parish,
+        requestor_acolyte=assignment.acolyte,
+        status="pending",
+        from_slot__isnull=False,
+    ).values_list("from_slot_id", flat=True)
+    pending_swaps_by_slot = {slot_id: True for slot_id in pending_swaps}
+    claims_by_slot = _claim_map_for_slots(parish, [assignment.slot_id])
+    return {
+        "assignment": assignment,
+        "team_names_map": team_names_map,
+        "mass_has_multiple_slots": mass_has_multiple_slots,
+        "pending_swaps_by_slot": pending_swaps_by_slot,
+        "claims_by_slot": claims_by_slot,
+    }
+
+
+def _claim_card_context(request, claim):
+    return {
+        "claim": claim,
+        "can_manage_parish": user_has_role(request.user, claim.parish, ADMIN_ROLE_CODES),
+        "claim_status_labels": dict(PositionClaimRequest.STATUS_CHOICES),
+        "claim_reason_labels": dict(PositionClaimRequest.RESOLUTION_CHOICES),
+    }
+
+
+def _claim_response(request, claim, return_target, success_message=None):
+    parish = claim.parish
+    if return_target == "slots_section":
+        return _htmx_or_redirect(
+            request,
+            "calendar/_slots_section.html",
+            _build_slots_context(parish, claim.slot.mass_instance, request.user),
+            reverse("mass_detail", args=[claim.slot.mass_instance_id]),
+            success_message,
+        )
+
+    if return_target == "dashboard_hero":
+        assignment = Assignment.objects.filter(id=claim.target_assignment_id, is_active=True).select_related(
+            "slot__mass_instance__community",
+            "slot__position_type",
+        ).first()
+        if assignment:
+            return _htmx_or_redirect(
+                request,
+                "acolytes/_partials/dashboard_hero_assignment.html",
+                {
+                    "hero_assignment": assignment,
+                    "claims_by_slot": _claim_map_for_slots(parish, [assignment.slot_id]),
+                },
+                "dashboard",
+                success_message,
+            )
+        if request.headers.get("HX-Request"):
+            response = HttpResponse("")
+            if success_message:
+                response["HX-Success-Message"] = success_message
+            return response
+        return redirect("dashboard")
+
+    if return_target == "dashboard_pending":
+        confirmation = Confirmation.objects.filter(assignment_id=claim.target_assignment_id).select_related(
+            "assignment__slot__mass_instance",
+            "assignment__slot__position_type",
+        ).first()
+        if confirmation and confirmation.assignment.is_active:
+            return _htmx_or_redirect(
+                request,
+                "acolytes/_partials/dashboard_pending_row.html",
+                {
+                    "confirmation": confirmation,
+                    "claims_by_slot": _claim_map_for_slots(parish, [confirmation.assignment.slot_id]),
+                },
+                "dashboard",
+                success_message,
+            )
+        if request.headers.get("HX-Request"):
+            response = HttpResponse("")
+            if success_message:
+                response["HX-Success-Message"] = success_message
+            return response
+        return redirect("dashboard")
+
+    if return_target == "assignment_card":
+        assignment = Assignment.objects.filter(id=claim.target_assignment_id, is_active=True).select_related(
+            "slot__mass_instance__community",
+            "slot__position_type",
+            "confirmation",
+        ).first()
+        if assignment:
+            return _htmx_or_redirect(
+                request,
+                "acolytes/_partials/assignment_card.html",
+                _assignment_card_context(parish, assignment),
+                "my_assignments",
+                success_message,
+            )
+        if request.headers.get("HX-Request"):
+            response = HttpResponse("")
+            if success_message:
+                response["HX-Success-Message"] = success_message
+            return response
+        return redirect("my_assignments")
+
+    if return_target == "claim_card":
+        return _htmx_or_redirect(
+            request,
+            "acolytes/_partials/claim_card.html",
+            _claim_card_context(request, claim),
+            "swap_requests",
+            success_message,
+        )
+
+    if request.headers.get("HX-Request"):
+        response = HttpResponse("")
+        if success_message:
+            response["HX-Success-Message"] = success_message
+        return response
+    if success_message:
+        messages.success(request, success_message)
+    return redirect("dashboard")
 
 
 def _handle_slot_assign(request, instance_id, slot_id, action_label):
@@ -581,7 +953,7 @@ def _handle_slot_assign(request, instance_id, slot_id, action_label):
     def _htmx_or_redirect():
         """Return partial for HTMX or redirect for normal requests."""
         if request.htmx:
-            slots_context = _build_slots_context(parish, instance)
+            slots_context = _build_slots_context(parish, instance, request.user)
             # Ensure can_manage_parish is available (normally comes from context processor)
             slots_context["can_manage_parish"] = True  # User already passed role check via decorator
             return render(request, "calendar/_slots_section.html", slots_context)
@@ -657,6 +1029,86 @@ def slot_assign(request, instance_id, slot_id):
 @require_parish_roles(ADMIN_ROLE_CODES)
 def slot_replace(request, instance_id, slot_id):
     return _handle_slot_assign(request, instance_id, slot_id, "Substituir")
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def slot_confirm_assignment(request, instance_id, slot_id):
+    parish = request.active_parish
+    instance = get_object_or_404(MassInstance, parish=parish, id=instance_id)
+    slot = get_object_or_404(AssignmentSlot, parish=parish, id=slot_id, mass_instance=instance)
+    if request.method != "POST":
+        return redirect("mass_detail", instance_id=instance.id)
+
+    assignment = slot.get_active_assignment()
+    if not assignment:
+        messages.info(request, "Nao ha acolito atribuido para confirmar.")
+        return _htmx_or_redirect(
+            request,
+            "calendar/_slots_section.html",
+            _build_slots_context(parish, instance, request.user),
+            reverse("mass_detail", args=[instance.id]),
+        )
+
+    confirmation, _ = Confirmation.objects.get_or_create(parish=parish, assignment=assignment)
+    confirmation.status = "confirmed"
+    confirmation.updated_by = request.user
+    confirmation.save(update_fields=["status", "updated_by", "timestamp"])
+    log_audit(parish, request.user, "Confirmation", confirmation.id, "update", {"status": "confirmed"})
+    expire_claims_for_assignment(assignment, "holder_confirmed", actor=request.user)
+
+    return _htmx_or_redirect(
+        request,
+        "calendar/_slots_section.html",
+        _build_slots_context(parish, instance, request.user),
+        reverse("mass_detail", args=[instance.id]),
+        "Presenca confirmada.",
+    )
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def slot_remove_assignment(request, instance_id, slot_id):
+    parish = request.active_parish
+    instance = get_object_or_404(MassInstance, parish=parish, id=instance_id)
+    slot = get_object_or_404(AssignmentSlot, parish=parish, id=slot_id, mass_instance=instance)
+    if request.method != "POST":
+        return redirect("mass_detail", instance_id=instance.id)
+
+    assignment = slot.get_active_assignment()
+    if not assignment:
+        messages.info(request, "Nao ha acolito atribuido para remover.")
+        return _htmx_or_redirect(
+            request,
+            "calendar/_slots_section.html",
+            _build_slots_context(parish, instance, request.user),
+            reverse("mass_detail", args=[instance.id]),
+        )
+
+    try:
+        deactivate_assignment(assignment, reason="manual_unassign", actor=request.user)
+        slot = assignment.slot
+        if slot.required and not slot.externally_covered:
+            slot.status = "open"
+            slot.save(update_fields=["status", "updated_at"])
+    except Exception as exc:
+        messages.error(request, f"Erro ao remover escala: {exc}")
+        return _htmx_or_redirect(
+            request,
+            "calendar/_slots_section.html",
+            _build_slots_context(parish, instance, request.user),
+            reverse("mass_detail", args=[instance.id]),
+        )
+
+    return _htmx_or_redirect(
+        request,
+        "calendar/_slots_section.html",
+        _build_slots_context(parish, instance, request.user),
+        reverse("mass_detail", args=[instance.id]),
+        "Escala removida.",
+    )
 
 
 @login_required
@@ -1196,17 +1648,35 @@ def event_series_list(request):
 def event_interest(request):
     parish = request.active_parish
     acolyte = parish.acolytes.filter(user=request.user).first()
-    series = EventSeries.objects.filter(parish=parish, is_active=True).order_by("start_date")
-    interests = {
-        interest.event_series_id: interest
-        for interest in EventInterest.objects.filter(parish=parish, acolyte=acolyte)
-    }
+    mass_qs = (
+        MassInstance.objects.filter(
+            parish=parish,
+            status="scheduled",
+            starts_at__date__gte=timezone.localdate(),
+            event_series__isnull=False,
+        )
+        .select_related("community", "event_series")
+        .order_by("starts_at")
+    )
+    series = (
+        EventSeries.objects.filter(parish=parish, is_active=True, end_date__gte=timezone.localdate())
+        .order_by("start_date")
+        .prefetch_related(Prefetch("massinstance_set", queryset=mass_qs, to_attr="upcoming_masses"))
+    )
+    series_list = list(series)
+    interests = {}
+    if acolyte:
+        interests = {
+            interest.mass_instance_id: interest
+            for interest in MassInterest.objects.filter(parish=parish, acolyte=acolyte)
+        }
     if request.method == "POST" and acolyte:
-        selected = set(request.POST.getlist("series"))
-        for item in series:
-            interested = str(item.id) in selected
-            obj, _ = EventInterest.objects.get_or_create(
-                parish=parish, event_series=item, acolyte=acolyte, defaults={"interested": interested}
+        selected = set(request.POST.getlist("masses"))
+        masses = [mass for item in series_list for mass in item.upcoming_masses]
+        for mass in masses:
+            interested = str(mass.id) in selected
+            obj, _ = MassInterest.objects.get_or_create(
+                parish=parish, mass_instance=mass, acolyte=acolyte, defaults={"interested": interested}
             )
             if obj.interested != interested:
                 obj.interested = interested
@@ -1215,7 +1685,7 @@ def event_interest(request):
     return render(
         request,
         "events/interest.html",
-        {"series": series, "interests": interests, "acolyte": acolyte},
+        {"series": series_list, "interests": interests, "acolyte": acolyte},
     )
 
 
@@ -2422,6 +2892,7 @@ def _people_member_context(parish, user=None, acolyte=None):
         stats = AcolyteStats.objects.filter(parish=parish, acolyte=acolyte).first()
 
     user_form = PeopleUserForm(instance=user) if user else None
+    login_form = AcolyteCreateLoginForm() if acolyte and not user else None
     membership_form = PeopleMembershipForm(
         parish=parish,
         initial={
@@ -2482,6 +2953,7 @@ def _people_member_context(parish, user=None, acolyte=None):
         "membership": membership,
         "stats": stats,
         "user_form": user_form,
+        "login_form": login_form,
         "membership_form": membership_form,
         "acolyte_form": acolyte_form,
         "qual_form": qual_form,
@@ -2507,9 +2979,47 @@ def _handle_member_post(request, parish, user=None, acolyte=None):
                 updated_user.is_active = True
                 messages.info(request, "Sua conta nao pode ser desativada por este formulario.")
             updated_user.save()
+
+            # Handle membership roles if provided
+            roles = request.POST.getlist("roles")
+            if roles is not None:
+                membership, _ = ParishMembership.objects.get_or_create(parish=parish, user=user, defaults={"active": True})
+                membership.roles.clear()
+                if roles:
+                    membership.roles.add(*roles)
+                # Also update active status if provided
+                active = request.POST.get("active")
+                if active is not None:
+                    membership.active = active == "on"
+                    membership.save(update_fields=["active", "updated_at"])
+
             messages.success(request, "Identidade atualizada.")
         else:
             messages.error(request, "Revise os dados de identidade.")
+    elif form_type == "login" and acolyte and not user:
+        form = AcolyteCreateLoginForm(request.POST)
+        if form.is_valid():
+            email = form.cleaned_data["email"]
+            password = form.cleaned_data["password"]
+            send_invite = form.cleaned_data.get("send_invite", False)
+            User = get_user_model()
+            user = User.objects.create_user(email=email, full_name=acolyte.display_name, password=password)
+            acolyte.user = user
+            acolyte.save(update_fields=["user", "updated_at"])
+            membership, _ = ParishMembership.objects.get_or_create(parish=parish, user=user, defaults={"active": True})
+            acolyte_role = MembershipRole.objects.filter(code="ACOLYTE").first()
+            if acolyte_role:
+                membership.roles.add(acolyte_role)
+            messages.success(request, "Credenciais de login criadas com sucesso.")
+            if send_invite:
+                send_mail(
+                    "Acesso ao Acoli",
+                    f"Seu acesso foi criado.\nEmail: {user.email}\nSenha: {password}\n",
+                    settings.DEFAULT_FROM_EMAIL,
+                    [user.email],
+                )
+        else:
+            messages.error(request, "Revise os dados de login.")
     elif form_type == "membership" and user:
         form = PeopleMembershipForm(request.POST, parish=parish)
         if form.is_valid():
@@ -3307,6 +3817,9 @@ def acolyte_remove_assignment(request, acolyte_id, assignment_id):
     
     try:
         deactivate_assignment(assignment, reason="manual_unassign", actor=request.user)
+        if slot.required and not slot.externally_covered:
+            slot.status = "open"
+            slot.save(update_fields=["status", "updated_at"])
         
         # For HTMX requests, return empty response to remove the row
         if request.headers.get("HX-Request"):
@@ -3342,6 +3855,7 @@ def acolyte_confirm_assignment(request, acolyte_id, assignment_id):
     confirmation.updated_by = request.user
     confirmation.notes = f"Confirmado pelo admin {request.user.full_name}"
     confirmation.save()
+    expire_claims_for_assignment(assignment, "holder_confirmed", actor=request.user)
     
     log_audit(
         parish=parish,
@@ -3459,6 +3973,8 @@ def my_assignments(request):
         ).values_list("from_slot_id", flat=True)
         pending_swaps_by_slot = {slot_id: True for slot_id in pending_swaps}
 
+    claims_by_slot = _claim_map_for_slots(parish, assignments.values_list("slot_id", flat=True))
+
     return render(
         request,
         "acolytes/assignments.html",
@@ -3468,6 +3984,7 @@ def my_assignments(request):
             "team_names_map": team_names_map,
             "mass_has_multiple_slots": mass_has_multiple_slots,
             "pending_swaps_by_slot": pending_swaps_by_slot,
+            "claims_by_slot": claims_by_slot,
             "calendar_feed_url": calendar_feed_url,
         },
     )
@@ -3638,9 +4155,9 @@ def my_preferences(request):
             )
         )
         rules = list(AcolyteAvailabilityRule.objects.filter(parish=parish, acolyte=acolyte))
-        interested_series = set(
-            EventInterest.objects.filter(parish=parish, acolyte=acolyte, interested=True).values_list(
-                "event_series_id", flat=True
+        interested_masses = set(
+            MassInterest.objects.filter(parish=parish, acolyte=acolyte, interested=True).values_list(
+                "mass_instance_id", flat=True
             )
         )
 
@@ -3652,7 +4169,7 @@ def my_preferences(request):
 
         for instance in upcoming:
             if instance.event_series and instance.event_series.candidate_pool == "interested_only":
-                if instance.event_series_id not in interested_series:
+                if instance.id not in interested_masses:
                     blocked_interest += 1
                     continue
             profile = instance.requirement_profile
@@ -3672,7 +4189,7 @@ def my_preferences(request):
         if not qualifications:
             diagnostics_reasons.append("Sem qualificacoes definidas para este periodo.")
         if blocked_interest == total_upcoming and total_upcoming:
-            diagnostics_reasons.append("Eventos marcados como interessados apenas estao fora da sua lista.")
+            diagnostics_reasons.append("Missas com pool de interessados estao fora da sua lista.")
         if eligible_by_qualification == 0 and qualifications:
             diagnostics_reasons.append("Nenhuma missa combina com suas qualificacoes.")
         if eligible_by_qualification and blocked_availability == eligible_by_qualification:
@@ -3815,6 +4332,116 @@ def delete_preference(request, pref_id):
 
 @login_required
 @require_active_parish
+def position_claim_create(request, instance_id, slot_id):
+    parish = request.active_parish
+    if request.method != "POST":
+        return redirect("mass_detail", instance_id=instance_id)
+    slot = get_object_or_404(
+        AssignmentSlot,
+        parish=parish,
+        id=slot_id,
+        mass_instance_id=instance_id,
+    )
+    acolyte = parish.acolytes.filter(user=request.user, active=True).first()
+    if not acolyte:
+        messages.error(request, "Seu usuario nao esta vinculado a um acolito.")
+        return redirect("mass_detail", instance_id=instance_id)
+    claim, error = create_position_claim(parish, slot, acolyte, actor=request.user)
+    if error:
+        if request.headers.get("HX-Request"):
+            response = HttpResponse(status=204)
+            response["HX-Success-Message"] = error
+            return response
+        messages.error(request, error)
+        return redirect("mass_detail", instance_id=instance_id)
+    return _claim_response(
+        request,
+        claim,
+        request.POST.get("return") or "slots_section",
+        "Solicitacao enviada.",
+    )
+
+
+@login_required
+@require_active_parish
+def position_claim_choose(request, claim_id):
+    parish = request.active_parish
+    if request.method != "POST":
+        return redirect("dashboard")
+    claim = get_object_or_404(PositionClaimRequest, parish=parish, id=claim_id)
+    assignment = claim.slot.get_active_assignment()
+    if not assignment or assignment.acolyte.user_id != request.user.id:
+        return redirect("dashboard")
+    success = choose_claim(claim, actor=request.user, require_coordination=parish.claim_require_coordination)
+    return _claim_response(
+        request,
+        claim,
+        request.POST.get("return") or "assignment_card",
+        "Solicitacao atualizada." if success else "Solicitacao indisponivel.",
+    )
+
+
+@login_required
+@require_active_parish
+def position_claim_reject(request, claim_id):
+    parish = request.active_parish
+    if request.method != "POST":
+        return redirect("dashboard")
+    claim = get_object_or_404(PositionClaimRequest, parish=parish, id=claim_id)
+    assignment = claim.slot.get_active_assignment()
+    if assignment and assignment.acolyte.user_id == request.user.id:
+        success = reject_claim(claim, actor=request.user, reason="holder_rejected", approval_mode="target")
+    elif user_has_role(request.user, parish, ADMIN_ROLE_CODES) and claim.status == "pending_coordination":
+        success = reject_claim(claim, actor=request.user, reason="coordination_rejected", approval_mode="coordination")
+    else:
+        return redirect("dashboard")
+    return _claim_response(
+        request,
+        claim,
+        request.POST.get("return") or "claim_card",
+        "Solicitacao recusada." if success else "Solicitacao indisponivel.",
+    )
+
+
+@login_required
+@require_active_parish
+def position_claim_cancel(request, claim_id):
+    parish = request.active_parish
+    if request.method != "POST":
+        return redirect("swap_requests")
+    claim = get_object_or_404(PositionClaimRequest, parish=parish, id=claim_id)
+    if claim.requestor_acolyte.user_id != request.user.id:
+        return redirect("swap_requests")
+    success = cancel_claim(claim, actor=request.user)
+    return _claim_response(
+        request,
+        claim,
+        request.POST.get("return") or "claim_card",
+        "Solicitacao cancelada." if success else "Solicitacao indisponivel.",
+    )
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def position_claim_approve(request, claim_id):
+    parish = request.active_parish
+    if request.method != "POST":
+        return redirect("swap_requests")
+    claim = get_object_or_404(PositionClaimRequest, parish=parish, id=claim_id)
+    if claim.status != "pending_coordination":
+        return redirect("swap_requests")
+    success = approve_claim(claim, actor=request.user, approval_mode="coordination", resolution_reason="coordination_approved")
+    return _claim_response(
+        request,
+        claim,
+        request.POST.get("return") or "claim_card",
+        "Solicitacao aprovada." if success else "Solicitacao indisponivel.",
+    )
+
+
+@login_required
+@require_active_parish
 def swap_requests(request):
     parish = request.active_parish
     swaps = SwapRequest.objects.filter(parish=parish).exclude(status="canceled").select_related(
@@ -3824,18 +4451,37 @@ def swap_requests(request):
         "from_slot__position_type",
         "to_slot__position_type"
     ).order_by("-created_at")
-    
+
+    claims = PositionClaimRequest.objects.filter(parish=parish).select_related(
+        "slot__mass_instance__community",
+        "slot__position_type",
+        "requestor_acolyte",
+        "target_assignment__acolyte",
+    ).order_by("-created_at")
+
     can_manage_parish = user_has_role(request.user, parish, ADMIN_ROLE_CODES)
-    
-    if not can_manage_parish:
+    show_all = request.GET.get('all') == 'true' and can_manage_parish
+
+    if not show_all:
+        # Show user's own swaps OR awaiting_approval swaps (for coordinators to approve)
         swaps = (
             swaps.filter(requestor_acolyte__user=request.user)
             | swaps.filter(target_acolyte__user=request.user)
+            | swaps.filter(status="awaiting_approval")  # Coordinators can see and approve these
         ).distinct()
-    
+
+        claim_filter = Q(requestor_acolyte__user=request.user) | Q(target_assignment__acolyte__user=request.user)
+        if can_manage_parish:
+            claim_filter |= Q(status__in=["pending_coordination", "scheduled_auto_approve"])
+        claims = claims.filter(claim_filter).distinct()
+
     return render(request, "acolytes/swaps.html", {
         "swaps": swaps,
+        "claims": claims,
         "can_manage_parish": can_manage_parish,
+        "show_all": show_all,
+        "claim_status_labels": dict(PositionClaimRequest.STATUS_CHOICES),
+        "claim_reason_labels": dict(PositionClaimRequest.RESOLUTION_CHOICES),
     })
 
 
@@ -4207,6 +4853,15 @@ def swap_request_approve(request, swap_id):
     if applied:
         swap.status = "accepted"
         swap.save(update_fields=["status", "updated_at"])
+
+        # Cancel other pending swaps in the same group
+        if swap.group_id:
+            other_swaps = SwapRequest.objects.filter(
+                group_id=swap.group_id,
+                status="pending"
+            ).exclude(id=swap.id)
+            other_swaps.update(status="canceled")
+
         if swap.requestor_acolyte.user:
             enqueue_notification(
                 parish,
@@ -4258,6 +4913,9 @@ def parish_settings(request):
                 "swap_requires_approval": parish.swap_requires_approval,
                 "notify_on_cancellation": parish.notify_on_cancellation,
                 "auto_assign_on_decline": parish.auto_assign_on_decline,
+                "claim_auto_approve_enabled": parish.claim_auto_approve_enabled,
+                "claim_auto_approve_hours": parish.claim_auto_approve_hours,
+                "claim_require_coordination": parish.claim_require_coordination,
                 "schedule_weights": parish.schedule_weights,
             }
             form.save(parish, actor=request.user)
@@ -4269,6 +4927,9 @@ def parish_settings(request):
                 "swap_requires_approval": parish.swap_requires_approval,
                 "notify_on_cancellation": parish.notify_on_cancellation,
                 "auto_assign_on_decline": parish.auto_assign_on_decline,
+                "claim_auto_approve_enabled": parish.claim_auto_approve_enabled,
+                "claim_auto_approve_hours": parish.claim_auto_approve_hours,
+                "claim_require_coordination": parish.claim_require_coordination,
                 "schedule_weights": parish.schedule_weights,
             }
             log_audit(parish, request.user, "Parish", parish.id, "update", {"from": before, "to": after})
@@ -4326,6 +4987,7 @@ def confirm_assignment(request, assignment_id):
     confirmation.updated_by = request.user
     confirmation.save(update_fields=["status", "updated_by", "timestamp"])
     log_audit(parish, request.user, "Confirmation", confirmation.id, "update", {"status": "confirmed"})
+    expire_claims_for_assignment(assignment, "holder_confirmed", actor=request.user)
     
     # Refetch assignment to get updated confirmation
     assignment = Assignment.objects.select_related(
@@ -4335,24 +4997,32 @@ def confirm_assignment(request, assignment_id):
         "acolyte"
     ).get(id=assignment_id)
     
-    # Get team names for the assignment
-    from .views import my_assignments  # Import to reuse team names logic
-    team_names_map = {}
-    if assignment.slot.mass_instance:
-        team_members = Assignment.objects.filter(
-            parish=parish,
-            slot__mass_instance=assignment.slot.mass_instance,
-            is_active=True
-        ).select_related("acolyte").order_by("acolyte__display_name")
-        team_names = [a.acolyte.display_name for a in team_members]
-        if team_names:
-            team_names_map[assignment.slot.mass_instance.id] = ", ".join(team_names)
-    
+    return_target = request.POST.get("return")
+    if return_target == "dashboard_hero":
+        return _htmx_or_redirect(
+            request,
+            "acolytes/_partials/dashboard_hero_assignment.html",
+            {
+                "hero_assignment": assignment,
+                "claims_by_slot": _claim_map_for_slots(parish, [assignment.slot_id]),
+            },
+            "dashboard",
+        )
+    if return_target == "dashboard_pending":
+        return _htmx_or_redirect(
+            request,
+            "acolytes/_partials/dashboard_pending_row.html",
+            {
+                "confirmation": confirmation,
+                "claims_by_slot": _claim_map_for_slots(parish, [assignment.slot_id]),
+            },
+            "dashboard",
+        )
     return _htmx_or_redirect(
         request,
         "acolytes/_partials/assignment_card.html",
-        {"assignment": assignment, "team_names_map": team_names_map},
-        "my_assignments"
+        _assignment_card_context(parish, assignment),
+        "my_assignments",
     )
 
 

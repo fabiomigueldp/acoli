@@ -2,14 +2,38 @@
 {% load extras %}
 {% block title %}Trocas{% endblock %}
 {% block content %}
-<div class="card">
-  <h2 class="font-serif text-xl mb-4">Solicitacoes de troca</h2>
-  <div class="space-y-2">
-    {% for swap in swaps %}
-      {% include "acolytes/_partials/swap_card.html" with swap=swap can_manage_parish=can_manage_parish %}
-    {% empty %}
-      <p class="text-sm text-slate">Nenhuma solicitacao.</p>
-    {% endfor %}
+<div class="space-y-6">
+  <div class="card">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-serif text-xl">Solicitações de troca</h2>
+      {% if can_manage_parish %}
+        {% if show_all %}
+          <a href="{% url 'swap_requests' %}" class="text-sm text-ink-600 hover:text-ink-800 underline">Ver minhas trocas</a>
+        {% else %}
+          <a href="{% url 'swap_requests' %}?all=true" class="text-sm text-ink-600 hover:text-ink-800 underline">Ver todas as trocas</a>
+        {% endif %}
+      {% endif %}
+    </div>
+    <div class="space-y-2">
+      {% for swap in swaps %}
+        {% include "acolytes/_partials/swap_card.html" with swap=swap can_manage_parish=can_manage_parish %}
+      {% empty %}
+        <p class="text-sm text-slate">Nenhuma solicitação.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-serif text-xl">Solicitações de posição</h2>
+    </div>
+    <div class="space-y-2">
+      {% for claim in claims %}
+        {% include "acolytes/_partials/claim_card.html" with claim=claim can_manage_parish=can_manage_parish claim_status_labels=claim_status_labels claim_reason_labels=claim_reason_labels %}
+      {% empty %}
+        <p class="text-sm text-slate">Nenhuma solicitação de posição.</p>
+      {% endfor %}
+    </div>
   </div>
 </div>
 {% endblock %}

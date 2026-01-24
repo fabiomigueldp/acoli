@@ -127,6 +127,23 @@ def _map_choice_label(mapping, value):
 
 
 @register.filter
+def choice_label(choices, value):
+    if not choices:
+        return ""
+    target = _normalize_choice(value)
+    if not target:
+        return ""
+    for choice_value, choice_label in choices:
+        if isinstance(choice_label, (list, tuple)):
+            for nested_value, nested_label in choice_label:
+                if _normalize_choice(nested_value) == target:
+                    return str(nested_label)
+        elif _normalize_choice(choice_value) == target:
+            return str(choice_label)
+    return ""
+
+
+@register.filter
 def mass_status_label(value):
     mapping = {
         "scheduled": "Agendada",
