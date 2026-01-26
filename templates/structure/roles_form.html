@@ -54,9 +54,10 @@
         <p class="form-help">{{ form.extra_functions.help_text }}</p>
       </div>
     </details>
+    {% url 'structure_roles_list' as fallback_url %}
     <div class="flex items-center gap-3">
       <button class="btn-primary">Salvar</button>
-      <a class="btn-secondary" href="{% url 'structure_roles_list' %}">Voltar</a>
+      <a class="btn-secondary" href="{{ back_url|default:fallback_url }}">Voltar</a>
     </div>
   </form>
 </div>

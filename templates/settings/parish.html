@@ -117,10 +117,11 @@
       </div>
     </details>
 
+    {% url 'dashboard' as fallback_url %}
     <div class="flex items-center gap-3">
       <button class="btn-primary" type="submit">Salvar configuracoes</button>
       <button class="btn-secondary" type="submit" name="action" value="reset">Restaurar padroes</button>
-      <a class="btn-secondary" href="{% url 'dashboard' %}">Voltar</a>
+      <a class="btn-secondary" href="{{ back_url|default:fallback_url }}">Voltar</a>
     </div>
   </form>
 </div>

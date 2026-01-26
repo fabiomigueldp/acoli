@@ -48,7 +48,7 @@
          <div>
            <label class="label">Comunidade</label>
            <div class="custom-select">
-             <input type="hidden" name="community" value="{{ filters.community }}">
+              <input type="hidden" name="community" value="{% if filters.community %}{{ filters.community }}{% endif %}">
              <button type="button" class="custom-select-button">
                <span class="selected-text">
                  {% if filters.community %}
@@ -71,7 +71,7 @@
          <div>
            <label class="label">Experiencia</label>
            <div class="custom-select">
-             <input type="hidden" name="experience" value="{{ filters.experience }}">
+              <input type="hidden" name="experience" value="{% if filters.experience %}{{ filters.experience }}{% endif %}">
              <button type="button" class="custom-select-button">
                <span class="selected-text">
                  {% for value,label in experience_choices %}
@@ -91,7 +91,7 @@
          <div>
            <label class="label">Status</label>
            <div class="custom-select">
-             <input type="hidden" name="status" value="{{ filters.status }}">
+              <input type="hidden" name="status" value="{% if filters.status %}{{ filters.status }}{% endif %}">
              <button type="button" class="custom-select-button">
                <span class="selected-text">
                  {% if filters.status == "active" %}Ativo{% elif filters.status == "inactive" %}Inativo{% else %}Todos{% endif %}
@@ -107,7 +107,7 @@
          <div>
            <label class="label">Papel</label>
            <div class="custom-select">
-             <input type="hidden" name="role" value="{{ filters.role }}">
+              <input type="hidden" name="role" value="{% if filters.role %}{{ filters.role }}{% endif %}">
              <button type="button" class="custom-select-button">
                <span class="selected-text">
                  {% if filters.role %}
@@ -135,82 +135,7 @@
    </div>
 
    <div id="people-list" class="space-y-3">
-     {% for member in members %}
-      <a class="block card hover:shadow-soft transition" href="{{ member.detail_url }}">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div class="flex items-center gap-3">
-             <div class="h-11 w-11 rounded-full bg-sand-100 text-ink flex items-center justify-center font-semibold">
-               {{ member.name|initials }}
-             </div>
-            <div>
-              <div class="font-medium">{{ member.name }}</div>
-              <div class="text-sm text-slate">
-                {% if member.user %}
-                  {{ member.user.email|default:"Sem email" }}
-                  {% if member.user.phone %} - {{ member.user.phone }}{% endif %}
-                {% else %}
-                  Sem login
-                {% endif %}
-              </div>
-            </div>
-          </div>
-          <div class="flex flex-wrap gap-2 text-xs">
-            {% for role in member.roles %}
-              <span class="badge">{{ role.name }}</span>
-            {% empty %}
-              <span class="badge">Sem papel</span>
-            {% endfor %}
-            {% if member.acolyte %}
-              <span class="badge">{{ member.acolyte.get_experience_level_display }}</span>
-              {% if member.acolyte.scheduling_mode == "reserve" %}
-                <span class="badge">Reserva tecnica</span>
-              {% endif %}
-            {% endif %}
-            {% if member.user and not member.user.is_active %}
-              <span class="badge">Usuario inativo</span>
-            {% endif %}
-            {% if member.acolyte and not member.acolyte.active %}
-              <span class="badge">Acolito inativo</span>
-            {% endif %}
-          </div>
-          <div class="flex flex-col gap-2 text-xs text-slate">
-            <div>
-              <span class="uppercase tracking-wider text-[0.65rem]">Qualificacoes</span>
-              <div class="flex flex-wrap gap-1 mt-1">
-                {% with quals=member.qualifications %}
-                  {% for qual in quals|slice:":3" %}
-                    <span class="badge">{{ qual }}</span>
-                  {% endfor %}
-                  {% if quals|length > 3 %}
-                    <span class="text-xs text-slate">+{{ quals|length|add:"-3" }}</span>
-                  {% endif %}
-                  {% if not quals %}
-                    <span class="text-xs text-slate">Sem qualificacoes</span>
-                  {% endif %}
-                {% endwith %}
-              </div>
-            </div>
-          </div>
-          <div class="flex flex-col gap-2 text-xs text-slate">
-            <div class="uppercase tracking-wider text-[0.65rem]">Confiabilidade</div>
-            {% if member.stats and member.stats.reliability_score is not None %}
-              <div class="h-2 w-28 rounded-full bg-black/5 overflow-hidden">
-                <div class="h-full bg-moss" style="width: {{ member.stats.reliability_score }}%;"></div>
-              </div>
-              <div>{{ member.stats.reliability_score }}%</div>
-             {% else %}
-               <div>n/d</div>
-             {% endif %}
-          </div>
-          <div class="flex flex-col gap-1 text-xs text-slate">
-            <div>30 dias: <span class="text-ink font-medium">{{ member.stats.services_last_30_days|default:"n/d" }}</span></div>
-            <div>90 dias: <span class="text-ink font-medium">{{ member.stats.services_last_90_days|default:"n/d" }}</span></div>
-          </div>
-        </div>
-      </a>
-     {% empty %}
-       <div class="card text-sm text-slate">Nenhuma pessoa encontrada com os filtros atuais.</div>
-     {% endfor %}
+     {% include "people/_people_list.html" %}
   </div>
 </div>
 {% endblock %}

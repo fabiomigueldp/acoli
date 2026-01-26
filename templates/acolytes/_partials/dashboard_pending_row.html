@@ -1,4 +1,5 @@
 {% load extras %}
+{% if confirmation.status == "pending" %}
 <div id="assignment-{{ confirmation.assignment.id }}" class="flex flex-col gap-4 py-4 sm:flex-row sm:items-start sm:justify-between">
   <div class="flex flex-col gap-2">
     <div class="text-xs uppercase tracking-[0.2em] text-slate">Escala pendente</div>
@@ -8,15 +9,18 @@
     </div>
   </div>
 
-  <div class="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[280px]">
-    {% with claims=claims_by_slot|get_item:confirmation.assignment.slot_id %}
-      {% if claims %}
-        <div class="rounded-lg bg-sand-50 px-3 py-3">
+  {% with claims=claims_by_slot|get_item:confirmation.assignment.slot_id %}
+    {% if claims %}
+      <div class="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[280px]">
+        <div class="space-y-2">
           <div class="text-[11px] uppercase tracking-[0.2em] text-slate">Solicitacoes</div>
-          <div class="mt-2 space-y-2">
+          <div class="space-y-2">
             {% for claim in claims %}
-              <div class="flex items-center justify-between gap-3">
-                <span class="text-sm text-ink">{{ claim.requestor_acolyte.display_name }}</span>
+              <div class="flex items-start justify-between gap-3 rounded-lg bg-sand-50 px-3 py-2">
+                <div class="min-w-0">
+                  <div class="text-sm text-ink">{{ claim.requestor_acolyte.display_name }}</div>
+                  <div class="text-xs text-slate">Pediu para voce ceder esta escala</div>
+                </div>
                 <button
                   hx-post="{% url 'position_claim_choose' claim.id %}"
                   hx-target="#assignment-{{ confirmation.assignment.id }}"
@@ -30,21 +34,39 @@
             {% endfor %}
           </div>
         </div>
-      {% endif %}
-    {% endwith %}
-
-    {% if confirmation.status == "confirmed" %}
-      <span class="text-xs font-medium uppercase tracking-[0.2em] text-moss">Confirmado</span>
+      </div>
+      <div class="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[200px] sm:items-end">
+        {% if confirmation.status == "confirmed" %}
+          <span class="text-xs font-medium uppercase tracking-[0.2em] text-moss">Confirmado</span>
+        {% else %}
+          <button
+            hx-post="{% url 'confirm_assignment' confirmation.assignment.id %}"
+            hx-target="#assignment-{{ confirmation.assignment.id }}"
+            hx-swap="outerHTML"
+            hx-vals='{"return": "dashboard_pending"}'
+            class="text-sm px-4 py-2 bg-sand-100 text-ink rounded-lg hover:bg-sand-200 transition-colors"
+            type="button">
+            Confirmar
+          </button>
+        {% endif %}
+      </div>
     {% else %}
-      <button
-        hx-post="{% url 'confirm_assignment' confirmation.assignment.id %}"
-        hx-target="#assignment-{{ confirmation.assignment.id }}"
-        hx-swap="outerHTML"
-        hx-vals='{"return": "dashboard_pending"}'
-        class="text-sm px-4 py-2 bg-sand-100 text-ink rounded-lg hover:bg-sand-200 transition-colors"
-        type="button">
-        Confirmar
-      </button>
+      <div class="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[280px] sm:items-end">
+        {% if confirmation.status == "confirmed" %}
+          <span class="text-xs font-medium uppercase tracking-[0.2em] text-moss">Confirmado</span>
+        {% else %}
+          <button
+            hx-post="{% url 'confirm_assignment' confirmation.assignment.id %}"
+            hx-target="#assignment-{{ confirmation.assignment.id }}"
+            hx-swap="outerHTML"
+            hx-vals='{"return": "dashboard_pending"}'
+            class="text-sm px-4 py-2 bg-sand-100 text-ink rounded-lg hover:bg-sand-200 transition-colors"
+            type="button">
+            Confirmar
+          </button>
+        {% endif %}
+      </div>
     {% endif %}
-  </div>
-</div>
+  {% endwith %}
+ </div>
+{% endif %}

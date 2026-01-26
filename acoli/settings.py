@@ -44,6 +44,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
+    "core.middleware.BackUrlMiddleware",
     "core.middleware.ActiveParishMiddleware",
     "core.middleware.ApiParishHeaderMiddleware",
 ]
@@ -62,6 +63,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "core.context_processors.active_parish",
+                "core.context_processors.back_url",
             ],
         },
     },

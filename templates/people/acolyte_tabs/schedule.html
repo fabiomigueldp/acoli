@@ -2,56 +2,35 @@
 <div class="space-y-6">
     <!-- Filters -->
     <div class="card">
-        <div class="flex flex-wrap items-center gap-4">
-            <div>
-                <label class="label">Período</label>
-                <div class="custom-select">
-                    <input type="hidden" name="time" value="{{ time_filter }}">
-                    <button type="button" class="custom-select-button"
+        <form method="get" action="{% url 'people_acolyte_detail' acolyte.id %}">
+            <input type="hidden" name="tab" value="schedule">
+            <div class="flex flex-wrap items-center gap-4">
+                <div>
+                    <label class="label">Período</label>
+                    <select name="time" class="custom-select-button"
                             hx-get="{% url 'people_acolyte_detail' acolyte.id %}"
                             hx-target="#tab-content"
                             hx-include="[name='time'],[name='status']"
                             hx-vals='{"tab": "schedule"}'>
-                        <span class="selected-text">
-                            {% if time_filter == "upcoming" %}Futuras{% elif time_filter == "past" %}Passadas{% else %}Todos{% endif %}
-                        </span>
-                    </button>
-                    <div class="custom-select-options">
-                        <button type="button" class="custom-select-option {% if time_filter == "all" %}selected{% endif %}" data-value="all">Todos</button>
-                        <button type="button" class="custom-select-option {% if time_filter == "upcoming" %}selected{% endif %}" data-value="upcoming">Futuras</button>
-                        <button type="button" class="custom-select-option {% if time_filter == "past" %}selected{% endif %}" data-value="past">Passadas</button>
-                    </div>
+                        <option value="all" {% if time_filter == "all" %}selected{% endif %}>Todos</option>
+                        <option value="upcoming" {% if time_filter == "upcoming" %}selected{% endif %}>Futuras</option>
+                        <option value="past" {% if time_filter == "past" %}selected{% endif %}>Passadas</option>
+                    </select>
                 </div>
-            </div>
-            <div>
-                <label class="label">Status</label>
-                <div class="custom-select">
-                    <input type="hidden" name="status" value="{{ status_filter }}">
-                    <button type="button" class="custom-select-button"
+                <div>
+                    <label class="label">Status</label>
+                    <select name="status" class="custom-select-button"
                             hx-get="{% url 'people_acolyte_detail' acolyte.id %}"
                             hx-target="#tab-content"
                             hx-include="[name='time'],[name='status']"
                             hx-vals='{"tab": "schedule"}'>
-                        <span class="selected-text">
-                            {% if status_filter == "active" %}Ativas{% elif status_filter == "ended" %}Encerradas{% else %}Todas{% endif %}
-                        </span>
-                    </button>
-                    <div class="custom-select-options">
-                        <button type="button" class="custom-select-option {% if status_filter == "all" %}selected{% endif %}" data-value="all">Todas</button>
-                        <button type="button" class="custom-select-option {% if status_filter == "active" %}selected{% endif %}" data-value="active">Ativas</button>
-                        <button type="button" class="custom-select-option {% if status_filter == "ended" %}selected{% endif %}" data-value="ended">Encerradas</button>
-                    </div>
+                        <option value="all" {% if status_filter == "all" %}selected{% endif %}>Todas</option>
+                        <option value="active" {% if status_filter == "active" %}selected{% endif %}>Ativas</option>
+                        <option value="ended" {% if status_filter == "ended" %}selected{% endif %}>Encerradas</option>
+                    </select>
                 </div>
             </div>
-            <div class="flex-1"></div>
-            <button type="button" class="btn-primary"
-                    hx-get="{% url 'acolyte_open_slots' acolyte.id %}"
-                    hx-target="#modal-container"
-                    hx-swap="innerHTML"
-                    onclick="document.getElementById('modal-container').classList.remove('hidden')">
-                + Nova Escala
-            </button>
-        </div>
+        </form>
     </div>
     
     <!-- Assignments List -->
@@ -167,10 +146,10 @@
             <p class="text-ink-500">Nenhuma escala encontrada com os filtros selecionados.</p>
             <button type="button" class="btn-primary mt-4"
                     hx-get="{% url 'acolyte_open_slots' acolyte.id %}"
-                    hx-target="#modal-container"
+                    hx-target="#modal-content"
                     hx-swap="innerHTML"
                     onclick="document.getElementById('modal-container').classList.remove('hidden')">
-                Criar nova escala
+                Atribuir a slot disponivel
             </button>
         </div>
         {% endif %}

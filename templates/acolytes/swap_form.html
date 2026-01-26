@@ -2,9 +2,10 @@
 {% block title %}Trocar função{% endblock %}
 {% block content %}
 <div class="max-w-lg">
-  <div class="mb-6">
-    <a href="{% url 'my_assignments' %}" class="text-sm text-ink-500 hover:text-ink-700">&larr; Voltar</a>
-  </div>
+  {% url 'my_assignments' as fallback_url %}
+   <div class="mb-6">
+     <a href="{{ back_url|default:fallback_url }}" class="text-sm text-ink-500 hover:text-ink-700">&larr; Voltar</a>
+   </div>
   
   <div class="card">
     <h2 class="font-serif text-xl mb-2">Trocar função</h2>
@@ -47,12 +48,12 @@
       
       <div class="flex gap-3">
         <button type="submit" class="btn-primary">Solicitar troca</button>
-        <a href="{% url 'my_assignments' %}" class="btn-secondary">Cancelar</a>
+        <a href="{{ back_url|default:fallback_url }}" class="btn-secondary">Cancelar</a>
       </div>
     </form>
     {% else %}
     <p class="text-ink-500 py-4">Não há outras funções disponíveis para troca nesta missa.</p>
-    <a href="{% url 'my_assignments' %}" class="btn-secondary inline-block">Voltar</a>
+    <a href="{{ back_url|default:fallback_url }}" class="btn-secondary inline-block">Voltar</a>
     {% endif %}
   </div>
 </div>

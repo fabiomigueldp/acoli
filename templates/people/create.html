@@ -213,9 +213,10 @@
       </div>
     </div>
 
+    {% url 'people_directory' as fallback_url %}
     <div class="flex flex-wrap gap-2">
       <button class="btn-primary" type="submit">Criar pessoa</button>
-      <a class="btn-secondary" href="{% url 'people_directory' %}">Voltar</a>
+      <a class="btn-secondary" href="{{ back_url|default:fallback_url }}">Voltar</a>
     </div>
   </form>
 </div>

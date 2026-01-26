@@ -9,10 +9,11 @@
   </div>
 
   <div class="card">
+    {% url 'replacement_center' as fallback_url %}
     <form method="get" class="flex flex-wrap items-center gap-3">
       <input class="flex-1" type="text" name="q" value="{{ query }}" placeholder="Buscar acolito" />
       <button class="btn-secondary" type="submit">Buscar</button>
-      <a class="btn-secondary" href="{% url 'replacement_center' %}">Voltar</a>
+      <a class="btn-secondary" href="{{ back_url|default:fallback_url }}">Voltar</a>
     </form>
   </div>
 

@@ -33,9 +33,10 @@
         <p class="text-xs text-slate mt-1">O papel de acolito sera sempre adicionado automaticamente.</p>
       </div>
     </div>
+    {% url 'acolyte_list' as fallback_url %}
     <div class="flex items-center gap-3">
       <button class="btn-primary" type="submit">Vincular</button>
-      <a class="btn-secondary" href="{% url 'acolyte_list' %}">Voltar</a>
+      <a class="btn-secondary" href="{{ back_url|default:fallback_url }}">Voltar</a>
     </div>
   </form>
 </div>

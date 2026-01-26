@@ -5,6 +5,30 @@ from rest_framework.exceptions import AuthenticationFailed
 from core.models import Parish, ParishMembership
 
 
+class BackUrlMiddleware:
+    """Middleware to track the last navigable URL for back navigation."""
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+
+        # Only save GET requests that are navigable and successful
+        if (request.method == "GET" and
+            response.status_code < 400 and
+            not request.headers.get("HX-Request") and  # Ignore HTMX requests
+            not request.path.startswith(("/static/", "/media/", "/api/", "/admin/", "/logout/")) and
+            not any(ext in request.path for ext in [".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".woff", ".woff2"])):
+            current_url = request.build_absolute_uri()
+            last_url = request.session.get("last_url")
+            if current_url != last_url:
+                if last_url:
+                    request.session["back_url"] = last_url
+                request.session["last_url"] = current_url
+
+        return response
+
+
 class ActiveParishMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response

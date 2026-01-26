@@ -60,6 +60,7 @@
     </div>
   {% endif %}
 
-  <a class="btn-secondary" href="{% url 'scheduling_dashboard' %}">Voltar</a>
+  {% url 'scheduling_dashboard' as fallback_url %}
+  <a class="btn-secondary" href="{{ back_url|default:fallback_url }}">Voltar</a>
 </div>
 {% endblock %}

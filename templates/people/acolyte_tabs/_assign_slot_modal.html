@@ -1,8 +1,7 @@
-<!-- Modal for Assigning Acolyte to Slot -->
-<div class="p-6">
-    <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-semibold text-ink-900">Escalar {{ acolyte.display_name }}</h3>
-        <button type="button" class="text-ink-400 hover:text-ink-600"
+<div class="p-6 max-h-[80vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-6">
+        <h3 class="text-lg font-semibold text-ink">Escalar {{ acolyte.display_name }}</h3>
+        <button type="button" class="text-slate hover:text-ink transition-colors"
                 onclick="document.getElementById('modal-container').classList.add('hidden')">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -11,53 +10,101 @@
     </div>
     
     {% if slots %}
-    <form method="post" action="{% url 'acolyte_assign_to_slot' acolyte.id %}">
+    <form method="post" action="{% url 'acolyte_assign_to_slot' acolyte.id %}" id="assign-slot-form">
         {% csrf_token %}
+        <input type="hidden" name="slot" id="selected-slot-id" value="">
         
-        <div class="mb-4">
-            <label class="label">Selecione um slot disponível</label>
-            <div class="custom-select">
-                <input type="hidden" name="slot" value="">
-                <button type="button" class="custom-select-button">
-                    <span class="selected-text">-- Selecione --</span>
-                </button>
-                <div class="custom-select-options">
-                    <button type="button" class="custom-select-option selected" data-value="">-- Selecione --</button>
-                    {% for slot in slots %}
-                        <button type="button" class="custom-select-option" data-value="{{ slot.id }}">
-                            {{ slot.mass_instance.starts_at|date:"d/m/Y H:i" }}
-                            - {{ slot.mass_instance.community.name }}
-                            - {{ slot.position_type.name }}
-                        </button>
-                    {% endfor %}
-                </div>
+        <div class="mb-6">
+            <label class="label mb-3">Slots disponiveis</label>
+            <div class="space-y-2 max-h-96 overflow-y-auto">
+                {% for slot in slots %}
+                <label class="slot-option block p-3 border border-sand-200 rounded-lg cursor-pointer hover:border-moss hover:bg-moss/5 transition-all">
+                    <input type="radio" name="slot_radio" value="{{ slot.id }}" class="sr-only slot-radio">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="flex-1 min-w-0">
+                            <div class="font-medium text-ink mb-1">
+                                {{ slot.mass_instance.starts_at|date:"d/m/Y H:i" }}
+                            </div>
+                            <div class="text-sm text-slate">
+                                {{ slot.mass_instance.community.code }} - {{ slot.position_type.name }}
+                            </div>
+                        </div>
+                        {% with days_until=slot.mass_instance.starts_at|timeuntil %}
+                        <div class="text-xs {% if 'dia' in days_until or 'hour' in days_until %}text-red-600{% else %}text-slate{% endif %}">
+                            {{ days_until }}
+                        </div>
+                        {% endwith %}
+                    </div>
+                </label>
+                {% endfor %}
             </div>
         </div>
         
         <div class="mb-6">
-            <label class="label">Observacoes (opcional)</label>
-            <textarea name="notes" rows="2" class="input w-full" placeholder="Notas sobre a atribuicao..."></textarea>
+            <label class="label">Observacoes</label>
+            <textarea name="notes" rows="2" class="input w-full" placeholder="Opcional"></textarea>
         </div>
         
-        <div class="flex justify-end gap-3">
+        <div class="flex flex-col-reverse sm:flex-row justify-end gap-3">
             <button type="button" class="btn-secondary"
                     onclick="document.getElementById('modal-container').classList.add('hidden')">
                 Cancelar
             </button>
-            <button type="submit" class="btn-primary">
-                Confirmar Escala
+            <button type="submit" class="btn-primary" id="confirm-btn" disabled>
+                Confirmar
             </button>
         </div>
     </form>
     {% else %}
-    <div class="text-center py-8">
-        <div class="text-4xl mb-4">&#128532;</div>
-        <p class="text-ink-500 mb-4">Nenhum slot disponivel para as qualificacoes deste acolito.</p>
-        <p class="text-sm text-ink-400">Verifique se o acolito possui qualificacoes e se ha missas com slots abertos.</p>
-        <button type="button" class="btn-secondary mt-4"
+    <div class="text-center py-12">
+        <p class="text-slate mb-2">Nenhum slot disponivel para as qualificacoes deste acolito.</p>
+        <p class="text-sm text-slate">Verifique se ha missas com slots abertos.</p>
+        <button type="button" class="btn-secondary mt-6"
                 onclick="document.getElementById('modal-container').classList.add('hidden')">
             Fechar
         </button>
     </div>
     {% endif %}
 </div>
+
+<script>
+function initAssignSlotModal(root) {
+    const radios = root.querySelectorAll('.slot-radio');
+    const hiddenInput = root.querySelector('#selected-slot-id');
+    const confirmBtn = root.querySelector('#confirm-btn');
+    const slotOptions = root.querySelectorAll('.slot-option');
+    
+    if (!radios.length || !hiddenInput || !confirmBtn) {
+        return;
+    }
+    
+    radios.forEach((radio, index) => {
+        radio.addEventListener('change', function() {
+            hiddenInput.value = this.value;
+            confirmBtn.disabled = false;
+            
+            slotOptions.forEach(opt => opt.classList.remove('border-moss', 'bg-moss/10'));
+            if (this.checked) {
+                slotOptions[index].classList.add('border-moss', 'bg-moss/10');
+            }
+        });
+    });
+}
+
+function bootAssignSlotModal() {
+    const modalContent = document.getElementById('modal-content') || document;
+    initAssignSlotModal(modalContent);
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootAssignSlotModal);
+} else {
+    bootAssignSlotModal();
+}
+
+document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target && (evt.detail.target.id === 'modal-content' || evt.detail.target.id === 'modal-container')) {
+        initAssignSlotModal(evt.detail.target);
+    }
+});
+</script>

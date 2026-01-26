@@ -172,9 +172,14 @@
         </div>
       {% endfor %}
     </div>
+    {% if series %}
+      {% url 'event_series_detail' series.id as fallback_url %}
+    {% else %}
+      {% url 'event_series_create' as fallback_url %}
+    {% endif %}
     <div class="flex items-center gap-3">
       <button class="btn-primary">{% if series %}Salvar ocorrencias{% else %}Gerar celebracoes{% endif %}</button>
-      <a class="btn-secondary" href="{% if series %}{% url 'event_series_detail' series.id %}{% else %}{% url 'event_series_create' %}{% endif %}">Voltar</a>
+      <a class="btn-secondary" href="{{ back_url|default:fallback_url }}">Voltar</a>
     </div>
   </form>
 </div>

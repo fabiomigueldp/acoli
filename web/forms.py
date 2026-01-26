@@ -1073,8 +1073,8 @@ class AssignToSlotForm(forms.Form):
         super().__init__(*args, **kwargs)
         if self.parish and self.acolyte:
             # Get open slots for positions the acolyte is qualified for
-            qualified_positions = self.acolyte.qualifications.filter(
-                parish=self.parish
+            qualified_positions = AcolyteQualification.objects.filter(
+                parish=self.parish, acolyte=self.acolyte, qualified=True
             ).values_list("position_type_id", flat=True)
             self.fields["slot"].queryset = AssignmentSlot.objects.filter(
                 parish=self.parish,
@@ -1082,5 +1082,5 @@ class AssignToSlotForm(forms.Form):
                 position_type_id__in=qualified_positions,
             ).select_related(
                 "mass_instance", "position_type", "mass_instance__community"
-            ).order_by("mass_instance__date", "mass_instance__time")
+            ).order_by("mass_instance__starts_at")
 

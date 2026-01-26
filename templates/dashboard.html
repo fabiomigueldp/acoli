@@ -154,7 +154,7 @@
       {% endif %}
 
       <!-- Pending Actions (Inbox) -->
-      {% if pending_confirmations or incoming_swaps %}
+      {% if pending_confirmations or incoming_swaps or claims_pending %}
         <div class="rounded-2xl bg-sun-50/70 p-6 shadow-soft border border-sun-100">
           <div class="mb-6 space-y-2">
             <div class="text-xs uppercase tracking-[0.2em] text-slate">Acoes pendentes</div>
@@ -164,19 +164,45 @@
             {% for confirmation in pending_confirmations %}
               {% include "acolytes/_partials/dashboard_pending_row.html" %}
             {% endfor %}
-            {% for swap in incoming_swaps %}
-              <div id="swap-{{ swap.id }}" class="flex flex-col gap-3 rounded-xl bg-white/80 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <div class="space-y-1">
-                  <div class="text-sm text-slate">{{ swap.mass_instance.starts_at|date:"D, d M • H:i" }}</div>
-                  <div class="text-base text-ink font-medium">Troca solicitada</div>
-                  <div class="text-sm text-slate">{{ swap.requested_position.name }}</div>
+             {% for swap in incoming_swaps %}
+                <div id="swap-{{ swap.id }}" class="flex flex-col gap-4 py-4 sm:flex-row sm:items-start sm:justify-between">
+                 <div class="flex flex-col gap-2">
+                   <div class="text-xs uppercase tracking-[0.2em] text-slate">Troca solicitada</div>
+                   <div class="flex items-center gap-3">
+                     <div class="text-sm text-slate">{{ swap.mass_instance.starts_at|date:"D, d M • H:i" }}</div>
+                     <div class="text-base text-ink font-medium">
+                       {% if swap.swap_type == "role_swap" %}
+                         Sua funcao: {{ swap.from_slot.position_type.name }}
+                       {% else %}
+                         Troca de acólito
+                       {% endif %}
+                     </div>
+                   </div>
+                   {% if swap.swap_type == "role_swap" %}
+                     <div class="text-sm text-slate">Quer: <span class="font-medium text-ink">{{ swap.to_slot.position_type.name }}</span></div>
+                   {% endif %}
+                   <div class="text-sm text-slate">Solicitado por <span class="font-medium text-ink">{{ swap.requestor_acolyte.display_name }}</span> para voce</div>
+                 </div>
+                  <div class="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[200px] sm:items-end">
+                    <div class="flex w-full gap-2 sm:w-auto sm:justify-end">
+                      <button hx-post="{% url 'swap_request_accept' swap.id %}" hx-target="#swap-{{ swap.id }}" hx-swap="outerHTML" class="text-sm px-4 py-2 bg-sand-100 text-ink rounded-lg hover:bg-sand-200 transition-colors">Aceitar</button>
+                      <button hx-post="{% url 'swap_request_reject' swap.id %}" hx-target="#swap-{{ swap.id }}" hx-swap="outerHTML" class="text-sm px-4 py-2 bg-sand-100 text-ink rounded-lg hover:bg-sand-200 transition-colors">Recusar</button>
+                    </div>
+                  </div>
                 </div>
-                <div class="flex w-full gap-2 sm:w-auto">
-                  <button hx-post="{% url 'swap_request_accept' swap.id %}" hx-target="#swap-{{ swap.id }}" hx-swap="outerHTML" class="btn-primary flex-1 sm:flex-none">Aceitar</button>
-                  <button hx-post="{% url 'swap_request_reject' swap.id %}" hx-target="#swap-{{ swap.id }}" hx-swap="outerHTML" class="btn-secondary flex-1 sm:flex-none">Recusar</button>
-                </div>
-              </div>
-            {% endfor %}
+              {% endfor %}
+             {% for claim in claims_pending %}
+               <div id="claim-{{ claim.id }}" class="flex flex-col gap-3 rounded-xl bg-white/80 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                 <div class="space-y-1">
+                    <div class="text-sm text-slate">{{ claim.slot.mass_instance.starts_at|date:"D, d M • H:i" }}</div>
+                    <div class="text-base text-ink font-medium">Solicitação de posição</div>
+                    <div class="text-sm text-slate">{{ claim.slot.position_type.name }}</div>
+                 </div>
+                 <div class="flex w-full gap-2 sm:w-auto">
+                   <button hx-post="{% url 'position_claim_cancel' claim.id %}" hx-target="#claim-{{ claim.id }}" hx-swap="outerHTML" hx-confirm="Tem certeza que deseja cancelar esta solicitação?" class="btn-danger flex-1 sm:flex-none">Cancelar</button>
+                 </div>
+               </div>
+             {% endfor %}
           </div>
         </div>
       {% endif %}

@@ -48,6 +48,8 @@ IGNORE_DIRS: Set[str] = {
     ".vs",
     ".fleet",
     ".zed",
+    ".opencode",
+    ".interface-design",
     "node_modules",
     ".npm",
     ".yarn",
@@ -407,6 +409,9 @@ class Scanner:
         # Check extension
         if ext in IGNORE_EXTENSIONS:
             return True
+        # Special: ignore .md files except README.md
+        if ext == ".md" and name != "README.md":
+            return True
         return False
     
     def get_file_status(self, filepath: Path) -> Tuple[bool, str]:
@@ -753,11 +758,11 @@ def main():
         root = Path.cwd()
     
     # Banner
-    print("┌─────────────────────────────────────────┐")
-    print("│      📸 Project Snapshot Scanner        │")
-    print("└─────────────────────────────────────────┘")
+    print("+-----------------------------------------+")
+    print("|      Project Snapshot Scanner        |")
+    print("+-----------------------------------------+")
     print()
-    print(f"📂 Target: {root}")
+    print(f"Target: {root}")
     print()
     
     # Scan
@@ -772,38 +777,33 @@ def main():
     line_count = snapshot.count("\n") + 1
     token_estimate = estimate_tokens(snapshot)
     
-    print("📊 Statistics:")
-    print(f"   ├── Directories:   {scanner.stats['dirs']}")
-    print(f"   ├── Files found:   {scanner.stats['files']}")
-    print(f"   ├── Files included:{scanner.stats['included']}")
-    print(f"   ├── Binary files:  {scanner.stats['binary']}")
-    print(f"   ├── Large files:   {scanner.stats['large']}")
-    print(f"   └── Empty files:   {scanner.stats['empty']}")
+    print("Statistics:")
+    print(f"   Directories:   {scanner.stats['dirs']}")
+    print(f"   Files found:   {scanner.stats['files']}")
+    print(f"   Files included:{scanner.stats['included']}")
+    print(f"   Binary files:  {scanner.stats['binary']}")
+    print(f"   Large files:   {scanner.stats['large']}")
+    print(f"   Empty files:   {scanner.stats['empty']}")
     print()
-    print("📄 Snapshot:")
-    print(f"   ├── Lines:         {line_count:,}")
-    print(f"   ├── Characters:    {char_count:,}")
-    print(f"   ├── Size:          {format_size(char_count)}")
-    print(f"   └── Est. tokens:   ~{token_estimate:,}")
+    print("Snapshot:")
+    print(f"   Lines:         {line_count:,}")
+    print(f"   Characters:    {char_count:,}")
+    print(f"   Size:          {format_size(char_count)}")
+    print(f"   Est. tokens:   ~{token_estimate:,}")
     print()
-    
-    # Copy to clipboard
-    if copy_to_clipboard(snapshot):
-        print("✅ Snapshot copied to clipboard!")
-    else:
-        print("⚠️  Could not copy to clipboard.")
-        print("   Saving to 'snapshot.md' instead...")
-        try:
-            output_file = root / "snapshot.md"
-            output_file.write_text(snapshot, encoding="utf-8")
-            print(f"   ✅ Saved to: {output_file}")
-        except Exception as e:
-            print(f"   ❌ Error saving file: {e}")
-            print()
-            print("─" * 50)
-            print("Snapshot output:")
-            print("─" * 50)
-            print(snapshot)
+
+    # Save to file
+    try:
+        output_file = root / "snapshot.md"
+        output_file.write_text(snapshot, encoding="utf-8")
+        print(f"Saved to: {output_file}")
+    except Exception as e:
+        print(f"Error saving file: {e}")
+        print()
+        print("-" * 50)
+        print("Snapshot output:")
+        print("-" * 50)
+        print(snapshot)
 
 
 if __name__ == "__main__":

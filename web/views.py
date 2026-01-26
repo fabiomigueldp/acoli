@@ -226,12 +226,23 @@ def dashboard(request):
                 parish=parish,
                 acolyte=acolyte,
                 is_active=True,
-                assignment_state__in=["published", "locked"],
+                assignment_state__in=["proposed", "published", "locked"],
                 slot__mass_instance__starts_at__gte=timezone.now(),
+                slot__mass_instance__status="scheduled",
             ).select_related(
                 "slot__mass_instance__community",
                 "slot__position_type",
             ).order_by("slot__mass_instance__starts_at").first()
+
+            # Check if hero has swap options (other active slots in same mass)
+            hero_has_swap_options = False
+            if hero_assignment:
+                hero_has_swap_options = AssignmentSlot.objects.filter(
+                    parish=parish,
+                    mass_instance=hero_assignment.slot.mass_instance,
+                ).exclude(id=hero_assignment.slot_id).filter(
+                    assignments__is_active=True
+                ).exists()
 
             # Inbox: Pending confirmations and incoming swaps (excluding next assignment)
             pending_confirmations = Confirmation.objects.filter(
@@ -240,6 +251,7 @@ def dashboard(request):
                 assignment__is_active=True,
                 assignment__assignment_state__in=["published", "locked"],
                 assignment__slot__mass_instance__status="scheduled",
+                assignment__slot__mass_instance__starts_at__gte=timezone.now(),
                 status="pending",
             ).select_related(
                 "assignment__slot__mass_instance",
@@ -249,8 +261,21 @@ def dashboard(request):
             incoming_swaps = SwapRequest.objects.filter(
                 parish=parish,
                 target_acolyte=acolyte,
-                status="awaiting_approval"
+                mass_instance__starts_at__gte=timezone.now(),
+                status="pending",
             ).select_related("mass_instance")
+
+            # Pending position claims
+            claims_pending = PositionClaimRequest.objects.filter(
+                parish=parish,
+                requestor_acolyte=acolyte,
+                status__in=["pending_target", "pending_coordination"],
+                slot__mass_instance__starts_at__gte=timezone.now(),
+            ).select_related(
+                "slot__mass_instance__community",
+                "slot__position_type",
+                "target_assignment__acolyte",
+            )
 
             # Exclude next assignment from pending confirmations if it exists
             if hero_assignment:
@@ -269,7 +294,7 @@ def dashboard(request):
                 parish=parish,
                 acolyte=acolyte,
                 is_active=True,
-                assignment_state__in=["published", "locked"],
+                assignment_state__in=["proposed", "published", "locked"],
                 slot__mass_instance__starts_at__gte=timezone.now(),
             ).select_related(
                 "slot__mass_instance__community",
@@ -284,8 +309,10 @@ def dashboard(request):
             context.update({
                 "acolyte": acolyte,
                 "hero_assignment": hero_assignment,
+                "hero_has_swap_options": hero_has_swap_options,
                 "pending_confirmations": pending_confirmations,
                 "incoming_swaps": incoming_swaps,
+                "claims_pending": claims_pending,
                 "horizon_assignments": horizon_assignments,
                 "claims_by_slot": claims_by_slot,
             })
@@ -2642,9 +2669,28 @@ def acolyte_link(request):
 def _build_people_members(parish, filters):
     search = filters.get("q", "").strip()
     community_id = filters.get("community")
+    if community_id in [None, 'None', '']:
+        community_id = None
+    else:
+        try:
+            community_id = int(community_id)
+        except ValueError:
+            community_id = None
     experience = filters.get("experience")
     status = filters.get("status")
     role = filters.get("role")
+
+    # Qualification code mapping for compact display
+    QUALIFICATION_CODE_MAP = {
+        "Ceroferario": "CER",
+        "Cruciferario": "CRU",
+        "Cruciferario + Microfonario": "CRU+MIC",
+        "Librifero": "LIB",
+        "Microfonario": "MIC",
+        "Naveteiro": "NAV",
+        "Turiferario": "TUR",
+    }
+    ALL_QUALIFICATION_COUNT = 7
 
     memberships = ParishMembership.objects.filter(parish=parish).select_related("user").prefetch_related("roles")
     if role:
@@ -2668,7 +2714,7 @@ def _build_people_members(parish, filters):
             )
         )
     )
-    if community_id:
+    if community_id is not None:
         acolytes = acolytes.filter(community_of_origin_id=community_id)
     if experience:
         acolytes = acolytes.filter(experience_level=experience)
@@ -2697,10 +2743,14 @@ def _build_people_members(parish, filters):
         user = membership.user
         acolyte = acolytes_by_user.get(user.id)
         qualifications = []
+        qualification_codes = []
+        is_all_qualified = False
         stats = None
         if acolyte:
             quals = list(acolyte.acolytequalification_set.all())
             qualifications = [qual.position_type.name for qual in quals]
+            qualification_codes = [QUALIFICATION_CODE_MAP.get(name, name[:3].upper()) for name in qualifications]
+            is_all_qualified = len(qualification_codes) >= ALL_QUALIFICATION_COUNT
             stats = stats_map.get(acolyte.id)
         member_rows.append(
             {
@@ -2710,6 +2760,8 @@ def _build_people_members(parish, filters):
                 "roles": list(membership.roles.all()),
                 "experience": acolyte.experience_level if acolyte else None,
                 "qualifications": qualifications,
+                "qualification_codes": qualification_codes,
+                "is_all_qualified": is_all_qualified,
                 "stats": stats,
                 "membership_active": membership.active,
                 "detail_url": reverse("people_acolyte_detail", args=[acolyte.id])
@@ -2723,6 +2775,9 @@ def _build_people_members(parish, filters):
             continue
         stats = stats_map.get(acolyte.id)
         quals = list(acolyte.acolytequalification_set.all())
+        qualifications = [qual.position_type.name for qual in quals]
+        qualification_codes = [QUALIFICATION_CODE_MAP.get(name, name[:3].upper()) for name in qualifications]
+        is_all_qualified = len(qualification_codes) >= ALL_QUALIFICATION_COUNT
         member_rows.append(
             {
                 "user": acolyte.user,
@@ -2730,7 +2785,9 @@ def _build_people_members(parish, filters):
                 "name": acolyte.display_name,
                 "roles": [],
                 "experience": acolyte.experience_level,
-                "qualifications": [qual.position_type.name for qual in quals],
+                "qualifications": qualifications,
+                "qualification_codes": qualification_codes,
+                "is_all_qualified": is_all_qualified,
                 "stats": stats,
                 "membership_active": False,
                 "detail_url": reverse("people_acolyte_detail", args=[acolyte.id]),
@@ -2756,17 +2813,16 @@ def people_directory(request):
     members = _build_people_members(parish, filters)
     communities = Community.objects.filter(parish=parish, active=True).order_by("name")
     roles = MembershipRole.objects.filter(code__in=AcolyteLinkForm.ALLOWED_ROLE_CODES).order_by("code")
-    return render(
-        request,
-        "people/directory.html",
-        {
-            "members": members,
-            "communities": communities,
-            "roles": roles,
-            "experience_choices": AcolyteProfile.EXPERIENCE_CHOICES,
-            "filters": filters,
-        },
-    )
+    context = {
+        "members": members,
+        "communities": communities,
+        "roles": roles,
+        "experience_choices": AcolyteProfile.EXPERIENCE_CHOICES,
+        "filters": filters,
+    }
+    if request.headers.get("HX-Request"):
+        return render(request, "people/_people_list.html", context)
+    return render(request, "people/directory.html", context)
 
 
 @login_required
@@ -3785,10 +3841,9 @@ def acolyte_assign_to_slot(request, acolyte_id):
         slot = form.cleaned_data["slot"]
         try:
             assignment = assign_manual(
-                parish=parish,
-                slot=slot,
-                acolyte=acolyte,
-                user=request.user,
+                slot,
+                acolyte,
+                actor=request.user,
             )
             messages.success(request, f"Acolito escalado para {slot.mass_instance} - {slot.position_type.name}.")
         except ConcurrentUpdateError:
@@ -3892,8 +3947,8 @@ def acolyte_open_slots(request, acolyte_id):
     acolyte = get_object_or_404(AcolyteProfile, parish=parish, id=acolyte_id)
     
     # Get qualified positions
-    qualified_positions = acolyte.qualifications.filter(
-        parish=parish
+    qualified_positions = AcolyteQualification.objects.filter(
+        parish=parish, acolyte=acolyte, qualified=True
     ).values_list("position_type_id", flat=True)
     
     # Get open slots
@@ -3905,7 +3960,7 @@ def acolyte_open_slots(request, acolyte_id):
         mass_instance__status="scheduled",
     ).select_related(
         "mass_instance", "position_type", "mass_instance__community"
-    ).order_by("mass_instance__date", "mass_instance__time")[:50]
+    ).order_by("mass_instance__starts_at")[:50]
     
     form = AssignToSlotForm(parish=parish, acolyte=acolyte)
     
@@ -5094,12 +5149,29 @@ def decline_assignment(request, assignment_id):
                     idempotency_key=f"replacement:{new_assignment.id}",
                 )
     
-    # For HTMX, return empty response with success message (will remove the card)
+    # For HTMX, return updated hero assignment
     if request.headers.get("HX-Request"):
-        response = HttpResponse("")
-        response["HX-Success-Message"] = "Escala rejeitada."
-        # Tell HTMX to remove the element by swapping with empty content
-        return response
+        # Get new hero assignment
+        hero_assignment = Assignment.objects.filter(
+            parish=parish,
+            acolyte=assignment.acolyte,
+            is_active=True,
+            assignment_state__in=["proposed", "published", "locked"],
+            slot__mass_instance__starts_at__gte=timezone.now(),
+            slot__mass_instance__status="scheduled",
+        ).select_related(
+            "slot__mass_instance__community",
+            "slot__position_type",
+        ).order_by("slot__mass_instance__starts_at").first()
+
+        claims_by_slot = {}
+        if hero_assignment:
+            claims_by_slot = _claim_map_for_slots(parish, [hero_assignment.slot_id])
+
+        return render(request, "acolytes/_partials/dashboard_hero_assignment.html", {
+            "hero_assignment": hero_assignment,
+            "claims_by_slot": claims_by_slot,
+        })
     return redirect("my_assignments")
 
 
@@ -5156,3 +5228,308 @@ def cancel_assignment(request, assignment_id):
         response["HX-Success-Message"] = "Escala cancelada."
         return response
     return redirect("my_assignments")
+
+
+# ============================================================================
+# OPEN SLOTS DASHBOARD
+# ============================================================================
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def roster_open_slots(request):
+    """Dashboard showing all open slots with filtering and quick assignment."""
+    parish = request.active_parish
+    today = timezone.localdate()
+    
+    # Get filter parameters
+    start_date = _parse_date(request.GET.get("start"), today)
+    end_date = _parse_date(request.GET.get("end"), today + timedelta(days=14))
+    community_id = request.GET.get("community")
+    if community_id in [None, 'None', '']:
+        community_id = None
+    else:
+        try:
+            community_id = int(community_id)
+        except ValueError:
+            community_id = None
+    position_id = request.GET.get("position")
+    if position_id in [None, 'None', '']:
+        position_id = None
+    else:
+        try:
+            position_id = int(position_id)
+        except ValueError:
+            position_id = None
+    urgent_only = request.GET.get("urgent") == "1"
+    
+    # Build query for open slots
+    slots = AssignmentSlot.objects.filter(
+        parish=parish,
+        status="open",
+        required=True,
+        externally_covered=False,
+        mass_instance__status="scheduled",
+        mass_instance__starts_at__gte=timezone.now(),
+        mass_instance__starts_at__date__range=(start_date, end_date)
+    ).select_related(
+        "mass_instance__community",
+        "position_type",
+        "mass_instance__requirement_profile"
+    ).prefetch_related(
+        "mass_instance__slots__assignments"
+    )
+    
+    if community_id:
+        slots = slots.filter(mass_instance__community_id=community_id)
+    if position_id:
+        slots = slots.filter(position_type_id=position_id)
+    if urgent_only:
+        consolidation_threshold = timezone.now() + timedelta(days=7)
+        slots = slots.filter(mass_instance__starts_at__lte=consolidation_threshold)
+    
+    slots = slots.order_by("mass_instance__starts_at")
+    
+    # Calculate KPIs
+    total_open_slots = slots.count()
+    urgent_slots = slots.filter(
+        mass_instance__starts_at__lte=timezone.now() + timedelta(days=7)
+    ).count()
+    
+    # Calculate fill rate across all upcoming masses
+    all_upcoming_slots = AssignmentSlot.objects.filter(
+        parish=parish,
+        required=True,
+        mass_instance__status="scheduled",
+        mass_instance__starts_at__gte=timezone.now(),
+        mass_instance__starts_at__date__range=(start_date, end_date)
+    ).exclude(externally_covered=True)
+    total_required_slots = all_upcoming_slots.count()
+    filled_slots = all_upcoming_slots.filter(status="assigned").count()
+    fill_rate = int((filled_slots / total_required_slots * 100)) if total_required_slots > 0 else 100
+    
+    # Pagination
+    paginator = Paginator(slots, 20)
+    page = request.GET.get("page", 1)
+    slots_page = paginator.get_page(page)
+    
+    # Get communities and positions for filters
+    communities = Community.objects.filter(parish=parish, active=True).order_by("code")
+    positions = PositionType.objects.filter(parish=parish).order_by("name")
+    
+    # For HTMX requests, return only the table partial
+    if request.headers.get("HX-Request"):
+        return render(request, "roster/_open_slots_table.html", {
+            "slots": slots_page,
+            "page_obj": slots_page,
+        })
+    
+    return render(request, "roster/open_slots.html", {
+        "parish": parish,
+        "slots": slots_page,
+        "page_obj": slots_page,
+        "start_date": start_date,
+        "end_date": end_date,
+        "community_id": community_id or "",
+        "position_id": position_id or "",
+        "urgent_only": urgent_only,
+        "communities": communities,
+        "positions": positions,
+        "total_open_slots": total_open_slots,
+        "urgent_slots": urgent_slots,
+        "fill_rate": fill_rate,
+    })
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def roster_open_slot_assign(request, slot_id):
+    """HTMX endpoint to assign an acolyte to a specific slot."""
+    if request.method != "POST":
+        return HttpResponse("Method not allowed", status=405)
+    
+    parish = request.active_parish
+    slot = get_object_or_404(AssignmentSlot, parish=parish, id=slot_id)
+    acolyte_id = request.POST.get("acolyte_id") or request.POST.get("acolyte")
+    notes = request.POST.get("notes", "")
+    
+    if not acolyte_id:
+        return HttpResponse("Acolyte required", status=400)
+    
+    acolyte = get_object_or_404(AcolyteProfile, parish=parish, id=acolyte_id)
+    
+    try:
+        assign_manual(slot, acolyte, actor=request.user)
+        response = HttpResponse("")
+        response["HX-Success-Message"] = f"{acolyte.display_name} atribuido com sucesso."
+        return response
+    except Exception as e:
+        return HttpResponse(str(e), status=400)
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def roster_open_slot_mark_external(request, slot_id):
+    """HTMX endpoint to mark a slot as externally covered."""
+    if request.method != "POST":
+        return HttpResponse("Method not allowed", status=405)
+    
+    parish = request.active_parish
+    slot = get_object_or_404(AssignmentSlot, parish=parish, id=slot_id)
+    
+    slot.externally_covered = True
+    slot.status = "finalized"
+    slot.save(update_fields=["externally_covered", "status", "updated_at"])
+    
+    log_audit(
+        parish=parish,
+        actor=request.user,
+        entity_type="AssignmentSlot",
+        entity_id=slot.id,
+        action_type="update",
+        diff={"externally_covered": True}
+    )
+    
+    response = HttpResponse("")
+    response["HX-Success-Message"] = "Slot marcado como externo."
+    return response
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def roster_open_slot_get_candidates(request, slot_id):
+    """HTMX endpoint to get candidate acolytes for a slot."""
+    parish = request.active_parish
+    slot = get_object_or_404(AssignmentSlot, parish=parish, id=slot_id)
+    
+    # Get top candidates using quick_fill logic
+    from scheduler.services.quick_fill import quick_fill_slot
+    
+    candidates_acolytes = quick_fill_slot(slot, parish, max_candidates=10)
+    
+    # Enrich with stats for display
+    candidates = []
+    for acolyte in candidates_acolytes:
+        stats = AcolyteStats.objects.filter(parish=parish, acolyte=acolyte).first()
+        candidates.append({
+            'acolyte': acolyte,
+            'last_served': stats.last_served if stats else None,
+            'score': None,  # quick_fill doesn't expose scores
+            'reason': None,
+            'conflicts': False,  # Could add conflict detection later
+        })
+    
+    return render(request, "roster/_slot_candidates.html", {
+        "slot": slot,
+        "candidates": candidates,
+    })
+
+
+# ============================================================================
+# ACOLYTE MULTI-SLOT ASSIGNMENT
+# ============================================================================
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def acolyte_assign_to_multiple_slots(request, acolyte_id):
+    """Interface to assign an acolyte to multiple open slots at once."""
+    parish = request.active_parish
+    acolyte = get_object_or_404(AcolyteProfile, parish=parish, id=acolyte_id)
+    
+    # Get filter parameters
+    today = timezone.localdate()
+    start_date = _parse_date(request.GET.get("start"), today)
+    end_date = _parse_date(request.GET.get("end"), today + timedelta(days=30))
+    community_id = request.GET.get("community")
+    if community_id in [None, 'None', '']:
+        community_id = None
+    else:
+        try:
+            community_id = int(community_id)
+        except ValueError:
+            community_id = None
+    
+    # Get acolyte's qualifications
+    qualified_positions = AcolyteQualification.objects.filter(
+        parish=parish, acolyte=acolyte, qualified=True
+    ).values_list("position_type_id", flat=True)
+    
+    # Get open slots that match qualifications
+    slots = AssignmentSlot.objects.filter(
+        parish=parish,
+        status="open",
+        required=True,
+        externally_covered=False,
+        mass_instance__status="scheduled",
+        mass_instance__starts_at__gte=timezone.now(),
+        mass_instance__starts_at__date__range=(start_date, end_date),
+        position_type_id__in=qualified_positions
+    ).select_related(
+        "mass_instance__community",
+        "position_type"
+    ).order_by("mass_instance__starts_at")
+    
+    if community_id:
+        slots = slots.filter(mass_instance__community_id=community_id)
+    
+    # Get acolyte stats
+    stats = AcolyteStats.objects.filter(parish=parish, acolyte=acolyte).first()
+    
+    # Get communities for filter
+    communities = Community.objects.filter(parish=parish, active=True).order_by("code")
+    
+    return render(request, "people/acolyte_assign_multiple_slots.html", {
+        "parish": parish,
+        "acolyte": acolyte,
+        "slots": slots,
+        "stats": stats,
+        "start_date": start_date,
+        "end_date": end_date,
+        "community_id": community_id or "",
+        "communities": communities,
+    })
+
+
+@login_required
+@require_active_parish
+@require_parish_roles(ADMIN_ROLE_CODES)
+def acolyte_assign_to_multiple_slots_submit(request, acolyte_id):
+    """Handle submission of multiple slot assignments."""
+    if request.method != "POST":
+        return redirect("people_acolyte_detail", acolyte_id=acolyte_id)
+    
+    parish = request.active_parish
+    acolyte = get_object_or_404(AcolyteProfile, parish=parish, id=acolyte_id)
+    
+    slot_ids = request.POST.getlist("slots")
+    notes = request.POST.get("notes", "")
+    
+    if not slot_ids:
+        messages.error(request, "Nenhum slot selecionado.")
+        return redirect("acolyte_assign_to_multiple_slots", acolyte_id=acolyte_id)
+    
+    # Validate and assign each slot
+    success_count = 0
+    errors = []
+    
+    for slot_id in slot_ids:
+        try:
+            slot = AssignmentSlot.objects.get(parish=parish, id=slot_id)
+            assign_manual(slot, acolyte, actor=request.user)
+            success_count += 1
+        except AssignmentSlot.DoesNotExist:
+            errors.append(f"Slot {slot_id} não encontrado")
+        except Exception as e:
+            errors.append(f"Erro no slot {slot_id}: {str(e)}")
+    
+    if success_count > 0:
+        messages.success(request, f"{success_count} atribuições criadas com sucesso.")
+    if errors:
+        for error in errors:
+            messages.error(request, error)
+    
+    return redirect("people_acolyte_detail", acolyte_id=acolyte_id)

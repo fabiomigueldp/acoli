@@ -39,9 +39,10 @@
       </div>
       </div>
     </div>
+    {% url 'structure_communities_list' as fallback_url %}
     <div class="flex items-center gap-3">
       <button class="btn-primary">Salvar</button>
-      <a class="btn-secondary" href="{% url 'structure_communities_list' %}">Voltar</a>
+      <a class="btn-secondary" href="{{ back_url|default:fallback_url }}">Voltar</a>
     </div>
   </form>
 </div>

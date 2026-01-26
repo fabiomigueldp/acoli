@@ -5,7 +5,7 @@
 - Identidade: `User` global + `ParishMembership` para papeis por paroquia.
 - Acolitos: `AcolyteProfile` separado da identidade para permitir uso sem login.
 - Calendario: `MassTemplate` (recorrencia) + `MassInstance` (instancia) + `MassOverride` (cancelar/mover/alterar requisitos).
-- Eventos: `EventSeries` + `EventOccurrence` (dias) com resolucao de conflitos e `EventInterest` para pool de interessados.
+- Eventos: `EventSeries` + `EventOccurrence` (dias) com resolucao de conflitos e `MassInterest` por missa para pool de interessados.
 - MassInstance: unicidade garantida apenas para status `scheduled`, preservando historico de cancelamentos.
 - Escalas: `AssignmentSlot` + `Assignment` (historico com `is_active`) + `Confirmation` + `SwapRequest` + `ReplacementRequest` (com resolucao e motivo).
 - Auditoria: `AuditEvent` para historico de alteracoes criticas.

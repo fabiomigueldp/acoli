@@ -28,3 +28,14 @@ def active_parish(request):
         "no_parishes": no_parishes,
     }
 
+
+def back_url(request):
+    """Provide back_url for navigation."""
+    back_url_value = request.session.get("back_url")
+    current_url = request.build_absolute_uri()
+    if back_url_value == current_url:
+        back_url_value = None
+    return {
+        "back_url": back_url_value,
+    }
+
