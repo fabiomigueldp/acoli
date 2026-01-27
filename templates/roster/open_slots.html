@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+{% load extras %}
+{% block title %}Slots Abertos{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="card">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div>
+        <h2 class="font-serif text-xl">Slots Abertos</h2>
+        <p class="text-sm text-slate">Preencha rapidamente posicoes em aberto</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-4 mb-6">
+      <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
+        <div class="text-2xl font-semibold text-red-700">{{ total_open_slots }}</div>
+        <div class="text-sm text-red-600">Abertos</div>
+      </div>
+      <div class="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+        <div class="text-2xl font-semibold text-amber-700">{{ urgent_slots }}</div>
+        <div class="text-sm text-amber-600">Urgentes</div>
+      </div>
+      <div class="p-4 bg-moss-50 border border-moss-200 rounded-lg">
+        <div class="text-2xl font-semibold text-moss-700">{{ fill_rate }}%</div>
+        <div class="text-sm text-moss-600">Preenchimento</div>
+      </div>
+    </div>
+
+    <form method="get" class="grid sm:grid-cols-6 gap-3 mb-4">
+      <div>
+        <label class="label">Data inicio</label>
+        <input type="date" name="start" value="{{ start_date|date:'Y-m-d' }}" class="input w-full">
+      </div>
+      <div>
+        <label class="label">Data final</label>
+        <input type="date" name="end" value="{{ end_date|date:'Y-m-d' }}" class="input w-full">
+      </div>
+      <div>
+        <label class="label">Comunidade</label>
+        <div class="custom-select">
+          <input type="hidden" name="community" value="{{ community_id }}">
+          <button type="button" class="custom-select-button">
+            <span class="selected-text">
+              {% if community_id %}
+                {% for community in communities %}
+                  {% if community_id|stringformat:"s" == community.id|stringformat:"s" %}{{ community.code }}{% endif %}
+                {% endfor %}
+              {% else %}
+                Todas
+              {% endif %}
+            </span>
+          </button>
+          <div class="custom-select-options">
+            <button type="button" class="custom-select-option {% if not community_id %}selected{% endif %}" data-value="">Todas</button>
+            {% for community in communities %}
+              <button type="button" class="custom-select-option {% if community_id|stringformat:"s" == community.id|stringformat:"s" %}selected{% endif %}" data-value="{{ community.id }}">{{ community.code }}</button>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      <div>
+        <label class="label">Posicao</label>
+        <div class="custom-select">
+          <input type="hidden" name="position" value="{{ position_id }}">
+          <button type="button" class="custom-select-button">
+            <span class="selected-text">
+              {% if position_id %}
+                {% for position in positions %}
+                  {% if position_id|stringformat:"s" == position.id|stringformat:"s" %}{{ position.name }}{% endif %}
+                {% endfor %}
+              {% else %}
+                Todas
+              {% endif %}
+            </span>
+          </button>
+          <div class="custom-select-options">
+            <button type="button" class="custom-select-option {% if not position_id %}selected{% endif %}" data-value="">Todas</button>
+            {% for position in positions %}
+              <button type="button" class="custom-select-option {% if position_id|stringformat:"s" == position.id|stringformat:"s" %}selected{% endif %}" data-value="{{ position.id }}">{{ position.name }}</button>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      <div class="flex items-end">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" name="urgent" value="1" {% if urgent_only %}checked{% endif %} class="rounded border-sand-200">
+          <span class="text-sm">Urgentes</span>
+        </label>
+      </div>
+      <div class="flex items-end">
+        <button class="btn-primary w-full" type="submit">Filtrar</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="slots-container">
+    {% include "roster/_open_slots_table.html" %}
+  </div>
+</div>
+
+<!-- Modal Container for HTMX -->
+<div id="modal-container" class="hidden fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+  <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+    <div class="fixed inset-0 bg-ink/40 backdrop-blur-sm transition-opacity" aria-hidden="true" onclick="document.getElementById('modal-container').classList.add('hidden')"></div>
+    <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+    <div class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-soft transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full border border-black/5">
+      <!-- Modal content will be loaded here via HTMX -->
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -83,9 +83,11 @@ from core.services.replacements import (
 from core.services.swaps import apply_swap_request
 from core.services.availability import is_acolyte_available, is_acolyte_available_with_rules
 from core.services.acolytes import deactivate_future_assignments_for_acolyte
+from core.services.time_windows import filter_past, filter_upcoming
 from scheduler.models import ScheduleJobRequest
 from notifications.services import enqueue_notification
 from scheduler.services.quick_fill import build_quick_fill_cache, quick_fill_slot
+from core.services.recommendations import build_recommendation_cache, rank_candidates
 from web.forms import (
     AcolyteAvailabilityRuleForm,
     AcolyteIntentForm,
@@ -144,18 +146,21 @@ def dashboard(request):
         "dashboard_view": dashboard_view,
     }
 
+    now = timezone.now()
+    cutoff = now + timedelta(days=14)
+    unfilled = AssignmentSlot.objects.filter(
+        parish=parish,
+        status="open",
+        required=True,
+        mass_instance__starts_at__gte=now,
+        mass_instance__starts_at__lte=cutoff,
+    ).count()
+    context["unfilled"] = unfilled
+
     if dashboard_view == "admin":
         # Management by Exception
-        now = timezone.now()
-        cutoff = now + timedelta(days=14)
         soon_cutoff = now + timedelta(days=2)
-        open_slots_count = AssignmentSlot.objects.filter(
-            parish=parish,
-            status="open",
-            required=True,
-            mass_instance__starts_at__gte=now,
-            mass_instance__starts_at__lte=cutoff,
-        ).count()
+        open_slots_count = unfilled
         pending_swaps = SwapRequest.objects.filter(
             parish=parish,
             status__in=["pending", "awaiting_approval"]
@@ -742,15 +747,23 @@ def mass_detail(request, instance_id):
 
 
 def _slot_candidate_list(parish, slot, query=None):
-    qualified_ids = AcolyteQualification.objects.filter(
-        parish=parish,
-        position_type=slot.position_type,
-        qualified=True,
-    ).values_list("acolyte_id", flat=True)
-    acolytes = parish.acolytes.filter(active=True, id__in=qualified_ids)
-    if query:
-        acolytes = acolytes.filter(display_name__icontains=query)
-    return [acolyte for acolyte in acolytes if is_acolyte_available(acolyte, slot.mass_instance)]
+    cache = build_recommendation_cache(parish, slots=[slot])
+    assigned_acolyte_ids = set(
+        Assignment.objects.filter(
+            parish=parish,
+            slot__mass_instance=slot.mass_instance,
+            is_active=True,
+        ).values_list("acolyte_id", flat=True)
+    )
+    return rank_candidates(
+        slot,
+        parish,
+        query=query,
+        cache=cache,
+        exclude_acolyte_ids=assigned_acolyte_ids,
+        enforce_dynamic=True,
+        include_meta=True,
+    )
 
 
 def _build_slots_context(parish, instance, user=None):
@@ -776,7 +789,7 @@ def _build_slots_context(parish, instance, user=None):
     for slot in slots:
         slot.recent_assignments = recent_by_slot.get(slot.id, [])
     position_ids = {slot.position_type_id for slot in slots}
-    quick_fill_cache = build_quick_fill_cache(parish, position_type_ids=position_ids)
+    quick_fill_cache = build_quick_fill_cache(parish, position_type_ids=position_ids, slots=slots)
     # Collect acolyte IDs already assigned in this mass to exclude from suggestions
     assigned_acolyte_ids = set()
     for slot in slots:
@@ -1525,7 +1538,7 @@ def structure_role_delete(request, role_id):
         if AssignmentSlot.objects.filter(position_type=role).exists():
             messages.error(
                 request,
-                "Nao e possivel excluir esta funcao porque existem escalas historicas. Desative a funcao se nao for mais usada.",
+                "Nao e possivel excluir esta funcao. Existem escalas historicas. Desative a funcao se nao for mais usada.",
             )
             return redirect("structure_roles_list")
         role_id = role.id
@@ -1675,6 +1688,9 @@ def event_series_list(request):
 def event_interest(request):
     parish = request.active_parish
     acolyte = parish.acolytes.filter(user=request.user).first()
+    weights = parish.schedule_weights or {}
+    deadline_hours = int(weights.get("interest_deadline_hours", 48) or 0)
+    now = timezone.now()
     mass_qs = (
         MassInstance.objects.filter(
             parish=parish,
@@ -1697,10 +1713,28 @@ def event_interest(request):
             interest.mass_instance_id: interest
             for interest in MassInterest.objects.filter(parish=parish, acolyte=acolyte)
         }
+    closed_ids = set()
+    deadline_by_mass = {}
+    for item in series_list:
+        for mass in getattr(item, "upcoming_masses", []):
+            if item.candidate_pool != "interested_only":
+                continue
+            deadline_at = item.interest_deadline_at
+            if deadline_at and timezone.is_naive(deadline_at):
+                deadline_at = timezone.make_aware(deadline_at, timezone.get_current_timezone())
+            if not deadline_at and deadline_hours:
+                deadline_at = mass.starts_at - timedelta(hours=deadline_hours)
+            if deadline_at:
+                deadline_by_mass[mass.id] = deadline_at
+                if now >= deadline_at:
+                    closed_ids.add(mass.id)
+
     if request.method == "POST" and acolyte:
         selected = set(request.POST.getlist("masses"))
         masses = [mass for item in series_list for mass in item.upcoming_masses]
         for mass in masses:
+            if mass.id in closed_ids:
+                continue
             interested = str(mass.id) in selected
             obj, _ = MassInterest.objects.get_or_create(
                 parish=parish, mass_instance=mass, acolyte=acolyte, defaults={"interested": interested}
@@ -1712,7 +1746,13 @@ def event_interest(request):
     return render(
         request,
         "events/interest.html",
-        {"series": series_list, "interests": interests, "acolyte": acolyte},
+        {
+            "series": series_list,
+            "interests": interests,
+            "acolyte": acolyte,
+            "closed_ids": closed_ids,
+            "deadline_by_mass": deadline_by_mass,
+        },
     )
 
 
@@ -1736,6 +1776,7 @@ def event_series_create(request):
                 "default_community_id": cleaned["default_community"].id if cleaned["default_community"] else None,
                 "default_requirement_profile_id": cleaned["default_requirement_profile"].id if cleaned["default_requirement_profile"] else None,
                 "candidate_pool": cleaned["candidate_pool"],
+                "interest_deadline_at": cleaned["interest_deadline_at"].isoformat() if cleaned.get("interest_deadline_at") else None,
             }
             return redirect("event_series_days")
     else:
@@ -1766,6 +1807,11 @@ def event_series_days(request):
     default_time = datetime.strptime(draft["default_time"], "%H:%M").time()
     default_community = draft.get("default_community_id")
     default_profile = draft.get("default_requirement_profile_id")
+    interest_deadline_at = None
+    if draft.get("interest_deadline_at"):
+        interest_deadline_at = datetime.fromisoformat(draft["interest_deadline_at"])
+        if timezone.is_naive(interest_deadline_at):
+            interest_deadline_at = timezone.make_aware(interest_deadline_at, timezone.get_current_timezone())
 
     dates = []
     current = start_date
@@ -1786,6 +1832,7 @@ def event_series_days(request):
                 end_date=end_date,
                 default_community_id=default_community,
                 candidate_pool=draft.get("candidate_pool", "all"),
+                interest_deadline_at=interest_deadline_at,
                 ruleset_json={
                     "default_time": draft["default_time"],
                     "default_requirement_profile_id": draft.get("default_requirement_profile_id"),
@@ -1886,6 +1933,8 @@ def event_series_days(request):
 def event_series_detail(request, series_id):
     parish = request.active_parish
     series = get_object_or_404(EventSeries, parish=parish, id=series_id)
+    weights = parish.schedule_weights or {}
+    interest_deadline_hours = int(weights.get("interest_deadline_hours", 48) or 0)
     occurrences = (
         series.occurrences.select_related("community", "requirement_profile")
         .order_by("date", "time")
@@ -1909,6 +1958,7 @@ def event_series_detail(request, series_id):
             "masses": masses,
             "default_time": default_time,
             "default_profile": default_profile,
+            "interest_deadline_hours": interest_deadline_hours,
         },
     )
 
@@ -1931,6 +1981,7 @@ def event_series_edit(request, series_id):
         "end_date": series.end_date,
         "default_community": series.default_community_id,
         "candidate_pool": series.candidate_pool,
+        "interest_deadline_at": series.interest_deadline_at,
     }
     default_time = (series.ruleset_json or {}).get("default_time")
     if default_time:
@@ -1955,6 +2006,7 @@ def event_series_edit(request, series_id):
             series.end_date = cleaned["end_date"]
             series.default_community = cleaned.get("default_community")
             series.candidate_pool = cleaned["candidate_pool"]
+            series.interest_deadline_at = cleaned.get("interest_deadline_at")
             ruleset = series.ruleset_json or {}
             ruleset["default_time"] = cleaned["default_time"].strftime("%H:%M")
             ruleset["default_requirement_profile_id"] = (
@@ -2167,7 +2219,12 @@ def scheduling_dashboard(request):
     jobs = ScheduleJobRequest.objects.filter(parish=parish).order_by("-created_at")[:10]
     if request.method == "POST":
         if request.POST.get("action") == "run":
-            ScheduleJobRequest.objects.create(parish=parish, requested_by=request.user, horizon_days=parish.horizon_days)
+            ScheduleJobRequest.objects.create(
+                parish=parish,
+                requested_by=request.user,
+                horizon_days=parish.horizon_days,
+                job_type="schedule",
+            )
         return redirect("scheduling_dashboard")
 
     today = timezone.now().date()
@@ -2515,7 +2572,11 @@ def replacement_center(request):
     ).count()
     if replacements:
         position_ids = {item.slot.position_type_id for item in replacements}
-        quick_fill_cache = build_quick_fill_cache(parish, position_type_ids=position_ids)
+        quick_fill_cache = build_quick_fill_cache(
+            parish,
+            position_type_ids=position_ids,
+            slots=[item.slot for item in replacements],
+        )
         suggestions = {
             item.id: quick_fill_slot(item.slot, parish, max_candidates=3, cache=quick_fill_cache)
             for item in replacements
@@ -3354,21 +3415,25 @@ def _acolyte_overview_context(parish, acolyte, user, stats, intent):
     
     # Upcoming assignments (future, active only)
     now = timezone.now()
-    upcoming_assignments = Assignment.objects.filter(
-        parish=parish,
-        acolyte=acolyte,
-        is_active=True,
-        slot__mass_instance__starts_at__gte=now
+    upcoming_assignments = filter_upcoming(
+        Assignment.objects.filter(
+            parish=parish,
+            acolyte=acolyte,
+            is_active=True,
+        ),
+        now=now,
     ).select_related(
         "slot__mass_instance__community", "slot__position_type", "confirmation"
     ).order_by("slot__mass_instance__starts_at")[:3]
     
     # Past assignments (served - confirmed or attended)
-    past_assignments = Assignment.objects.filter(
-        parish=parish,
-        acolyte=acolyte,
-        is_active=True,
-        slot__mass_instance__starts_at__lt=now
+    past_assignments = filter_past(
+        Assignment.objects.filter(
+            parish=parish,
+            acolyte=acolyte,
+            is_active=True,
+        ),
+        now=now,
     ).select_related(
         "slot__mass_instance__community", "slot__position_type", "confirmation"
     ).order_by("-slot__mass_instance__starts_at")[:3]
@@ -3428,9 +3493,9 @@ def _acolyte_schedule_context(request, parish, acolyte):
     # Apply filters
     now = timezone.now()
     if time_filter == "upcoming":
-        assignments_qs = assignments_qs.filter(slot__mass_instance__starts_at__gte=now)
+        assignments_qs = filter_upcoming(assignments_qs, now=now)
     elif time_filter == "past":
-        assignments_qs = assignments_qs.filter(slot__mass_instance__starts_at__lt=now)
+        assignments_qs = filter_past(assignments_qs, now=now)
     
     if status_filter == "active":
         assignments_qs = assignments_qs.filter(is_active=True)
@@ -5129,25 +5194,16 @@ def decline_assignment(request, assignment_id):
                 idempotency_key=f"cancel:{assignment.id}:{user.id}",
             )
     if parish.auto_assign_on_decline:
-        candidates = quick_fill_slot(slot, parish, max_candidates=1)
-        if candidates:
-            try:
-                new_assignment = assign_replacement_request(parish, replacement.id, candidates[0], actor=request.user)
-            except (ConcurrentUpdateError, ValueError):
-                if request.headers.get("HX-Request"):
-                    response = HttpResponse(status=204)
-                    response["HX-Success-Message"] = "Esta vaga foi atualizada por outra acao. Recarregue e tente novamente."
-                    return response
-                messages.error(request, "Esta vaga foi atualizada por outra acao. Recarregue e tente novamente.")
-                return redirect("my_assignments")
-            if new_assignment.acolyte.user:
-                enqueue_notification(
-                    parish,
-                    new_assignment.acolyte.user,
-                    "REPLACEMENT_ASSIGNED",
-                    {"assignment_id": new_assignment.id},
-                    idempotency_key=f"replacement:{new_assignment.id}",
-                )
+        ScheduleJobRequest.objects.create(
+            parish=parish,
+            requested_by=request.user,
+            job_type="replacement",
+            horizon_days=0,
+            payload_json={
+                "slot_id": slot.id,
+                "replacement_request_id": replacement.id,
+            },
+        )
     
     # For HTMX, return updated hero assignment
     if request.headers.get("HX-Request"):
@@ -5405,21 +5461,34 @@ def roster_open_slot_get_candidates(request, slot_id):
     parish = request.active_parish
     slot = get_object_or_404(AssignmentSlot, parish=parish, id=slot_id)
     
-    # Get top candidates using quick_fill logic
-    from scheduler.services.quick_fill import quick_fill_slot
-    
-    candidates_acolytes = quick_fill_slot(slot, parish, max_candidates=10)
-    
-    # Enrich with stats for display
+    cache = build_recommendation_cache(parish, slots=[slot])
+    assigned_acolyte_ids = set(
+        Assignment.objects.filter(
+            parish=parish,
+            slot__mass_instance=slot.mass_instance,
+            is_active=True,
+        ).values_list("acolyte_id", flat=True)
+    )
+    candidates_meta = rank_candidates(
+        slot,
+        parish,
+        max_candidates=10,
+        exclude_acolyte_ids=assigned_acolyte_ids,
+        cache=cache,
+        include_meta=True,
+        enforce_dynamic=True,
+    )
+
     candidates = []
-    for acolyte in candidates_acolytes:
+    for entry in candidates_meta:
+        acolyte = entry["acolyte"]
         stats = AcolyteStats.objects.filter(parish=parish, acolyte=acolyte).first()
         candidates.append({
-            'acolyte': acolyte,
-            'last_served': stats.last_served if stats else None,
-            'score': None,  # quick_fill doesn't expose scores
-            'reason': None,
-            'conflicts': False,  # Could add conflict detection later
+            "acolyte": acolyte,
+            "last_served": stats.last_served_at if stats else None,
+            "score": entry.get("score"),
+            "reason": entry.get("reason"),
+            "conflicts": False,
         })
     
     return render(request, "roster/_slot_candidates.html", {

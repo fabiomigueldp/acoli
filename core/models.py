@@ -273,6 +273,7 @@ class EventSeries(TimeStampedModel):
     default_community = models.ForeignKey(Community, on_delete=models.SET_NULL, null=True, blank=True)
     ruleset_json = models.JSONField(default=dict, blank=True)
     candidate_pool = models.CharField(max_length=20, choices=CANDIDATE_POOL_CHOICES, default="all")
+    interest_deadline_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="eventseries_created")
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="eventseries_updated")
     is_active = models.BooleanField(default=True)

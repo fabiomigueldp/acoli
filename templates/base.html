@@ -124,6 +124,7 @@
         <div id="toast-container" class="fixed top-24 right-6 z-50 space-y-2 pointer-events-none">
           <!-- Toasts will be injected here -->
         </div>
+        {% include 'partials/_messages.html' %}
 
         {% block content %}{% endblock %}
       </main>

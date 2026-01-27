@@ -1,0 +1,111 @@
+{% load extras %}
+<div class="p-6 max-h-[80vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h3 class="text-lg font-semibold text-ink">Atribuir slot</h3>
+            <p class="text-sm text-slate mt-1">
+                {{ slot.mass_instance.starts_at|date:"d/m/Y H:i" }} - {{ slot.mass_instance.community.code }} - {{ slot.position_type.name }}
+            </p>
+        </div>
+        <button type="button" class="text-slate hover:text-ink transition-colors"
+                onclick="document.getElementById('modal-container').classList.add('hidden')">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    </div>
+    
+    {% if candidates %}
+    <form method="post" action="{% url 'roster_open_slot_assign' slot.id %}" id="assign-candidate-form"
+          hx-post="{% url 'roster_open_slot_assign' slot.id %}"
+          hx-target="#slot-row-{{ slot.id }}"
+          hx-swap="delete">
+        {% csrf_token %}
+        <input type="hidden" name="acolyte_id" id="selected-acolyte-id" value="">
+        
+        <div class="mb-6">
+            <label class="label mb-3">Acolitos recomendados</label>
+            <div class="space-y-2 max-h-96 overflow-y-auto">
+                {% for candidate in candidates %}
+                <label class="candidate-option block p-3 border border-sand-200 rounded-lg cursor-pointer hover:border-moss hover:bg-moss/5 transition-all">
+                    <input type="radio" name="candidate_radio" value="{{ candidate.acolyte.id }}" class="sr-only candidate-radio">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="flex-1 min-w-0">
+                            <div class="font-medium text-ink mb-1">
+                                {{ candidate.acolyte.display_name }}
+                            </div>
+                            <div class="text-xs text-slate space-y-1">
+                                {% if candidate.score %}
+                                <div>Score: {{ candidate.score|floatformat:1 }}</div>
+                                {% endif %}
+                                {% if candidate.reason %}
+                                <div>{{ candidate.reason }}</div>
+                                {% endif %}
+                                {% if candidate.last_served %}
+                                <div>Ultima escala: {{ candidate.last_served|date:"d/m/Y" }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if candidate.conflicts %}
+                        <div class="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 rounded">
+                            Conflitos
+                        </div>
+                        {% endif %}
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <div class="mb-6">
+            <label class="label">Observacoes</label>
+            <textarea name="notes" rows="2" class="input w-full" placeholder="Opcional"></textarea>
+        </div>
+        
+        <div class="flex flex-col-reverse sm:flex-row justify-end gap-3">
+            <button type="button" class="btn-secondary"
+                    onclick="document.getElementById('modal-container').classList.add('hidden')">
+                Cancelar
+            </button>
+            <button type="submit" class="btn-primary" id="confirm-assign-btn" disabled>
+                Confirmar
+            </button>
+        </div>
+    </form>
+    {% else %}
+    <div class="text-center py-12">
+        <p class="text-slate mb-2">Nenhum candidato encontrado para este slot.</p>
+        <p class="text-sm text-slate">Verifique se ha acolitos qualificados disponiveis.</p>
+        <button type="button" class="btn-secondary mt-6"
+                onclick="document.getElementById('modal-container').classList.add('hidden')">
+            Fechar
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const radios = document.querySelectorAll('.candidate-radio');
+    const hiddenInput = document.getElementById('selected-acolyte-id');
+    const confirmBtn = document.getElementById('confirm-assign-btn');
+    const candidateOptions = document.querySelectorAll('.candidate-option');
+    
+    radios.forEach((radio, index) => {
+        radio.addEventListener('change', function() {
+            hiddenInput.value = this.value;
+            confirmBtn.disabled = false;
+            
+            candidateOptions.forEach(opt => opt.classList.remove('border-moss', 'bg-moss/10'));
+            if (this.checked) {
+                candidateOptions[index].classList.add('border-moss', 'bg-moss/10');
+            }
+        });
+    });
+    
+    // Close modal after successful assignment
+    document.getElementById('assign-candidate-form').addEventListener('htmx:afterSwap', function() {
+        document.getElementById('modal-container').classList.add('hidden');
+    });
+});
+</script>

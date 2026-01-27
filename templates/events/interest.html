@@ -15,6 +15,9 @@
             <div>
               <div class="font-medium">{{ item.title }}</div>
               <div class="text-sm text-slate">{{ item.start_date }} a {{ item.end_date }}</div>
+              {% if item.candidate_pool == "interested_only" and item.interest_deadline_at %}
+                <div class="text-xs text-slate">Prazo de interesse: {{ item.interest_deadline_at|date:"d/m/Y H:i" }}</div>
+              {% endif %}
             </div>
             <div class="space-y-2">
               {% for mass in item.upcoming_masses %}
@@ -22,9 +25,19 @@
                   <div>
                     <div class="font-medium">{{ mass.starts_at|date:"d/m/Y" }} as {{ mass.starts_at|date:"H:i" }}</div>
                     <div class="text-sm text-slate">{{ mass.community.code }} · {{ mass.liturgy_label|default:item.title }}</div>
+                    {% if item.candidate_pool == "interested_only" and not item.interest_deadline_at %}
+                      {% with deadline=deadline_by_mass|get_item:mass.id %}
+                        {% if deadline %}
+                          <div class="text-xs text-slate">Prazo de interesse: {{ deadline|date:"d/m/Y H:i" }}</div>
+                        {% endif %}
+                      {% endwith %}
+                    {% endif %}
+                    {% if mass.id in closed_ids %}
+                      <div class="text-xs text-slate">Inscricoes encerradas.</div>
+                    {% endif %}
                   </div>
                   {% with interest=interests|get_item:mass.id %}
-                    <input type="checkbox" name="masses" value="{{ mass.id }}" {% if interest and interest.interested %}checked{% endif %} />
+                    <input type="checkbox" name="masses" value="{{ mass.id }}" {% if interest and interest.interested %}checked{% endif %} {% if mass.id in closed_ids %}disabled{% endif %} />
                   {% endwith %}
                 </label>
               {% empty %}

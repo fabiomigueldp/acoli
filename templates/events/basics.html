@@ -15,7 +15,7 @@
        <div>
          <label class="label" for="id_series_type">Tipo litúrgico</label>
          <div class="custom-select">
-           <input type="hidden" name="series_type" value="{{ form.series_type.value }}">
+           <input type="hidden" name="series_type" value="{{ form.series_type.value }}" id="id_series_type">
            <button type="button" class="custom-select-button">
              <span class="selected-text">
                {% if form.series_type.value %}
@@ -134,9 +134,9 @@
       </div>
        <div class="sm:col-span-2">
          <label class="label" for="id_candidate_pool">Pool de candidatos</label>
-         <div class="custom-select">
-           <input type="hidden" name="candidate_pool" value="{{ form.candidate_pool.value }}">
-           <button type="button" class="custom-select-button">
+          <div class="custom-select">
+            <input type="hidden" name="candidate_pool" value="{{ form.candidate_pool.value }}" id="id_candidate_pool">
+            <button type="button" class="custom-select-button">
              <span class="selected-text">
                {% if form.candidate_pool.value %}
                  {% for choice_value, choice_label in form.candidate_pool.field.choices %}
@@ -153,10 +153,18 @@
              {% endfor %}
            </div>
          </div>
-         {% if form.candidate_pool.errors %}
-           <div class="form-error">{{ form.candidate_pool.errors.0 }}</div>
-         {% endif %}
-       </div>
+          {% if form.candidate_pool.errors %}
+            <div class="form-error">{{ form.candidate_pool.errors.0 }}</div>
+          {% endif %}
+        </div>
+        <div id="interest_deadline_field" class="sm:col-span-2 {% if form.candidate_pool.value != 'interested_only' %}hidden{% endif %}">
+          <label class="label" for="id_interest_deadline_at">Prazo de interesse</label>
+          {{ form.interest_deadline_at }}
+          {% if form.interest_deadline_at.errors %}
+            <p class="mt-1 text-xs text-red-600">{{ form.interest_deadline_at.errors.0 }}</p>
+          {% endif %}
+          <p class="text-xs text-slate mt-1">Opcional. Se vazio, usa o prazo padrao da paroquia.</p>
+        </div>
     </div>
     <div class="flex items-center gap-3 pt-2">
       <button type="submit" class="btn-primary">{{ submit_label|default:"Avancar" }}</button>
@@ -186,6 +194,27 @@
     
     typeField.addEventListener("change", toggleOther);
     toggleOther();
+  })();
+  (function () {
+    const poolField = document.getElementById("id_candidate_pool");
+    const deadlineWrap = document.getElementById("interest_deadline_field");
+    const deadlineInput = document.getElementById("id_interest_deadline_at");
+    if (!poolField || !deadlineWrap || !deadlineInput) return;
+
+    let isInitialLoad = true;
+
+    const toggleDeadline = () => {
+      const show = poolField.value === "interested_only";
+      deadlineWrap.classList.toggle("hidden", !show);
+      deadlineInput.disabled = !show;
+      if (!show && !isInitialLoad) {
+        deadlineInput.value = "";
+      }
+      isInitialLoad = false;
+    };
+
+    poolField.addEventListener("change", toggleDeadline);
+    toggleDeadline();
   })();
 </script>
 {% endblock %}

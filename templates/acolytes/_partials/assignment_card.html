@@ -131,31 +131,19 @@
           {% endwith %}
         {% endwith %}
 
-        {# Rejeitar / Cancelar #}
-        {% if assignment.confirmation and assignment.confirmation.status == "confirmed" %}
-          <button
-            hx-post="{% url 'decline_assignment' assignment.id %}"
-            hx-target="#assignment-{{ assignment.id }}"
-            hx-swap="outerHTML"
-            hx-confirm="Você realmente deseja cancelar esta escala que já havia confirmado? Prosseguir com esta ação resultará na transferência da escala para outro acólito."
-            class="btn-secondary"
-            type="button">
-            Cancelar
-          </button>
-        {% else %}
-          <button
-            hx-post="{% url 'decline_assignment' assignment.id %}"
-            hx-target="#assignment-{{ assignment.id }}"
-            hx-swap="outerHTML"
-            hx-confirm="Tem certeza que deseja rejeitar esta escala?"
-            class="btn-danger inline-flex items-center gap-2"
-            type="button">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-            Rejeitar
-          </button>
-        {% endif %}
+        {# Rejeitar #}
+        <button
+          hx-post="{% url 'decline_assignment' assignment.id %}"
+          hx-target="#assignment-{{ assignment.id }}"
+          hx-swap="outerHTML"
+          hx-confirm="Tem certeza que deseja rejeitar esta escala?"
+          class="btn-danger inline-flex items-center gap-2"
+          type="button">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+          Rejeitar
+        </button>
       </div>
     </div>
   </div>

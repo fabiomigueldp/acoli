@@ -139,9 +139,8 @@
       </div>
     </div>
 
-    {% url 'structure_requirement_profiles_list' as fallback_url %}
     <div class="mt-8 flex items-center justify-between pt-6 border-t border-black/5">
-      <a class="btn-secondary" href="{{ back_url|default:fallback_url }}">
+      <a class="btn-secondary" href="{% url 'structure_requirement_profiles_list' %}">
         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
         </svg>

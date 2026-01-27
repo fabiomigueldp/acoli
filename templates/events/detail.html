@@ -20,6 +20,9 @@
           <div>Comunidade padrao: {{ series.default_community|default:"-" }}</div>
           <div>Horario padrao: {{ default_time|default:"-" }}</div>
           <div>Perfil padrao: {{ default_profile|default:"-" }}</div>
+          {% if series.candidate_pool == "interested_only" %}
+            <div>Prazo de interesse: {% if series.interest_deadline_at %}{{ series.interest_deadline_at|date:"d/m/Y H:i" }}{% else %}ate {{ interest_deadline_hours }}h antes de cada missa{% endif %}</div>
+          {% endif %}
         </div>
       </div>
       <div class="flex items-center gap-2">

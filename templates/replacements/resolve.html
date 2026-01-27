@@ -48,10 +48,9 @@
         Se a vaga continuar aberta, ela ainda aparecera como pendencia na consolidacao.
       </div>
 
-      {% url 'replacement_center' as fallback_url %}
       <div class="flex flex-wrap gap-2">
         <button class="btn-primary" type="submit">Confirmar resolucao</button>
-        <a class="btn-secondary" href="{{ back_url|default:fallback_url }}">Voltar</a>
+        <a class="btn-secondary" href="{% url 'replacement_center' %}">Voltar</a>
       </div>
     </form>
   </div>

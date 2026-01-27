@@ -20,16 +20,22 @@
   <div class="card">
     <h3 class="font-semibold mb-3">Atribuir substituicao</h3>
     <div class="space-y-2">
-      {% for acolyte in candidates %}
+      {% for candidate in candidates %}
         <form method="post" action="{% url 'replacement_assign' replacement.id %}" class="border border-black/5 rounded-lg p-3 flex items-center justify-between gap-3">
           {% csrf_token %}
           <div>
-            <div class="font-medium">{{ acolyte.display_name }}</div>
-            {% if acolyte.community_of_origin %}
-              <div class="text-sm text-slate">{{ acolyte.community_of_origin.code }}</div>
+            <div class="font-medium">{{ candidate.acolyte.display_name }}</div>
+            {% if candidate.acolyte.community_of_origin %}
+              <div class="text-sm text-slate">{{ candidate.acolyte.community_of_origin.code }}</div>
+            {% endif %}
+            {% if candidate.score %}
+              <div class="text-xs text-slate">Score: {{ candidate.score|floatformat:1 }}</div>
+            {% endif %}
+            {% if candidate.reason %}
+              <div class="text-xs text-slate">{{ candidate.reason }}</div>
             {% endif %}
           </div>
-          <input type="hidden" name="acolyte_id" value="{{ acolyte.id }}" />
+          <input type="hidden" name="acolyte_id" value="{{ candidate.acolyte.id }}" />
           <button class="btn-primary" type="submit">Atribuir</button>
         </form>
       {% empty %}

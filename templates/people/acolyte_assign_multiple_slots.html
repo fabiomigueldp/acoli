@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% load extras %}
+
+{% block title %}Atribuir multiplos slots - {{ acolyte.display_name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <!-- Breadcrumb -->
+    <div class="mb-6">
+        <div class="flex items-center gap-2 text-sm text-slate mb-2">
+            <a href="{% url 'people_directory' %}" class="hover:text-ink">Pessoas</a>
+            <span>/</span>
+            <a href="{% url 'people_acolyte_detail' acolyte.id %}" class="hover:text-ink">{{ acolyte.display_name }}</a>
+            <span>/</span>
+            <span class="text-ink">Atribuir multiplos slots</span>
+        </div>
+        
+        <h1 class="text-2xl font-semibold text-ink">Atribuir {{ acolyte.display_name }} a multiplos slots</h1>
+    </div>
+
+    <!-- Stats Card -->
+    {% if stats %}
+    <div class="card mb-6">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+                <div class="text-xs text-slate uppercase tracking-widest mb-1">Total</div>
+                <div class="text-2xl font-semibold text-ink">{{ stats.total_served }}</div>
+            </div>
+            <div>
+                <div class="text-xs text-slate uppercase tracking-widest mb-1">Pendentes</div>
+                <div class="text-2xl font-semibold text-sun-600">{{ stats.pending_confirmations }}</div>
+            </div>
+            <div>
+                <div class="text-xs text-slate uppercase tracking-widest mb-1">Ultima escala</div>
+                <div class="text-sm text-ink">
+                    {% if stats.last_served %}
+                        {{ stats.last_served|date:"d/m/Y" }}
+                    {% else %}
+                        Nunca
+                    {% endif %}
+                </div>
+            </div>
+            <div>
+                <div class="text-xs text-slate uppercase tracking-widest mb-1">Proxima escala</div>
+                <div class="text-sm text-ink">
+                    {% if stats.next_scheduled %}
+                        {{ stats.next_scheduled|date:"d/m/Y" }}
+                    {% else %}
+                        Nenhuma
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Filters -->
+    <form method="get" class="card mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+                <label class="label">Data inicial</label>
+                <input type="date" name="start" value="{{ start_date|date:'Y-m-d' }}" class="input w-full">
+            </div>
+            <div>
+                <label class="label">Data final</label>
+                <input type="date" name="end" value="{{ end_date|date:'Y-m-d' }}" class="input w-full">
+            </div>
+            <div>
+                <label class="label">Comunidade</label>
+                <select name="community" class="input w-full">
+                    <option value="">Todas</option>
+                    {% for community in communities %}
+                    <option value="{{ community.id }}" {% if community.id|stringformat:"s" == community_id|stringformat:"s" %}selected{% endif %}>
+                        {{ community.code }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="mt-4 flex justify-end">
+            <button type="submit" class="btn-primary">Filtrar</button>
+        </div>
+    </form>
+
+    <!-- Slot Selection Form -->
+    {% if slots %}
+    <form method="post" action="{% url 'acolyte_assign_to_multiple_slots_submit' acolyte.id %}" id="multi-assign-form">
+        {% csrf_token %}
+        
+        <div class="card mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-ink">Slots disponiveis ({{ slots|length }})</h2>
+                <button type="button" id="select-all-btn" class="text-sm text-moss hover:text-moss-700">
+                    Selecionar todos
+                </button>
+            </div>
+            
+            <div class="space-y-2 max-h-96 overflow-y-auto">
+                {% for slot in slots %}
+                <label class="slot-checkbox block p-3 border border-sand-200 rounded-lg cursor-pointer hover:border-moss hover:bg-moss/5 transition-all">
+                    <input type="checkbox" name="slots" value="{{ slot.id }}" class="mr-3 rounded border-sand-300 text-moss focus:ring-moss">
+                    <span class="inline-flex items-start justify-between flex-1 gap-3">
+                        <span class="flex-1 min-w-0">
+                            <span class="font-medium text-ink block mb-1">
+                                {{ slot.mass_instance.starts_at|date:"d/m/Y H:i" }}
+                            </span>
+                            <span class="text-sm text-slate">
+                                {{ slot.mass_instance.community.code }} - {{ slot.position_type.name }}
+                            </span>
+                        </span>
+                        {% with days_until=slot.mass_instance.starts_at|timeuntil %}
+                        <span class="text-xs {% if 'dia' in days_until or 'hour' in days_until %}text-red-600{% else %}text-slate{% endif %}">
+                            {{ days_until }}
+                        </span>
+                        {% endwith %}
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card mb-6">
+            <label class="label">Observacoes</label>
+            <textarea name="notes" rows="3" class="input w-full" placeholder="Opcional - sera aplicado a todas as atribuicoes"></textarea>
+        </div>
+
+        <div class="flex flex-col-reverse sm:flex-row justify-end gap-3">
+            <a href="{% url 'people_acolyte_detail' acolyte.id %}" class="btn-secondary">
+                Cancelar
+            </a>
+            <button type="submit" class="btn-primary" id="submit-btn" disabled>
+                Atribuir slots selecionados
+            </button>
+        </div>
+    </form>
+    {% else %}
+    <div class="card text-center py-12">
+        <p class="text-slate mb-2">Nenhum slot disponivel para este acolito.</p>
+        <p class="text-sm text-slate">Verifique os filtros ou aguarde novas missas serem criadas.</p>
+        <a href="{% url 'people_acolyte_detail' acolyte.id %}" class="btn-secondary mt-6">
+            Voltar ao perfil
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const checkboxes = document.querySelectorAll('input[name="slots"]');
+    const submitBtn = document.getElementById('submit-btn');
+    const selectAllBtn = document.getElementById('select-all-btn');
+    
+    function updateSubmitButton() {
+        const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+        submitBtn.disabled = !anyChecked;
+        
+        const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+        if (checkedCount > 0) {
+            submitBtn.textContent = `Atribuir ${checkedCount} slot${checkedCount > 1 ? 's' : ''} selecionado${checkedCount > 1 ? 's' : ''}`;
+        } else {
+            submitBtn.textContent = 'Atribuir slots selecionados';
+        }
+    }
+    
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', updateSubmitButton);
+    });
+    
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', function() {
+            const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+            checkboxes.forEach(cb => {
+                cb.checked = !allChecked;
+            });
+            selectAllBtn.textContent = allChecked ? 'Selecionar todos' : 'Desmarcar todos';
+            updateSubmitButton();
+        });
+    }
+    
+    // Confirm before submitting if many slots selected
+    document.getElementById('multi-assign-form').addEventListener('submit', function(e) {
+        const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+        if (checkedCount > 5) {
+            if (!confirm(`Tem certeza que deseja atribuir ${checkedCount} slots?`)) {
+                e.preventDefault();
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

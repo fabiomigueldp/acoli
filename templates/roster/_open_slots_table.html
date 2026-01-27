@@ -1,0 +1,90 @@
+{% load extras %}
+{% if slots %}
+<div class="card">
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-sm">
+      <thead>
+        <tr class="text-left text-xs text-slate uppercase tracking-widest border-b border-black/5">
+          <th class="py-3 pr-4">Data</th>
+          <th class="py-3 pr-4">Hora</th>
+          <th class="py-3 pr-4">Comunidade</th>
+          <th class="py-3 pr-4">Posicao</th>
+          <th class="py-3 pr-4">Urgencia</th>
+          <th class="py-3 pr-4 text-right">Acoes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for slot in slots %}
+        <tr class="border-t border-black/5 hover:bg-sand/30 transition-colors" id="slot-row-{{ slot.id }}">
+          <td class="py-3 pr-4">{{ slot.mass_instance.starts_at|date:"d/m/Y" }}</td>
+          <td class="py-3 pr-4">{{ slot.mass_instance.starts_at|date:"H:i" }}</td>
+          <td class="py-3 pr-4">
+            <span class="font-medium">{{ slot.mass_instance.community.code }}</span>
+          </td>
+          <td class="py-3 pr-4">{{ slot.position_type.name }}</td>
+          <td class="py-3 pr-4">
+            {% with days_until=slot.mass_instance.starts_at|timeuntil %}
+              {% if 'dia' in days_until or 'hour' in days_until or 'minute' in days_until %}
+                <span class="text-xs px-2 py-1 bg-red-100 text-red-700 rounded">{{ days_until }}</span>
+              {% else %}
+                <span class="text-xs text-slate">{{ days_until }}</span>
+              {% endif %}
+            {% endwith %}
+          </td>
+          <td class="py-3 pr-4 text-right">
+            <div class="flex items-center justify-end gap-2">
+              <button type="button" 
+                      class="text-sm px-3 py-1 border border-moss hover:bg-moss hover:text-white transition-colors rounded"
+                      hx-get="{% url 'roster_open_slot_get_candidates' slot.id %}"
+                      hx-target="#modal-container"
+                      hx-swap="innerHTML"
+                      onclick="document.getElementById('modal-container').classList.remove('hidden')">
+                Atribuir
+              </button>
+              <button type="button"
+                      class="text-sm px-3 py-1 border border-slate hover:bg-slate hover:text-white transition-colors rounded"
+                      hx-post="{% url 'roster_open_slot_mark_external' slot.id %}"
+                      hx-target="#slot-row-{{ slot.id }}"
+                      hx-swap="delete"
+                      hx-confirm="Marcar este slot como coberto externamente?">
+                Externo
+              </button>
+              <a href="{% url 'mass_detail' slot.mass_instance.id %}" 
+                 class="text-sm text-slate hover:text-ink">
+                Ver missa
+              </a>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page_obj.has_other_pages %}
+  <div class="flex items-center justify-between mt-4 pt-4 border-t border-black/5">
+    <div class="text-sm text-slate">
+      Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+    </div>
+    <div class="flex gap-2">
+      {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+           class="btn-secondary">
+          Anterior
+        </a>
+      {% endif %}
+      {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+           class="btn-primary">
+          Proxima
+        </a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% else %}
+<div class="card text-center py-12">
+  <p class="text-slate">Nenhum slot aberto encontrado com os filtros selecionados.</p>
+</div>
+{% endif %}

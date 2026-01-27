@@ -15,6 +15,7 @@ from core.services.assignments import (
     ConcurrentUpdateError,
     _assign_acolyte_to_slot_locked,
     _lock_slot,
+    _validate_no_conflict_in_mass,
     deactivate_assignment,
 )
 from core.services.audit import log_audit
@@ -58,6 +59,10 @@ def assign_replacement(parish, slot, acolyte, actor=None):
         return None
     with transaction.atomic():
         locked_slot = _lock_slot(slot.id)
+        try:
+            _validate_no_conflict_in_mass(locked_slot, acolyte)
+        except ValueError:
+            return None
         assignment_state = "locked" if locked_slot.is_locked else "published"
         new_assignment = _assign_acolyte_to_slot_locked(
             locked_slot,
@@ -95,6 +100,10 @@ def assign_replacement_request(parish, replacement_request_id, acolyte, actor=No
         locked_slot = _lock_slot(replacement.slot_id)
         if locked_slot.parish_id != parish.id or acolyte.parish_id != parish.id:
             raise ValueError("Paroquia invalida para substituicao.")
+        try:
+            _validate_no_conflict_in_mass(locked_slot, acolyte)
+        except ValueError:
+            return None
         if not AcolyteQualification.objects.filter(
             parish=parish, acolyte=acolyte, position_type=locked_slot.position_type, qualified=True
         ).exists():

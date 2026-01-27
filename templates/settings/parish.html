@@ -103,6 +103,38 @@
         <label class="label">Janela de rotacao (dias)</label>
         {{ form.rotation_days }}
       </div>
+      <div>
+        <label class="label">Bonus comunidade de origem</label>
+        {{ form.home_community_bonus }}
+      </div>
+      <div>
+        <label class="label">Penalidade comunidade recente</label>
+        {{ form.community_recent_penalty }}
+      </div>
+      <div>
+        <label class="label">Janela comunidade recente (dias)</label>
+        {{ form.community_recent_window_days }}
+      </div>
+      <div>
+        <label class="label">Bonus de escassez</label>
+        {{ form.scarcity_bonus }}
+      </div>
+      <div>
+        <label class="label">Fator comunidade em eventos</label>
+        {{ form.event_series_community_factor }}
+      </div>
+      <div>
+        <label class="label">Politica para missa avulsa</label>
+        {{ form.single_mass_community_policy }}
+      </div>
+      <div>
+        <label class="label">Prazo de interesse (horas)</label>
+        {{ form.interest_deadline_hours }}
+      </div>
+      <div>
+        <label class="label">Fallback pool interessados</label>
+        {{ form.interested_pool_fallback }}
+      </div>
     </div>
 
     <details class="border border-black/5 rounded-xl p-4">
@@ -117,11 +149,10 @@
       </div>
     </details>
 
-    {% url 'dashboard' as fallback_url %}
     <div class="flex items-center gap-3">
       <button class="btn-primary" type="submit">Salvar configuracoes</button>
       <button class="btn-secondary" type="submit" name="action" value="reset">Restaurar padroes</button>
-      <a class="btn-secondary" href="{{ back_url|default:fallback_url }}">Voltar</a>
+      <a class="btn-secondary" href="{% url 'dashboard' %}">Voltar</a>
     </div>
   </form>
 </div>

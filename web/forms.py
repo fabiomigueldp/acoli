@@ -123,6 +123,11 @@ class EventSeriesBasicsForm(forms.Form):
     candidate_pool = forms.ChoiceField(
         choices=[("all", "Todos os acolitos"), ("interested_only", "Somente interessados (opt-in)")]
     )
+    interest_deadline_at = forms.DateTimeField(
+        required=False,
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
+        input_formats=["%Y-%m-%dT%H:%M"],
+    )
     default_community = forms.ModelChoiceField(queryset=Community.objects.none(), required=False)
     default_requirement_profile = forms.ModelChoiceField(queryset=RequirementProfile.objects.none(), required=False)
 
@@ -153,6 +158,8 @@ class EventSeriesBasicsForm(forms.Form):
                 self.add_error("series_type_other", "Informe o tipo da celebracao.")
             else:
                 cleaned["series_type"] = other
+        if cleaned.get("candidate_pool") != "interested_only":
+            cleaned["interest_deadline_at"] = None
         return cleaned
 
 
@@ -542,6 +549,14 @@ class ParishSettingsForm(forms.Form):
         "rotation_days": 60,
         "rotation_penalty": 3,
         "reserve_penalty": 1000,
+        "home_community_bonus": 40,
+        "community_recent_penalty": 6,
+        "community_recent_window_days": 30,
+        "scarcity_bonus": 15,
+        "event_series_community_factor": 0.4,
+        "single_mass_community_policy": "recurring",
+        "interest_deadline_hours": 48,
+        "interested_pool_fallback": "relax_to_all",
     }
     consolidation_days = forms.IntegerField(min_value=7, max_value=90)
     horizon_days = forms.IntegerField(min_value=30, max_value=90)
@@ -559,6 +574,27 @@ class ParishSettingsForm(forms.Form):
     rotation_penalty = forms.IntegerField(min_value=0, max_value=20, required=False)
     rotation_days = forms.IntegerField(min_value=0, max_value=120, required=False)
     reserve_penalty = forms.IntegerField(min_value=0, max_value=10000, required=False)
+    home_community_bonus = forms.IntegerField(min_value=0, max_value=200, required=False)
+    community_recent_penalty = forms.IntegerField(min_value=0, max_value=50, required=False)
+    community_recent_window_days = forms.IntegerField(min_value=0, max_value=180, required=False)
+    scarcity_bonus = forms.IntegerField(min_value=0, max_value=100, required=False)
+    event_series_community_factor = forms.FloatField(min_value=0, max_value=1, required=False)
+    single_mass_community_policy = forms.ChoiceField(
+        choices=[
+            ("recurring", "Tratar como recorrente"),
+            ("special", "Tratar como evento"),
+        ],
+        required=False,
+    )
+    interest_deadline_hours = forms.IntegerField(min_value=0, max_value=168, required=False)
+    interested_pool_fallback = forms.ChoiceField(
+        choices=[
+            ("relax_to_all", "Abrir para todos"),
+            ("strict", "Manter fechado"),
+            ("relax_to_preferred", "Somente preferidos"),
+        ],
+        required=False,
+    )
     claim_auto_approve_enabled = forms.BooleanField(required=False)
     claim_auto_approve_hours = forms.IntegerField(min_value=0, max_value=168, required=False)
     claim_require_coordination = forms.BooleanField(required=False)
@@ -588,6 +624,14 @@ class ParishSettingsForm(forms.Form):
             self.fields["rotation_penalty"].initial = weights.get("rotation_penalty", 3)
             self.fields["rotation_days"].initial = weights.get("rotation_days", 60)
             self.fields["reserve_penalty"].initial = weights.get("reserve_penalty", 1000)
+            self.fields["home_community_bonus"].initial = weights.get("home_community_bonus", 40)
+            self.fields["community_recent_penalty"].initial = weights.get("community_recent_penalty", 6)
+            self.fields["community_recent_window_days"].initial = weights.get("community_recent_window_days", 30)
+            self.fields["scarcity_bonus"].initial = weights.get("scarcity_bonus", 15)
+            self.fields["event_series_community_factor"].initial = weights.get("event_series_community_factor", 0.4)
+            self.fields["single_mass_community_policy"].initial = weights.get("single_mass_community_policy", "recurring")
+            self.fields["interest_deadline_hours"].initial = weights.get("interest_deadline_hours", 48)
+            self.fields["interested_pool_fallback"].initial = weights.get("interested_pool_fallback", "relax_to_all")
             self.fields["schedule_weights_json"].initial = json.dumps(weights, ensure_ascii=True, indent=2)
 
     def clean(self):
@@ -631,9 +675,23 @@ class ParishSettingsForm(forms.Form):
                 "rotation_penalty",
                 "rotation_days",
                 "reserve_penalty",
+                "home_community_bonus",
+                "community_recent_penalty",
+                "community_recent_window_days",
+                "scarcity_bonus",
+                "event_series_community_factor",
+                "single_mass_community_policy",
+                "interest_deadline_hours",
+                "interested_pool_fallback",
             ]:
                 if self.cleaned_data.get(key) is not None:
-                    weights[key] = int(self.cleaned_data[key])
+                    value = self.cleaned_data[key]
+                    if key == "event_series_community_factor":
+                        weights[key] = float(value)
+                    elif key in {"single_mass_community_policy", "interested_pool_fallback"}:
+                        weights[key] = value
+                    else:
+                        weights[key] = int(value)
         parish.schedule_weights = weights
         parish.save(
             update_fields=[
