@@ -332,8 +332,8 @@
             <div class="grid sm:grid-cols-2 gap-3">
                <div class="sm:col-span-2">
                  <label class="label">Tipo</label>
-                 <div class="custom-select">
-                   <input type="hidden" name="preference_type" value="{{ preference_form.preference_type.value }}">
+                  <div class="custom-select">
+                    <input type="hidden" id="id_preference_type" name="preference_type" value="{{ preference_form.preference_type.value }}">
                    <button type="button" class="custom-select-button">
                      <span class="selected-text">
                        {% if preference_form.preference_type.value %}
@@ -561,22 +561,27 @@
     }
 
     function updateFields() {
-      if (!typeSelect) {
-        return;
-      }
-      const allowed = mapping[typeSelect.value] || [];
-      groups.forEach((group) => {
-        const field = group.getAttribute("data-pref-field");
-        const show = allowed.includes(field);
-        group.classList.toggle("hidden", !show);
-        group.querySelectorAll("select, input, textarea").forEach((el) => {
-          el.disabled = !show;
-          if (!show) {
-            resetField(el);
-          }
-        });
-      });
-    }
+       if (!typeSelect) {
+         return;
+       }
+       const allowed = mapping[typeSelect.value] || [];
+       groups.forEach((group) => {
+         const field = group.getAttribute("data-pref-field");
+         const show = allowed.includes(field);
+         const wasHidden = group.classList.contains("hidden");
+         group.classList.toggle("hidden", !show);
+         group.querySelectorAll("select, input, textarea").forEach((el) => {
+           el.disabled = !show;
+           if (!show) {
+             resetField(el);
+           }
+         });
+         // Re-initialize custom selects if the group was hidden and now shown
+         if (wasHidden && show && window.initCustomSelects) {
+           window.initCustomSelects(group);
+         }
+       });
+     }
 
     function setPriority(value) {
       if (!weightInput) {

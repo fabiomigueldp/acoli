@@ -208,6 +208,19 @@
     }
   },
   {
+    "model": "core.functiontype",
+    "pk": 7,
+    "fields": {
+      "parish": 1,
+      "code": "CER",
+      "name": "Ceroferario",
+      "description": "",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
     "model": "core.positiontype",
     "pk": 1,
     "fields": {
@@ -256,6 +269,30 @@
     }
   },
   {
+    "model": "core.positiontype",
+    "pk": 5,
+    "fields": {
+      "parish": 1,
+      "code": "CER",
+      "name": "Ceroferario",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "core.positiontype",
+    "pk": 6,
+    "fields": {
+      "parish": 1,
+      "code": "CRU",
+      "name": "Cruciferario",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
     "model": "core.positiontypefunction",
     "pk": 1,
     "fields": {
@@ -293,6 +330,22 @@
     "fields": {
       "position_type": 4,
       "function_type": 5
+    }
+  },
+  {
+    "model": "core.positiontypefunction",
+    "pk": 6,
+    "fields": {
+      "position_type": 5,
+      "function_type": 7
+    }
+  },
+  {
+    "model": "core.positiontypefunction",
+    "pk": 7,
+    "fields": {
+      "position_type": 6,
+      "function_type": 2
     }
   },
   {

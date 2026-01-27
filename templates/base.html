@@ -365,8 +365,8 @@
         }
       });
 
-      // ===== Custom Select Functionality =====
-      function initCustomSelects(root = document) {
+       // ===== Custom Select Functionality =====
+       window.initCustomSelects = function(root = document) {
         root.querySelectorAll('.custom-select:not([data-custom-select-init])').forEach(function(select) {
           const button = select.querySelector('.custom-select-button');
           const options = select.querySelector('.custom-select-options');
