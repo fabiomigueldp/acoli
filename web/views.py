@@ -2052,7 +2052,9 @@ def event_series_occurrences(request, series_id):
         dates.append(current)
         current += timedelta(days=1)
 
-    occurrence_map = {occ.date: occ for occ in series.occurrences.all()}
+    occurrences_by_date = defaultdict(list)
+    for occ in series.occurrences.all().order_by("time"):
+        occurrences_by_date[occ.date].append(occ)
     OccurrenceFormSet = formset_factory(EventOccurrenceForm, extra=0)
     if request.method == "POST":
         formset = OccurrenceFormSet(request.POST, form_kwargs={"parish": parish})
@@ -2061,7 +2063,8 @@ def event_series_occurrences(request, series_id):
             for form in formset:
                 data = form.cleaned_data
                 label = data.get("label") or series.title
-                existing = occurrence_map.get(data["date"])
+                existing_list = occurrences_by_date.get(data["date"], [])
+                existing = existing_list[0] if existing_list else None
                 if existing:
                     existing.time = data["time"]
                     existing.community = data["community"]
@@ -2102,7 +2105,9 @@ def event_series_occurrences(request, series_id):
                         starts_at__date=data.get("date"),
                         starts_at__time=data.get("time"),
                         status="scheduled",
-                    ).first()
+                    ).exclude(
+                         event_series=series
+                     ).first()
                     conflicts.append(conflict)
                 return render(
                     request,
@@ -2122,7 +2127,8 @@ def event_series_occurrences(request, series_id):
     else:
         initial = []
         for date_value in dates:
-            existing = occurrence_map.get(date_value)
+            existing_list = occurrences_by_date.get(date_value, [])
+            existing = existing_list[0] if existing_list else None
             initial.append(
                 {
                     "date": date_value,
@@ -2147,6 +2153,8 @@ def event_series_occurrences(request, series_id):
             starts_at__date=data.get("date"),
             starts_at__time=data.get("time"),
             status="scheduled",
+        ).exclude(
+            event_series=series
         ).first()
         conflicts.append(conflict)
 
