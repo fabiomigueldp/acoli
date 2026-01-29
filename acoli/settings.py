@@ -14,7 +14,10 @@ DEBUG = DEBUG == "1"
 
 ALLOWED_HOSTS = [host.strip() for host in os.environ.get("ALLOWED_HOSTS", "").split(",") if host.strip()]
 if not ALLOWED_HOSTS:
-    ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+    ALLOWED_HOSTS = ["localhost", "127.0.0.1", "0.0.0.0"]
+
+if DEBUG:
+    ALLOWED_HOSTS.append("192.168.15.6")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
