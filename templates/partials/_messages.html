@@ -1,9 +1,19 @@
 <div id="messages-container" hx-swap-oob="true">
   {% if messages %}
     <script>
-      {% for message in messages %}
-        window.showToast('{{ message|escapejs }}', 'info');
-      {% endfor %}
+      (function() {
+        const pushToast = function(message, type) {
+          if (window.showToast) {
+            window.showToast(message, type);
+            return;
+          }
+          window.pendingToasts = window.pendingToasts || [];
+          window.pendingToasts.push([message, type]);
+        };
+        {% for message in messages %}
+          pushToast('{{ message|escapejs }}', 'info');
+        {% endfor %}
+      })();
     </script>
   {% endif %}
 </div>

@@ -4,7 +4,7 @@ from django.utils import timezone
 
 from core.models import Assignment
 from core.services.assignments import deactivate_assignment
-from core.services.replacements import create_replacement_request
+from core.services.replacements import create_replacement_request, should_create_replacement
 
 
 def deactivate_future_assignments_for_acolyte(acolyte, actor=None, now=None):
@@ -12,7 +12,6 @@ def deactivate_future_assignments_for_acolyte(acolyte, actor=None, now=None):
         return 0
     now = now or timezone.now()
     parish = acolyte.parish
-    consolidation_limit = now + timedelta(days=parish.consolidation_days)
     assignments = (
         Assignment.objects.filter(
             parish=parish,
@@ -31,6 +30,6 @@ def deactivate_future_assignments_for_acolyte(acolyte, actor=None, now=None):
         if slot.required and not slot.externally_covered:
             slot.status = "open"
             slot.save(update_fields=["status", "updated_at"])
-            if slot.is_locked or slot.mass_instance.starts_at <= consolidation_limit:
+            if should_create_replacement(parish, slot, now=now):
                 create_replacement_request(parish, slot, actor=actor, notes="Acolito desativado")
     return count

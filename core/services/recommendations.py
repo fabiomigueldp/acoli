@@ -342,6 +342,9 @@ def score_candidate(acolyte, slot, context, cache, local_eligible_count=0):
     weights = cache["weights"] or {}
     stats = cache["stats_map"].get(acolyte.id)
     preferences = cache["pref_by_acolyte"].get(acolyte.id, [])
+    reliability_score = int(stats.reliability_score) if stats else 100
+    services_last_30 = int(stats.services_last_30_days) if stats else 0
+    credit_balance = int(stats.credit_balance or 0) if stats else 0
 
     breakdown = preference_score_breakdown(acolyte, slot.mass_instance, slot, preferences)
     community_factor = context.get("community_factor", 1.0)
@@ -385,19 +388,18 @@ def score_candidate(acolyte, slot, context, cache, local_eligible_count=0):
 
     credit_weight = int(_get_weight(weights, "credit_weight", 1) or 0)
     credit_cap = int(_get_weight(weights, "credit_cap", 10) or 10)
-    if stats and credit_weight:
-        credit_bonus = min(max(stats.credit_balance or 0, 0), credit_cap)
+    if credit_weight:
+        credit_bonus = min(max(credit_balance, 0), credit_cap)
         base_score += credit_weight * credit_bonus
 
     reliability_penalty = int(_get_weight(weights, "reliability_penalty", 0) or 0)
-    if stats and reliability_penalty:
-        penalty = int(reliability_penalty * (100 - stats.reliability_score) / 100)
+    if reliability_penalty:
+        penalty = int(reliability_penalty * (100 - reliability_score) / 100)
         base_score -= penalty
-    elif stats:
-        base_score += int(stats.reliability_score / 25)
+    else:
+        base_score += int(reliability_score / 25)
 
-    if stats:
-        base_score += max(0, 10 - int(stats.services_last_30_days / 2))
+    base_score += max(0, 10 - int(services_last_30 / 2))
 
     return base_score
 

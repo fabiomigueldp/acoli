@@ -267,9 +267,9 @@
 
    <script>
      // ===== Toast Notification System =====
-     window.showToast = function(message, type = 'success') {
-       const container = document.getElementById('toast-container');
-       const toast = document.createElement('div');
+      window.showToast = function(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
        
        const bgColors = {
          success: 'bg-moss-50 border-moss-200 text-moss-800',
@@ -291,11 +291,16 @@
        });
        
        // Auto dismiss after 4 seconds
-       setTimeout(() => {
-         toast.classList.add('translate-x-full', 'opacity-0');
-         setTimeout(() => toast.remove(), 300);
-       }, 4000);
-     };
+        setTimeout(() => {
+          toast.classList.add('translate-x-full', 'opacity-0');
+          setTimeout(() => toast.remove(), 300);
+        }, 4000);
+      };
+
+      if (window.pendingToasts && window.pendingToasts.length) {
+        window.pendingToasts.forEach(([message, type]) => window.showToast(message, type));
+        window.pendingToasts = [];
+      }
 
      // ===== Confirmation Modal System =====
      window.showConfirmModal = function(message, onConfirm, title = 'Confirmar ação') {

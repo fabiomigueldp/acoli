@@ -85,93 +85,197 @@
               </div>
             {% endwith %}
           {% endif %}
-          <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
-            {{ form.date }}
-            <div>
-              <label class="label">Horario</label>
-              {{ form.time }}
-            </div>
-             <div>
-               <label class="label">Comunidade</label>
-               <div class="custom-select">
-                 <select class="hidden" name="{{ form.community.html_name }}">
-                   {% for option in form.community %}
-                     {{ option }}
-                   {% endfor %}
-                 </select>
-                 <button type="button" class="custom-select-button">
-                   <span class="selected-text">{{ form.community.field.choices|choice_label:form.community.value|slice:":3"|default:"--" }}</span>
-                 </button>
-                 <div class="custom-select-options">
-                   {% for option in form.community %}
-                     <button type="button" class="custom-select-option{% if form.community.value|stringformat:"s" == option.data.value|stringformat:"s" %} selected{% endif %}" data-value="{{ option.data.value }}">{{ option.data.label|slice:":3" }}</button>
-                   {% endfor %}
+           <div class="time-slots" data-day-index="{{ forloop.counter0 }}">
+             <div class="slot" data-slot-index="0">
+               <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+                 {{ form.date }}
+                 {% with base_occurrence_id=base_occurrence_ids|index:forloop.counter0 %}
+                   <input type="hidden" name="form-{{ forloop.counter0 }}-occurrence_id" value="{{ base_occurrence_id|default:'' }}">
+                 {% endwith %}
+                 <div>
+                   <label class="label">Horario</label>
+                   {{ form.time }}
+                 </div>
+                  <div>
+                    <label class="label">Comunidade</label>
+                    <div class="custom-select">
+                      <select class="hidden" name="{{ form.community.html_name }}">
+                        {% for option in form.community %}
+                          {{ option }}
+                        {% endfor %}
+                      </select>
+                      <button type="button" class="custom-select-button">
+                        <span class="selected-text">{{ form.community.field.choices|choice_label:form.community.value|slice:":3"|default:"--" }}</span>
+                      </button>
+                      <div class="custom-select-options">
+                        {% for option in form.community %}
+                          <button type="button" class="custom-select-option{% if form.community.value|stringformat:"s" == option.data.value|stringformat:"s" %} selected{% endif %}" data-value="{{ option.data.value }}">{{ option.data.label|slice:":3" }}</button>
+                        {% endfor %}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label class="label">Perfil</label>
+                    <div class="custom-select">
+                      <select class="hidden" name="{{ form.requirement_profile.html_name }}">
+                        {% for option in form.requirement_profile %}
+                          {{ option }}
+                        {% endfor %}
+                      </select>
+                      <button type="button" class="custom-select-button">
+                        <span class="selected-text">{{ form.requirement_profile.field.choices|choice_label:form.requirement_profile.value|default:"--" }}</span>
+                      </button>
+                      <div class="custom-select-options">
+                        {% for option in form.requirement_profile %}
+                          <button type="button" class="custom-select-option{% if form.requirement_profile.value|stringformat:"s" == option.data.value|stringformat:"s" %} selected{% endif %}" data-value="{{ option.data.value }}">{{ option.data.label }}</button>
+                        {% endfor %}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label class="label">Conflito</label>
+                    <div class="custom-select">
+                      <select class="hidden" name="{{ form.conflict_action.html_name }}">
+                        {% for option in form.conflict_action %}
+                          {{ option }}
+                        {% endfor %}
+                      </select>
+                      <button type="button" class="custom-select-button">
+                        <span class="selected-text">{{ form.conflict_action.field.choices|choice_label:form.conflict_action.value|default:"--" }}</span>
+                      </button>
+                      <div class="custom-select-options">
+                        {% for option in form.conflict_action %}
+                          <button type="button" class="custom-select-option{% if form.conflict_action.value|stringformat:"s" == option.data.value|stringformat:"s" %} selected{% endif %}" data-value="{{ option.data.value }}">{{ option.data.label }}</button>
+                        {% endfor %}
+                      </div>
+                    </div>
+                   <p class="text-xs text-slate mt-1">
+                     Manter: usa a missa existente · Cancelar: remove a missa existente · Mover: transfere a missa existente · Pular: ignora este dia
+                   </p>
+                 </div>
+                 <div class="sm:col-span-2">
+                   <label class="label">Rotulo</label>
+                   {{ form.label }}
+                   <p class="text-xs text-slate mt-1">Se vazio, usamos o titulo da celebracao.</p>
                  </div>
                </div>
-             </div>
-             <div>
-               <label class="label">Perfil</label>
-               <div class="custom-select">
-                 <select class="hidden" name="{{ form.requirement_profile.html_name }}">
-                   {% for option in form.requirement_profile %}
-                     {{ option }}
-                   {% endfor %}
-                 </select>
-                 <button type="button" class="custom-select-button">
-                   <span class="selected-text">{{ form.requirement_profile.field.choices|choice_label:form.requirement_profile.value|default:"--" }}</span>
-                 </button>
-                 <div class="custom-select-options">
-                   {% for option in form.requirement_profile %}
-                     <button type="button" class="custom-select-option{% if form.requirement_profile.value|stringformat:"s" == option.data.value|stringformat:"s" %} selected{% endif %}" data-value="{{ option.data.value }}">{{ option.data.label }}</button>
-                   {% endfor %}
-                 </div>
-               </div>
-             </div>
-             <div>
-               <label class="label">Conflito</label>
-               <div class="custom-select">
-                 <select class="hidden" name="{{ form.conflict_action.html_name }}">
-                   {% for option in form.conflict_action %}
-                     {{ option }}
-                   {% endfor %}
-                 </select>
-                 <button type="button" class="custom-select-button">
-                   <span class="selected-text">{{ form.conflict_action.field.choices|choice_label:form.conflict_action.value|default:"--" }}</span>
-                 </button>
-                 <div class="custom-select-options">
-                   {% for option in form.conflict_action %}
-                     <button type="button" class="custom-select-option{% if form.conflict_action.value|stringformat:"s" == option.data.value|stringformat:"s" %} selected{% endif %}" data-value="{{ option.data.value }}">{{ option.data.label }}</button>
-                   {% endfor %}
-                 </div>
-               </div>
-              <p class="text-xs text-slate mt-1">
-                Manter: usa a missa existente · Cancelar: remove a missa existente · Mover: transfere a missa existente · Pular: ignora este dia
-              </p>
+                <div class="grid sm:grid-cols-3 gap-3 mt-3 hidden" data-move-fields="">
+                  <div>
+                    <label class="label">Mover para (data)</label>
+                    {{ form.move_to_date }}
+                  </div>
+                  <div>
+                    <label class="label">Mover para (hora)</label>
+                    {{ form.move_to_time }}
+                  </div>
+                  <div>
+                    <label class="label">Mover para (comunidade)</label>
+                    {{ form.move_to_community }}
+                  </div>
+                </div>
+              </div>
+              {% with extras=extra_occurrences_by_index|index:forloop.counter0 %}
+                {% if extras %}
+                  {% for extra in extras %}
+                    <div class="slot" data-slot-index="{{ forloop.counter }}">
+                      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+                        <input type="hidden" name="form-{{ forloop.parentloop.counter0 }}-occurrence_id-{{ forloop.counter }}" value="{{ extra.id }}">
+                        <div>
+                          <label class="label">Horario</label>
+                          <input type="time" name="form-{{ forloop.parentloop.counter0 }}-time-{{ forloop.counter }}" value="{{ extra.time|time:'H:i' }}" id="id_form-{{ forloop.parentloop.counter0 }}-time-{{ forloop.counter }}">
+                        </div>
+                        <div>
+                          <label class="label">Comunidade</label>
+                          <div class="custom-select">
+                            <select class="hidden" name="form-{{ forloop.parentloop.counter0 }}-community-{{ forloop.counter }}">
+                              {% for value, label in form.community.field.choices %}
+                                <option value="{{ value }}"{% if value|stringformat:"s" == extra.community_id|stringformat:"s" %} selected{% endif %}>{{ label }}</option>
+                              {% endfor %}
+                            </select>
+                            <button type="button" class="custom-select-button">
+                              <span class="selected-text">{{ form.community.field.choices|choice_label:extra.community_id|slice:":3"|default:"--" }}</span>
+                            </button>
+                            <div class="custom-select-options">
+                              {% for value, label in form.community.field.choices %}
+                                <button type="button" class="custom-select-option{% if value|stringformat:"s" == extra.community_id|stringformat:"s" %} selected{% endif %}" data-value="{{ value }}">{{ label|slice:":3" }}</button>
+                              {% endfor %}
+                            </div>
+                          </div>
+                        </div>
+                        <div>
+                          <label class="label">Perfil</label>
+                          <div class="custom-select">
+                            <select class="hidden" name="form-{{ forloop.parentloop.counter0 }}-requirement_profile-{{ forloop.counter }}">
+                              {% for value, label in form.requirement_profile.field.choices %}
+                                <option value="{{ value }}"{% if value|stringformat:"s" == extra.requirement_profile_id|stringformat:"s" %} selected{% endif %}>{{ label }}</option>
+                              {% endfor %}
+                            </select>
+                            <button type="button" class="custom-select-button">
+                              <span class="selected-text">{{ form.requirement_profile.field.choices|choice_label:extra.requirement_profile_id|default:"--" }}</span>
+                            </button>
+                            <div class="custom-select-options">
+                              {% for value, label in form.requirement_profile.field.choices %}
+                                <button type="button" class="custom-select-option{% if value|stringformat:"s" == extra.requirement_profile_id|stringformat:"s" %} selected{% endif %}" data-value="{{ value }}">{{ label }}</button>
+                              {% endfor %}
+                            </div>
+                          </div>
+                        </div>
+                        <div>
+                          <label class="label">Conflito</label>
+                          <div class="custom-select">
+                            <select class="hidden" name="form-{{ forloop.parentloop.counter0 }}-conflict_action-{{ forloop.counter }}">
+                              {% for value, label in form.conflict_action.field.choices %}
+                                <option value="{{ value }}"{% if value|stringformat:"s" == extra.conflict_action|stringformat:"s" %} selected{% endif %}>{{ label }}</option>
+                              {% endfor %}
+                            </select>
+                            <button type="button" class="custom-select-button">
+                              <span class="selected-text">{{ form.conflict_action.field.choices|choice_label:extra.conflict_action|default:"--" }}</span>
+                            </button>
+                            <div class="custom-select-options">
+                              {% for value, label in form.conflict_action.field.choices %}
+                                <button type="button" class="custom-select-option{% if value|stringformat:"s" == extra.conflict_action|stringformat:"s" %} selected{% endif %}" data-value="{{ value }}">{{ label }}</button>
+                              {% endfor %}
+                            </div>
+                          </div>
+                          <p class="text-xs text-slate mt-1">
+                            Manter: usa a missa existente · Cancelar: remove a missa existente · Mover: transfere a missa existente · Pular: ignora este dia
+                          </p>
+                        </div>
+                        <div class="sm:col-span-2">
+                          <label class="label">Rotulo</label>
+                          <input type="text" name="form-{{ forloop.parentloop.counter0 }}-label-{{ forloop.counter }}" value="{{ extra.label }}" maxlength="200" id="id_form-{{ forloop.parentloop.counter0 }}-label-{{ forloop.counter }}">
+                          <p class="text-xs text-slate mt-1">Se vazio, usamos o titulo da celebracao.</p>
+                        </div>
+                      </div>
+                      <div class="grid sm:grid-cols-3 gap-3 mt-3 hidden" data-move-fields="">
+                        <div>
+                          <label class="label">Mover para (data)</label>
+                          <input type="date" name="form-{{ forloop.parentloop.counter0 }}-move_to_date-{{ forloop.counter }}" value="{{ extra.move_to_date|date:'Y-m-d' }}" id="id_form-{{ forloop.parentloop.counter0 }}-move_to_date-{{ forloop.counter }}">
+                        </div>
+                        <div>
+                          <label class="label">Mover para (hora)</label>
+                          <input type="time" name="form-{{ forloop.parentloop.counter0 }}-move_to_time-{{ forloop.counter }}" value="{{ extra.move_to_time|time:'H:i' }}" id="id_form-{{ forloop.parentloop.counter0 }}-move_to_time-{{ forloop.counter }}">
+                        </div>
+                        <div>
+                          <label class="label">Mover para (comunidade)</label>
+                          <select name="form-{{ forloop.parentloop.counter0 }}-move_to_community-{{ forloop.counter }}" id="id_form-{{ forloop.parentloop.counter0 }}-move_to_community-{{ forloop.counter }}">
+                            {% for value, label in form.move_to_community.field.choices %}
+                              <option value="{{ value }}"{% if value|stringformat:"s" == extra.move_to_community_id|stringformat:"s" %} selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                          </select>
+                        </div>
+                      </div>
+                      <button type="button" class="remove-slot-btn btn-secondary mt-3">Remover missa</button>
+                    </div>
+                  {% endfor %}
+                {% endif %}
+              {% endwith %}
+              <button type="button" class="add-slot-btn btn-secondary mt-3">Adicionar missa</button>
             </div>
-            <div class="sm:col-span-2">
-              <label class="label">Rotulo</label>
-              {{ form.label }}
-              <p class="text-xs text-slate mt-1">Se vazio, usamos o titulo da celebracao.</p>
-            </div>
-          </div>
-          <div class="grid sm:grid-cols-3 gap-3 mt-3 hidden" data-move-fields>
-            <div>
-              <label class="label">Mover para (data)</label>
-              {{ form.move_to_date }}
-            </div>
-            <div>
-              <label class="label">Mover para (hora)</label>
-              {{ form.move_to_time }}
-            </div>
-            <div>
-              <label class="label">Mover para (comunidade)</label>
-              {{ form.move_to_community }}
-            </div>
-          </div>
-          {{ form.non_field_errors }}
+           {{ form.non_field_errors }}
         </div>
-      {% endfor %}
-    </div>
+     </div>
+     {% endfor %}
     {% if series %}
       {% url 'event_series_detail' series.id as fallback_url %}
     {% else %}
@@ -207,9 +311,132 @@
       });
     }
 
-    const forms = document.querySelectorAll("select[name$='-conflict_action']");
-    forms.forEach((select) => {
-      const container = select.closest(".border");
+    // Function to clone a slot and update names
+    function cloneSlot(slot, dayIndex, newSlotIndex) {
+      const cloned = slot.cloneNode(true);
+      cloned.setAttribute('data-slot-index', newSlotIndex);
+      
+      // Copy values from the original slot and update names/IDs
+      cloned.querySelectorAll('input, select').forEach(el => {
+        const name = el.name;
+        if (!name) return;
+        const suffixes = [
+          '-move_to_date',
+          '-move_to_time',
+          '-move_to_community',
+          '-requirement_profile',
+          '-conflict_action',
+          '-community',
+          '-time',
+          '-label',
+          '-occurrence_id'
+        ];
+        let newName = name;
+        for (const suffix of suffixes) {
+          const regex = new RegExp(`${suffix}(?:-\\d+)?$`);
+          if (regex.test(name)) {
+            newName = name.replace(regex, `${suffix}-${newSlotIndex}`);
+            break;
+          }
+        }
+        el.name = newName;
+        if (newName.includes('-occurrence_id')) {
+          el.value = '';
+        }
+        if (el.id) el.id = el.id.replace(/\d+$/, newSlotIndex);
+      });
+
+      cloned.querySelectorAll('input[name$="-date"]').forEach(el => {
+        if (!el.name.includes('move_to_date')) {
+          el.remove();
+        }
+      });
+      
+      // Reinitialize custom selects with correct display
+      cloned.querySelectorAll('.custom-select').forEach(customSelect => {
+        const select = customSelect.querySelector('select');
+        const button = customSelect.querySelector('.custom-select-button');
+        const selectedText = button ? button.querySelector('.selected-text') : null;
+        const options = customSelect.querySelector('.custom-select-options');
+
+        customSelect.classList.remove('open');
+        customSelect.removeAttribute('data-custom-select-init');
+
+        const selectedValue = select ? select.value : "";
+        let displayText = '--';
+
+        if (options) {
+          let selectedOptionButton = null;
+          options.querySelectorAll('.custom-select-option').forEach(opt => {
+            const isSelected = opt.getAttribute('data-value') === selectedValue;
+            opt.classList.toggle('selected', isSelected);
+            if (isSelected) selectedOptionButton = opt;
+          });
+          if (selectedOptionButton) {
+            displayText = selectedOptionButton.textContent.trim();
+          }
+        } else if (select) {
+          const selectedOption = select.selectedOptions ? select.selectedOptions[0] : null;
+          if (selectedOption) {
+            displayText = selectedOption.textContent.trim();
+          }
+        }
+
+        if (selectedText) {
+          selectedText.textContent = displayText || '--';
+        }
+      });
+
+      cloned.querySelectorAll('.remove-slot-btn').forEach(btn => btn.remove());
+      cloned.querySelectorAll('.add-slot-btn').forEach(btn => btn.remove());
+      
+      // Add remove button for cloned slots
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'remove-slot-btn btn-secondary mt-3';
+      removeBtn.textContent = 'Remover missa';
+      cloned.appendChild(removeBtn);
+      
+      return cloned;
+    }
+
+    // Add event listeners for add-slot-btn
+    document.addEventListener('click', (e) => {
+      const addButton = e.target.closest('.add-slot-btn');
+      if (!addButton) return;
+      const timeSlots = addButton.closest('.time-slots');
+      const dayIndex = timeSlots.getAttribute('data-day-index');
+      const slots = timeSlots.querySelectorAll('.slot');
+      const newSlotIndex = slots.length;
+
+      if (newSlotIndex >= 5) return; // Limit to 5 slots
+
+      const lastSlot = slots[slots.length - 1];
+      const clonedSlot = cloneSlot(lastSlot, dayIndex, newSlotIndex);
+
+      timeSlots.insertBefore(clonedSlot, addButton);
+
+      if (window.initCustomSelects) {
+        window.initCustomSelects(clonedSlot);
+      }
+
+      clonedSlot.querySelectorAll("select[name$='-conflict_action']").forEach(bindConflictSelect);
+    });
+
+    // Add event listeners for remove-slot-btn
+    document.addEventListener('click', (e) => {
+      if (e.target.classList.contains('remove-slot-btn')) {
+        const slot = e.target.closest('.slot');
+        const timeSlots = e.target.closest('.time-slots');
+        const slots = timeSlots.querySelectorAll('.slot');
+        if (slots.length > 1) {
+          slot.remove();
+        }
+      }
+    });
+
+    function bindConflictSelect(select) {
+      const container = select.closest(".slot");
       if (!container) return;
       const moveFields = container.querySelector("[data-move-fields]");
       const update = () => {
@@ -224,7 +451,9 @@
       };
       select.addEventListener("change", update);
       update();
-    });
+    }
+
+    document.querySelectorAll("select[name$='-conflict_action']").forEach(bindConflictSelect);
   })();
 </script>
 {% endblock %}

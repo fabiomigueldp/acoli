@@ -49,6 +49,20 @@ def apply_event_occurrences(event_series, occurrences, actor=None):
             status="scheduled",
         ).first()
 
+        if existing and existing.event_series_id == event_series.id:
+            updated_fields = []
+            if label and existing.liturgy_label != label:
+                existing.liturgy_label = label
+                updated_fields.append("liturgy_label")
+            if profile_id and existing.requirement_profile_id != profile_id:
+                existing.requirement_profile_id = profile_id
+                updated_fields.append("requirement_profile")
+            if updated_fields:
+                existing.save(update_fields=updated_fields + ["updated_at"])
+                log_audit(event_series.parish, actor, "MassInstance", existing.id, "update", {"event_series_id": event_series.id})
+                sync_slots_for_instance(existing)
+            continue
+
         if existing and conflict_action == "keep":
             updated_fields = []
             if existing.event_series_id != event_series.id:

@@ -22,7 +22,8 @@
         <button class="btn-primary" type="submit">Atualizar</button>
       </div>
     </form>
-    <div class="text-xs text-slate">Media do periodo: {{ avg_total|floatformat:1 }}</div>
+    <div class="text-xs text-slate">Media do periodo (ativas): {{ avg_total|floatformat:1 }} | Media recebidas: {{ avg_received|floatformat:1 }}</div>
+    <div class="text-xs text-slate">Total considera escalas ativas no momento do servico. Recebidas incluem recusas/cancelamentos/cedencias. Futuras contam a partir de hoje.</div>
   </div>
 
   <div class="card overflow-x-auto">
@@ -31,10 +32,18 @@
         <tr class="text-left text-xs text-slate uppercase tracking-widest">
           <th class="py-2 pr-3">Acolito</th>
           <th class="py-2 pr-3">Total</th>
+          <th class="py-2 pr-3">Recebidas</th>
+          <th class="py-2 pr-3">Futuras</th>
+          <th class="py-2 pr-3">Total geral</th>
           <th class="py-2 pr-3">Ultimos 30</th>
           <th class="py-2 pr-3">Ultimos 90</th>
           <th class="py-2 pr-3">Confiabilidade</th>
           <th class="py-2 pr-3">Creditos</th>
+          <th class="py-2 pr-3">Rejeitou</th>
+          <th class="py-2 pr-3">Cancelou</th>
+          <th class="py-2 pr-3">Cedeu</th>
+          <th class="py-2 pr-3">Aloc. bruta</th>
+          <th class="py-2 pr-3">Aloc. ajust.</th>
           <th class="py-2 pr-3">Conta</th>
         </tr>
       </thead>
@@ -50,10 +59,18 @@
                 </div>
               </div>
             </td>
+            <td class="py-2 pr-3">{{ row.received }}</td>
+            <td class="py-2 pr-3">{{ row.future }}</td>
+            <td class="py-2 pr-3">{{ row.total_all_time }}</td>
             <td class="py-2 pr-3">{{ row.services_30 }}</td>
             <td class="py-2 pr-3">{{ row.services_90 }}</td>
             <td class="py-2 pr-3">{{ row.reliability|floatformat:0 }}%</td>
             <td class="py-2 pr-3">{{ row.credit }}</td>
+            <td class="py-2 pr-3">{{ row.declined }}</td>
+            <td class="py-2 pr-3">{{ row.canceled }}</td>
+            <td class="py-2 pr-3">{{ row.ceded }}</td>
+            <td class="py-2 pr-3">{{ row.allocation_raw }}</td>
+            <td class="py-2 pr-3">{{ row.allocation_adjusted }}</td>
             <td class="py-2 pr-3">
               {% if row.has_user %}
                 <span class="text-xs uppercase tracking-widest">Vinculado</span>
@@ -64,7 +81,7 @@
           </tr>
         {% empty %}
           <tr>
-            <td class="py-4 text-sm text-slate" colspan="7">Nenhum dado no periodo.</td>
+            <td class="py-4 text-sm text-slate" colspan="15">Nenhum dado no periodo.</td>
           </tr>
         {% endfor %}
       </tbody>

@@ -154,14 +154,14 @@
       {% endif %}
 
       <!-- Pending Actions (Inbox) -->
-      {% if pending_confirmations or incoming_swaps %}
+      {% if pending_assignments or incoming_swaps %}
         <div class="rounded-2xl bg-sun-50/70 p-6 shadow-soft border border-sun-100">
           <div class="mb-6 space-y-2">
             <div class="text-xs uppercase tracking-[0.2em] text-slate">Acoes pendentes</div>
             <h2 class="font-serif text-2xl text-ink">Resolva antes de fechar</h2>
           </div>
           <div class="space-y-3">
-            {% for confirmation in pending_confirmations %}
+            {% for assignment in pending_assignments %}
               {% include "acolytes/_partials/dashboard_pending_row.html" %}
             {% endfor %}
             {% for swap in incoming_swaps %}
@@ -198,7 +198,7 @@
                     <div class="text-sm text-slate">{{ assignment.slot.mass_instance.starts_at|date:"H:i" }}</div>
                   </div>
                 </div>
-                {% if assignment.confirmation.status == 'confirmed' %}
+                {% if assignment.confirmation_status == 'confirmed' %}
                   <span class="text-xs font-medium uppercase tracking-[0.2em] text-moss">Confirmado</span>
                 {% else %}
                   <span class="text-xs font-medium uppercase tracking-[0.2em] text-sun">Pendente</span>

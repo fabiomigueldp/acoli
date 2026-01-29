@@ -29,6 +29,9 @@
             Pool: {% if item.candidate_pool == "interested_only" %}Somente interessados{% else %}Todos os acolitos{% endif %}
             · Ocorrencias: {{ item.occurrence_count }}
             · Missas geradas: {{ item.mass_count }}
+            {% if item.candidate_pool == "interested_only" and item.interest_deadline_at %}
+              · Prazo: {{ item.interest_deadline_at|date:"d/m/Y H:i" }}
+            {% endif %}
           </div>
         </a>
         <div class="flex items-center gap-2">

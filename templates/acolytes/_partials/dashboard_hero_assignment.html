@@ -1,6 +1,6 @@
 {% load extras %}
 {% if hero_assignment %}
-  <div id="assignment-{{ hero_assignment.id }}" class="rounded-2xl bg-gradient-to-br from-sand-50 via-white to-moss-50/40 p-6 sm:p-8 shadow-soft border border-white/70{% if not hero_assignment.confirmation or hero_assignment.confirmation.status != 'confirmed' %} hero-attn{% endif %}">
+  <div id="assignment-{{ hero_assignment.id }}" class="rounded-2xl bg-gradient-to-br from-sand-50 via-white to-moss-50/40 p-6 sm:p-8 shadow-soft border border-white/70{% if hero_assignment.confirmation_status != 'confirmed' %} hero-attn{% endif %}">
     <div class="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
       <div class="space-y-3">
         <div class="text-xs uppercase tracking-[0.2em] text-slate">Sua proxima escala</div>
@@ -38,7 +38,7 @@
           {% endif %}
         {% endwith %}
 
-        {% if hero_assignment.confirmation and hero_assignment.confirmation.status == 'confirmed' %}
+        {% if hero_assignment.confirmation_status == 'confirmed' %}
           <div class="text-sm font-medium text-ink ml-auto">
             Confirmado
           </div>

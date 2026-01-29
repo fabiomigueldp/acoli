@@ -1,0 +1,1 @@
+[{"model": "core.confirmation", "pk": 111, "fields": {"created_at": "2026-01-27T11:30:15.930Z", "updated_at": "2026-01-27T11:30:15.930Z", "parish": 1, "assignment": 684, "status": "pending", "notes": "", "updated_by": null, "timestamp": "2026-01-27T11:30:15.931Z"}}]

@@ -430,6 +430,20 @@ class Assignment(TimeStampedModel):
             )
         ]
 
+    @property
+    def confirmation_status(self):
+        try:
+            confirmation = self.confirmation
+        except Confirmation.DoesNotExist:
+            confirmation = None
+        if confirmation:
+            return confirmation.status
+        return "pending"
+
+    def get_confirmation_status_display(self):
+        mapping = dict(Confirmation.STATUS_CHOICES)
+        return mapping.get(self.confirmation_status, self.confirmation_status)
+
 
 class Confirmation(TimeStampedModel):
     STATUS_CHOICES = [

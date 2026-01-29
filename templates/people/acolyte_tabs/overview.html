@@ -221,7 +221,8 @@
                 {% if upcoming_assignments %}
                 <div class="space-y-2">
                     {% for assignment in upcoming_assignments %}
-                    <div class="flex items-center justify-between p-3 rounded-lg {% if assignment.confirmation and assignment.confirmation.status == 'pending' %}bg-sun-50 border border-sun-200{% else %}bg-sand-50{% endif %}">
+                    {% with status=assignment.confirmation_status %}
+                    <div class="flex items-center justify-between p-3 rounded-lg {% if status == 'pending' %}bg-sun-50 border border-sun-200{% else %}bg-sand-50{% endif %}">
                         <div>
                             <div class="font-medium text-ink-900">
                                 {{ assignment.slot.mass_instance.starts_at|date:"d/m/Y" }} - {{ assignment.slot.mass_instance.starts_at|time:"H:i" }}
@@ -231,19 +232,16 @@
                             </div>
                         </div>
                         <div>
-                            {% if assignment.confirmation %}
-                                {% if assignment.confirmation.status == 'confirmed' %}
-                                <span class="badge badge-green">Confirmado</span>
-                                {% elif assignment.confirmation.status == 'pending' %}
-                                <span class="badge badge-yellow">Aguardando confirmacao</span>
-                                {% else %}
-                                <span class="badge badge-gray">{{ assignment.confirmation.get_status_display }}</span>
-                                {% endif %}
+                            {% if status == 'confirmed' %}
+                            <span class="badge badge-green">Confirmado</span>
+                            {% elif status == 'pending' %}
+                            <span class="badge badge-yellow">Aguardando confirmacao</span>
                             {% else %}
-                            <span class="badge badge-gray">Sem confirmacao</span>
+                            <span class="badge badge-gray">{{ assignment.get_confirmation_status_display }}</span>
                             {% endif %}
                         </div>
                     </div>
+                    {% endwith %}
                     {% endfor %}
                 </div>
                 <a href="{% url 'people_acolyte_detail' acolyte.id %}?tab=schedule&time=upcoming" 
@@ -264,6 +262,7 @@
                 {% if past_assignments %}
                 <div class="space-y-2">
                     {% for assignment in past_assignments %}
+                    {% with status=assignment.confirmation_status %}
                     <div class="flex items-center justify-between p-2 rounded-lg hover:bg-sand-50">
                         <div>
                             <div class="font-medium text-ink-900">
@@ -274,19 +273,16 @@
                             </div>
                         </div>
                         <div>
-                            {% if assignment.confirmation %}
-                                {% if assignment.confirmation.status == 'confirmed' %}
-                                <span class="badge badge-green">Compareceu</span>
-                                {% elif assignment.confirmation.status == 'no_show' %}
-                                <span class="badge badge-red">Faltou</span>
-                                {% else %}
-                                <span class="badge badge-gray">{{ assignment.confirmation.get_status_display }}</span>
-                                {% endif %}
+                            {% if status == 'confirmed' %}
+                            <span class="badge badge-green">Compareceu</span>
+                            {% elif status == 'no_show' %}
+                            <span class="badge badge-red">Faltou</span>
                             {% else %}
-                            <span class="badge badge-gray">-</span>
+                            <span class="badge badge-gray">{{ assignment.get_confirmation_status_display }}</span>
                             {% endif %}
                         </div>
                     </div>
+                    {% endwith %}
                     {% endfor %}
                 </div>
                 <a href="{% url 'people_acolyte_detail' acolyte.id %}?tab=schedule&time=past" 

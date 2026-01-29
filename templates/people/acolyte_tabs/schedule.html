@@ -71,13 +71,11 @@
                             {% endif %}
                         </td>
                         <td class="px-4 py-3">
-                            {% if assignment.confirmation %}
-                            <span class="badge {% if assignment.confirmation.status == 'confirmed' %}badge-green{% elif assignment.confirmation.status == 'declined' %}badge-red{% elif assignment.confirmation.status == 'pending' %}badge-yellow{% else %}badge-gray{% endif %}">
-                                {{ assignment.confirmation.get_status_display }}
+                            {% with status=assignment.confirmation_status %}
+                            <span class="badge {% if status == 'confirmed' %}badge-green{% elif status == 'declined' %}badge-red{% elif status == 'pending' %}badge-yellow{% else %}badge-gray{% endif %}">
+                                {{ assignment.get_confirmation_status_display }}
                             </span>
-                            {% else %}
-                            <span class="text-ink-400">-</span>
-                            {% endif %}
+                            {% endwith %}
                         </td>
                         <td class="px-4 py-3 text-sm text-ink-500">
                             {% if assignment.assigned_by %}
@@ -89,7 +87,7 @@
                         <td class="px-4 py-3 text-right">
                             {% if assignment.is_active %}
                             <div class="flex items-center justify-end gap-2">
-                                {% if not assignment.confirmation or assignment.confirmation.status == 'pending' %}
+                                {% if assignment.confirmation_status == 'pending' %}
                                 <button 
                                     hx-post="{% url 'acolyte_confirm_assignment' acolyte.id assignment.id %}"
                                     hx-target="#assignment-row-{{ assignment.id }}"

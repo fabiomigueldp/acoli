@@ -1,0 +1,22 @@
+{% load extras %}
+<div class="card" id="schedule-jobs">
+  <h3 class="font-semibold mb-3">Ultimos jobs</h3>
+  <div class="space-y-2">
+    {% for job in jobs %}
+      <a class="border border-black/5 rounded-lg p-3 flex items-center justify-between hover:bg-sand" href="{% url 'schedule_job_detail' job.id %}">
+        <div>
+          <div class="text-sm text-slate">{{ job.created_at|date:"d/m H:i" }}</div>
+          <div class="font-medium">{{ job.status|job_status_label }}</div>
+        </div>
+        <span class="badge">
+          {{ job.summary_json.coverage|default:"-" }} coberturas
+          {% if job.summary_json.unfilled_slots_count %}
+            / {{ job.summary_json.unfilled_slots_count }} sem cobertura
+          {% endif %}
+        </span>
+      </a>
+    {% empty %}
+      <p class="text-sm text-slate">Nenhum job executado ainda.</p>
+    {% endfor %}
+  </div>
+</div>

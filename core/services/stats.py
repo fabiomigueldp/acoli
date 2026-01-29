@@ -4,7 +4,7 @@ from django.db import models
 from django.db.models import F, Q
 from django.utils import timezone
 
-from core.models import AcolyteCreditLedger, AcolyteStats, Assignment, Confirmation
+from core.models import AcolyteCreditLedger, AcolyteProfile, AcolyteStats, Assignment, Confirmation
 
 
 def recompute_stats(parish):
@@ -17,7 +17,10 @@ def recompute_stats(parish):
     ).filter(
         Q(ended_at__isnull=True) | Q(ended_at__gte=F("slot__mass_instance__starts_at"))
     )
-    for acolyte_id in assignments.values_list("acolyte_id", flat=True).distinct():
+    acolyte_ids = list(
+        AcolyteProfile.objects.filter(parish=parish, active=True).values_list("id", flat=True)
+    )
+    for acolyte_id in acolyte_ids:
         recent_30 = active_at_service.filter(
             acolyte_id=acolyte_id, slot__mass_instance__starts_at__gte=start_30, slot__mass_instance__starts_at__lte=now
         ).count()

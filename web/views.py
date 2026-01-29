@@ -3,6 +3,7 @@ from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone as dt_timezone
 from uuid import uuid4
 from urllib.parse import urlencode
+import re
 
 from django.contrib import messages
 from django.conf import settings
@@ -10,7 +11,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.mail import send_mail
 from django.core.paginator import Paginator
-from django.db.models import Count, F, Prefetch, Q
+from django.db.models import Count, F, Min, Max, Prefetch, Q
 from django.forms import formset_factory
 from django.http import HttpResponse, HttpResponseNotFound
 from django.shortcuts import get_object_or_404, redirect, render
@@ -79,6 +80,8 @@ from core.services.replacements import (
     assign_replacement_request,
     cancel_mass_and_resolve_dependents,
     create_replacement_request,
+    reconcile_pending_replacements,
+    should_create_replacement,
 )
 from core.services.swaps import apply_swap_request
 from core.services.availability import is_acolyte_available, is_acolyte_available_with_rules
@@ -87,7 +90,7 @@ from core.services.time_windows import filter_past, filter_upcoming
 from scheduler.models import ScheduleJobRequest
 from notifications.services import enqueue_notification
 from scheduler.services.quick_fill import build_quick_fill_cache, quick_fill_slot
-from core.services.recommendations import build_recommendation_cache, rank_candidates
+from core.services.recommendations import build_recommendation_cache, get_mass_context, rank_candidates
 from web.forms import (
     AcolyteAvailabilityRuleForm,
     AcolyteIntentForm,
@@ -160,6 +163,7 @@ def dashboard(request):
     if dashboard_view == "admin":
         # Management by Exception
         soon_cutoff = now + timedelta(days=2)
+        consolidation_end = now + timedelta(days=parish.consolidation_days)
         open_slots_count = unfilled
         pending_swaps = SwapRequest.objects.filter(
             parish=parish,
@@ -175,10 +179,7 @@ def dashboard(request):
             "from_slot__position_type",
             "to_slot__position_type"
         ).order_by("mass_instance__starts_at")[:5]  # Limit to 5 most recent
-        pending_replacements = ReplacementRequest.objects.filter(
-            parish=parish,
-            status="pending"
-        ).count()
+        pending_replacements = len(_actionable_replacements(parish, now, consolidation_end))
         upcoming_masses = (
             MassInstance.objects.filter(parish=parish, starts_at__gte=now)
             .select_related("community")
@@ -237,6 +238,7 @@ def dashboard(request):
             ).select_related(
                 "slot__mass_instance__community",
                 "slot__position_type",
+                "confirmation",
             ).order_by("slot__mass_instance__starts_at").first()
 
             # Check if hero has swap options (other active slots in same mass)
@@ -250,18 +252,20 @@ def dashboard(request):
                 ).exists()
 
             # Inbox: Pending confirmations and incoming swaps (excluding next assignment)
-            pending_confirmations = Confirmation.objects.filter(
+            pending_assignments = Assignment.objects.filter(
                 parish=parish,
-                assignment__acolyte=acolyte,
-                assignment__is_active=True,
-                assignment__assignment_state__in=["published", "locked"],
-                assignment__slot__mass_instance__status="scheduled",
-                assignment__slot__mass_instance__starts_at__gte=timezone.now(),
-                status="pending",
+                acolyte=acolyte,
+                is_active=True,
+                assignment_state__in=["proposed", "published", "locked"],
+                slot__mass_instance__status="scheduled",
+                slot__mass_instance__starts_at__gte=timezone.now(),
+            ).filter(
+                Q(confirmation__status="pending") | Q(confirmation__isnull=True)
             ).select_related(
-                "assignment__slot__mass_instance",
-                "assignment__slot__position_type",
-            ).order_by("assignment__slot__mass_instance__starts_at")
+                "slot__mass_instance",
+                "slot__position_type",
+                "confirmation",
+            ).order_by("slot__mass_instance__starts_at")
 
             incoming_swaps = SwapRequest.objects.filter(
                 parish=parish,
@@ -284,14 +288,12 @@ def dashboard(request):
 
             # Exclude next assignment from pending confirmations if it exists
             if hero_assignment:
-                pending_confirmations = pending_confirmations.exclude(assignment=hero_assignment)
+                pending_assignments = pending_assignments.exclude(id=hero_assignment.id)
 
             claim_slot_ids = set()
             if hero_assignment:
                 claim_slot_ids.add(hero_assignment.slot_id)
-            claim_slot_ids.update(
-                pending_confirmations.values_list("assignment__slot_id", flat=True)
-            )
+            claim_slot_ids.update(pending_assignments.values_list("slot_id", flat=True))
             claims_by_slot = _claim_map_for_slots(parish, claim_slot_ids)
 
             # Horizon: Next 4 confirmed assignments after hero
@@ -304,6 +306,7 @@ def dashboard(request):
             ).select_related(
                 "slot__mass_instance__community",
                 "slot__position_type",
+                "confirmation",
             ).order_by("slot__mass_instance__starts_at")
 
             if hero_assignment:
@@ -315,7 +318,7 @@ def dashboard(request):
                 "acolyte": acolyte,
                 "hero_assignment": hero_assignment,
                 "hero_has_swap_options": hero_has_swap_options,
-                "pending_confirmations": pending_confirmations,
+                "pending_assignments": pending_assignments,
                 "incoming_swaps": incoming_swaps,
                 "claims_pending": claims_pending,
                 "horizon_assignments": horizon_assignments,
@@ -430,6 +433,66 @@ def _parse_date(value, fallback):
         return fallback
 
 
+def _parse_time_value(value):
+    if not value:
+        return None
+    for fmt in ("%H:%M:%S", "%H:%M"):
+        try:
+            return datetime.strptime(value, fmt).time()
+        except ValueError:
+            continue
+    return None
+
+
+def _parse_fk_id(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _replacement_interest_closed(parish, instance, now, weights):
+    if not instance.event_series_id or not instance.event_series:
+        return True
+    if instance.event_series.candidate_pool != "interested_only":
+        return True
+    context = get_mass_context(instance, weights, interest_map=None, now=now)
+    return bool(context.get("interest_closed"))
+
+
+def _actionable_replacements(parish, now, consolidation_end):
+    replacements_qs = (
+        ReplacementRequest.objects.filter(
+            parish=parish,
+            status="pending",
+            slot__required=True,
+            slot__externally_covered=False,
+            slot__status="open",
+            slot__mass_instance__status="scheduled",
+            slot__mass_instance__starts_at__gte=now,
+            slot__mass_instance__starts_at__lte=consolidation_end,
+        )
+        .select_related("slot__mass_instance__community", "slot__mass_instance__event_series", "slot__position_type")
+        .prefetch_related(
+            Prefetch(
+                "slot__assignments",
+                queryset=Assignment.objects.filter(is_active=True).select_related("acolyte"),
+                to_attr="active_assignments",
+            )
+        )
+        .order_by("slot__mass_instance__starts_at")
+    )
+    weights = parish.schedule_weights or {}
+    actionable = []
+    for replacement in replacements_qs:
+        if replacement.slot.get_active_assignment():
+            continue
+        if not _replacement_interest_closed(parish, replacement.slot.mass_instance, now, weights):
+            continue
+        actionable.append(replacement)
+    return actionable
+
+
 def _safe_next_url(request, fallback):
     next_url = request.GET.get("next") or request.POST.get("next")
     if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
@@ -523,19 +586,23 @@ def _build_roster_context(parish, start_date, end_date, community_id=None, kind=
         if column_max_index.get(position.id, 0) > 1:
             suffix = f" {key[1]}"
         label = f"{position.code}{suffix}" if position.code else f"{position.name}{suffix}"
+        label = label.replace("_", " + ")
         columns.append({"key": key, "label": label, "title": position.name})
 
     days = []
     current_day = None
     day_bucket = None
     for instance in instances:
-        instance_day = instance.starts_at.date()
+        local_dt = timezone.localtime(instance.starts_at)
+        instance_day = local_dt.date()
         if instance_day != current_day:
             day_bucket = {"date": instance_day, "items": []}
             days.append(day_bucket)
             current_day = instance_day
         slot_map = {(slot.position_type_id, slot.slot_index): slot for slot in instance.slots.all()}
-        day_bucket["items"].append({"instance": instance, "slot_map": slot_map})
+        day_bucket["items"].append(
+            {"instance": instance, "slot_map": slot_map, "local_dt": local_dt}
+        )
 
     return {"days": days, "columns": columns, "instances": instances}
 
@@ -591,34 +658,129 @@ def roster_view(request):
     )
 
 
-def _build_roster_lines(days, columns):
-    lines = []
+ROSTER_WEEKDAY_SHORT = [
+    "Segunda-feira",
+    "Terça-feira",
+    "Quarta-feira",
+    "Quinta-feira",
+    "Sexta-feira",
+    "Sábado",
+    "Domingo",
+]
+ROSTER_MONTH_NAMES = [
+    "Janeiro",
+    "Fevereiro",
+    "Março",
+    "Abril",
+    "Maio",
+    "Junho",
+    "Julho",
+    "Agosto",
+    "Setembro",
+    "Outubro",
+    "Novembro",
+    "Dezembro",
+]
+ROSTER_POSITION_ORDER = ["CER", "CRU_MIC", "LIB", "NAV", "TUR"]
+
+
+def _format_roster_day_header(value):
+    return f"{ROSTER_WEEKDAY_SHORT[value.weekday()]} • {value.strftime('%d/%m')}"
+
+
+def _format_roster_position_label(position, slot_index, max_index):
+    label = position.code or position.name or "Funcao"
+    label = label.replace("_", " + ")
+    code = (position.code or "").strip().upper()
+    if max_index > 1 and code != "CER":
+        label = f"{label} {slot_index}"
+    return label
+
+
+def _build_roster_role_entries(instance, slot_map):
+    if instance.status == "canceled":
+        return []
+    slots = list(slot_map.values())
+    max_indices = {}
+    for slot in slots:
+        max_indices[slot.position_type_id] = max(
+            max_indices.get(slot.position_type_id, 0), slot.slot_index
+        )
+
+    def _position_sort_key(position):
+        code = (position.code or position.name or "").upper()
+        code = code.replace(" ", "").replace("+", "_")
+        if code in ROSTER_POSITION_ORDER:
+            return (ROSTER_POSITION_ORDER.index(code), "")
+        return (len(ROSTER_POSITION_ORDER), code)
+
+    def _slot_sort(slot):
+        return (_position_sort_key(slot.position_type), slot.slot_index)
+
+    entries = []
+    for slot in sorted(slots, key=_slot_sort):
+        active = slot.get_active_assignment()
+        if not (slot.required or slot.externally_covered or active):
+            continue
+        label = _format_roster_position_label(
+            slot.position_type, slot.slot_index, max_indices.get(slot.position_type_id, 1)
+        )
+        if slot.externally_covered:
+            value = "EXTERNO"
+        elif active:
+            value = active.acolyte.display_name
+        else:
+            value = "ABERTO"
+        entries.append((label, value))
+    return entries
+
+
+def _format_roster_roles_text(entries):
+    if not entries:
+        return ""
+    return " | ".join([f"{label}: {value}" for label, value in entries])
+
+
+def _build_roster_export_data(days):
+    data = []
     for day in days:
-        lines.append(day["date"].strftime("%a %d/%m"))
+        day_items = []
         for item in day["items"]:
             instance = item["instance"]
-            line = f"{instance.starts_at.strftime('%H:%M')} {instance.community.code}"
-            if instance.liturgy_label:
-                line = f"{line} - {instance.liturgy_label}"
-            cells = []
-            for column in columns:
-                slot = item["slot_map"].get(column["key"])
-                if not slot:
-                    cells.append(f"{column['label']}: N/A")
-                    continue
-                if instance.status == "canceled":
-                    cells.append(f"{column['label']}: CANCELADA")
-                    continue
-                active = slot.get_active_assignment()
-                if slot.externally_covered:
-                    cells.append(f"{column['label']}: EXTERNO")
-                elif not slot.required:
-                    cells.append(f"{column['label']}: N/A")
-                elif active:
-                    cells.append(f"{column['label']}: {active.acolyte.display_name}")
-                else:
-                    cells.append(f"{column['label']}: ABERTO")
-            lines.append(f"{line} — " + " | ".join(cells))
+            local_dt = item.get("local_dt") or timezone.localtime(instance.starts_at)
+            day_items.append(
+                {
+                    "time": local_dt.strftime("%H:%M"),
+                    "community": instance.community.code,
+                    "label": (instance.liturgy_label or "").strip(),
+                    "status": "CANCELADA" if instance.status == "canceled" else "",
+                    "roles": _build_roster_role_entries(instance, item["slot_map"]),
+                }
+            )
+        data.append({"date": day["date"], "items": day_items})
+    return data
+
+
+def _build_roster_lines(days):
+    lines = []
+    for day in _build_roster_export_data(days):
+        lines.append(_format_roster_day_header(day["date"]))
+        for item in day["items"]:
+            base = f"{item['time']} {item['community']}"
+            if item["label"]:
+                base = f"{base} — {item['label']}"
+            if item["status"]:
+                lines.append(f"{base} — {item['status']}")
+                continue
+            # single-role masses render inline
+            roles = item.get("roles", [])
+            if len(roles) == 1:
+                label, value = roles[0]
+                lines.append(f"{base} — {label}: {value}")
+            else:
+                lines.append(base)
+                for label, value in roles:
+                    lines.append(f"  {label}: {value}")
         lines.append("")
     return "\n".join(lines).strip()
 
@@ -640,7 +802,7 @@ def roster_export_whatsapp(request):
         community_id=community_id or None,
         kind=kind or None,
     )
-    text = _build_roster_lines(context["days"], context["columns"])
+    text = _build_roster_lines(context["days"])
     response = HttpResponse(text, content_type="text/plain; charset=utf-8")
     response["Content-Disposition"] = "inline; filename=escala.txt"
     return response
@@ -663,34 +825,604 @@ def roster_export_pdf(request):
         community_id=community_id or None,
         kind=kind or None,
     )
-    lines = _build_roster_lines(context["days"], context["columns"]).splitlines()
+    data = _build_roster_export_data(context["days"])
 
     from io import BytesIO
+    import os
+    from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.pdfgen import canvas
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    def _wrap_pdf_text(pdf, text, font_name, font_size, max_width):
+        words = text.split()
+        if not words:
+            return [""]
+        lines = []
+        current = words[0]
+        for word in words[1:]:
+            candidate = f"{current} {word}"
+            if pdf.stringWidth(candidate, font_name, font_size) <= max_width:
+                current = candidate
+            else:
+                lines.append(current)
+                current = word
+        lines.append(current)
+        return lines
+
+    def _wrap_tokens(pdf, tokens, font_name, font_size, max_width, separator="; "):
+        lines = []
+        current = ""
+        for token in tokens:
+            if not token:
+                continue
+            candidate = token if not current else f"{current}{separator}{token}"
+            if pdf.stringWidth(candidate, font_name, font_size) <= max_width:
+                current = candidate
+                continue
+            if current:
+                lines.append(current)
+                current = ""
+            if pdf.stringWidth(token, font_name, font_size) <= max_width:
+                current = token
+            else:
+                wrapped = _wrap_pdf_text(pdf, token, font_name, font_size, max_width)
+                if wrapped:
+                    lines.extend(wrapped[:-1])
+                    current = wrapped[-1]
+                else:
+                    current = token
+        if current:
+            lines.append(current)
+        return lines
+
+    accent_color = colors.HexColor("#7A2E2E")
+    muted_color = colors.HexColor("#6B6B6B")
+    line_color = colors.HexColor("#D0D0D0")
+    text_color = colors.black
+
+    serif_font = "Times-Roman"
+    serif_bold_font = "Times-Bold"
+    sans_font = "Helvetica"
+    sans_bold_font = "Helvetica-Bold"
+    sans_italic_font = "Helvetica-Oblique"
+
+    def _find_font_path(paths):
+        for path in paths:
+            if path and os.path.exists(path):
+                return path
+        return None
+
+    def _register_font(name, path):
+        if not path:
+            return None
+        try:
+            pdfmetrics.registerFont(TTFont(name, path))
+            return name
+        except Exception:
+            return None
+
+    serif_path = _find_font_path(
+        [
+            "C:\\Windows\\Fonts\\times.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
+            "/usr/share/fonts/truetype/noto/NotoSerif-Regular.ttf",
+            "/System/Library/Fonts/Supplemental/Times New Roman.ttf",
+        ]
+    )
+    serif_bold_path = _find_font_path(
+        [
+            "C:\\Windows\\Fonts\\timesbd.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf",
+            "/usr/share/fonts/truetype/noto/NotoSerif-Bold.ttf",
+            "/System/Library/Fonts/Supplemental/Times New Roman Bold.ttf",
+        ]
+    )
+    sans_path = _find_font_path(
+        [
+            "C:\\Windows\\Fonts\\arial.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+            "/System/Library/Fonts/Supplemental/Arial.ttf",
+        ]
+    )
+    sans_bold_path = _find_font_path(
+        [
+            "C:\\Windows\\Fonts\\arialbd.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+            "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
+            "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+        ]
+    )
+    sans_italic_path = _find_font_path(
+        [
+            "C:\\Windows\\Fonts\\ariali.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Italic.ttf",
+            "/usr/share/fonts/truetype/noto/NotoSans-Italic.ttf",
+            "/System/Library/Fonts/Supplemental/Arial Italic.ttf",
+        ]
+    )
+
+    serif_font = _register_font("AcoliSerif", serif_path) or serif_font
+    serif_bold_font = _register_font("AcoliSerifBold", serif_bold_path) or serif_bold_font
+    sans_font = _register_font("AcoliSans", sans_path) or sans_font
+    sans_bold_font = _register_font("AcoliSansBold", sans_bold_path) or sans_bold_font
+    sans_italic_font = _register_font("AcoliSansItalic", sans_italic_path) or sans_italic_font
+
+    width, height = A4
+    left = 40
+    right = 40
+    top = 46
+    bottom = 50
+    max_width = width - left - right
+
+    def _draw_footer(pdf, page_num, page_count):
+        footer_y = 30
+        pdf.setFont(sans_font, 8)
+        pdf.setFillColor(muted_color)
+        version = timezone.localtime(timezone.now()).strftime("v%Y%m%d")
+        pdf.drawString(left, footer_y, f"{parish.name} - Escala de Acólitos — {version}")
+        pdf.drawRightString(width - right, footer_y, f"{page_num}/{page_count}")
+        pdf.setFillColor(text_color)
+
+    class _NumberedCanvas(canvas.Canvas):
+        def __init__(self, *args, **kwargs):
+            self._saved_page_states = []
+            super().__init__(*args, **kwargs)
+
+        def showPage(self):
+            self._saved_page_states.append(dict(self.__dict__))
+            self._startPage()
+
+        def save(self):
+            self._saved_page_states.append(dict(self.__dict__))
+            page_count = len(self._saved_page_states)
+            for state in self._saved_page_states:
+                self.__dict__.update(state)
+                _draw_footer(self, self._pageNumber, page_count)
+                canvas.Canvas.showPage(self)
+            canvas.Canvas.save(self)
+
+    def _draw_header(pdf, y, compact=False):
+        pdf.setFillColor(text_color)
+        if compact:
+            pdf.setFont(serif_bold_font, 12)
+            pdf.drawString(left, y, parish.name)
+            pdf.setFont(sans_font, 9)
+            pdf.setFillColor(muted_color)
+            pdf.drawRightString(width - right, y, "Escala de Acólitos")
+            y -= 12
+        else:
+            pdf.setFont(serif_bold_font, 18)
+            pdf.drawString(left, y, parish.name)
+            y -= 20
+            pdf.setFont(sans_font, 11)
+            pdf.setFillColor(muted_color)
+            pdf.drawString(left, y, "Escala de Acólitos - Missas")
+            y -= 14
+            pdf.setFont(sans_font, 9)
+            pdf.drawString(
+                left,
+                y,
+                (
+                    f"Período: {start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}"
+                    f" | Gerado em: {timezone.localtime(timezone.now()).strftime('%d/%m/%Y %H:%M')}"
+                ),
+            )
+            y -= 12
+        pdf.setStrokeColor(line_color)
+        pdf.line(left, y, width - right, y)
+        y -= 12
+        pdf.setFillColor(text_color)
+        return y
+
+    def _start_page(pdf):
+        pdf.showPage()
+        y = height - top
+        return _draw_header(pdf, y, compact=True)
+
+    def _draw_legend(pdf, y, context):
+        if not context:
+            return y
+
+        role_positions = {}
+        for day in context.get("days", []):
+            for item in day.get("items", []):
+                for slot in item.get("slot_map", {}).values():
+                    position = getattr(slot, "position_type", None)
+                    if not position:
+                        continue
+                    role_positions[position.id] = position
+
+        def _position_sort_key(position):
+            code = (position.code or position.name or "").upper()
+            code = code.replace(" ", "").replace("+", "_")
+            if code in ROSTER_POSITION_ORDER:
+                return (ROSTER_POSITION_ORDER.index(code), "")
+            return (len(ROSTER_POSITION_ORDER), code)
+
+        role_tokens = []
+        for position in sorted(role_positions.values(), key=_position_sort_key):
+            label = position.code or position.name or "Funcao"
+            label = label.replace("_", " + ")
+            title = position.name or label
+            role_tokens.append(f"{label} = {title}")
+
+        try:
+            communities = list(parish.community_set.filter(active=True).order_by("code"))
+        except Exception:
+            communities = []
+        comm_tokens = [f"{c.code} = {c.name}" for c in communities] if communities else []
+
+        if not role_tokens and not comm_tokens:
+            return y
+
+        pdf.setFont(sans_font, 8)
+        pdf.setFillColor(muted_color)
+        line_height = 10
+        gap_after_block = 4
+
+        if role_tokens:
+            prefix = "Legenda — Funções: "
+            prefix_width = pdf.stringWidth(prefix, sans_font, 8)
+            lines = _wrap_tokens(pdf, role_tokens, sans_font, 8, max_width - prefix_width)
+            if lines:
+                pdf.drawString(left, y, prefix)
+                pdf.drawString(left + prefix_width, y, lines[0])
+                y -= line_height
+                for line in lines[1:]:
+                    pdf.drawString(left + prefix_width, y, line)
+                    y -= line_height
+                y -= gap_after_block
+
+        if comm_tokens:
+            prefix = "Legenda — Comunidades: "
+            prefix_width = pdf.stringWidth(prefix, sans_font, 8)
+            lines = _wrap_tokens(pdf, comm_tokens, sans_font, 8, max_width - prefix_width)
+            if lines:
+                pdf.drawString(left, y, prefix)
+                pdf.drawString(left + prefix_width, y, lines[0])
+                y -= line_height
+                for line in lines[1:]:
+                    pdf.drawString(left + prefix_width, y, line)
+                    y -= line_height
+                y -= gap_after_block
+
+        pdf.setFillColor(text_color)
+        return y
+
+    def _draw_month_header(pdf, y, day_date):
+        month_label = f"{ROSTER_MONTH_NAMES[day_date.month - 1]} {day_date.year}"
+        pdf.setFont(sans_bold_font, 10)
+        pdf.setFillColor(muted_color)
+        pdf.drawString(left, y, month_label)
+        y -= 10
+        pdf.setStrokeColor(line_color)
+        pdf.line(left, y, width - right, y)
+        # breathing after month header
+        y -= GAP_AFTER_MONTH_HEADER
+        pdf.setFillColor(text_color)
+        return y
+
+    def _draw_day_header(pdf, y, day_date):
+        pdf.setFont(serif_bold_font, 12)
+        pdf.setFillColor(accent_color)
+        pdf.drawString(left, y, _format_roster_day_header(day_date))
+        # primary day header height
+        y -= 14
+        # small gap after day header before first mass
+        y -= GAP_AFTER_DAY_HEADER
+        pdf.setFillColor(text_color)
+        return y
 
     buffer = BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
-    y = height - 40
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawString(40, y, parish.name)
-    pdf.setFont("Helvetica", 10)
-    pdf.drawString(40, y - 14, f"Periodo: {start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}")
-    pdf.drawString(40, y - 28, f"Gerado em {timezone.localtime(timezone.now()).strftime('%d/%m/%Y %H:%M')}")
-    y -= 50
+    pdf = _NumberedCanvas(buffer, pagesize=A4)
+    y = _draw_header(pdf, height - top, compact=False)
+    # draw legend on first page after header
+    y = _draw_legend(pdf, y, context)
 
-    for line in lines:
-        if y < 60:
-            pdf.showPage()
-            y = height - 40
-            pdf.setFont("Helvetica", 10)
-        if not line.strip():
-            y -= 8
-            continue
-        pdf.drawString(40, y, line)
-        y -= 14
+    current_month = None
+    time_font = serif_bold_font
+    time_size = 10
+    community_font = sans_bold_font
+    community_size = 9
+    label_font = sans_font
+    label_size = 9
+    role_label_font = sans_bold_font
+    role_value_font = sans_font
+    role_value_emphasis = sans_bold_font
+    status_font = sans_italic_font
+    header_leading = 12
+    label_leading = 11
+    role_leading = 11
+    roles_indent = 12
+    roles_width = max_width - roles_indent
+    column_gap = 18
+    # fixed column stops for the mass line
+    time_col_width = pdf.stringWidth("00:00", time_font, time_size) + 6
+    community_col_width = pdf.stringWidth("WWW", community_font, community_size) + 10
+    x_time = left
+    x_comm = x_time + time_col_width
+    x_sep = x_comm + community_col_width
+    sep_text = "—"
+    sep_width = pdf.stringWidth("— ", label_font, label_size)
+    # vertical spacing constants (typographic polish)
+    GAP_AFTER_MONTH_HEADER = 10
+    GAP_BEFORE_DAY_HEADER = 8
+    GAP_AFTER_DAY_HEADER = 4
+    GAP_BETWEEN_MASSES = 2
+    GAP_AFTER_DAY_BLOCK = 6
+    month_header_height = 18
+    day_header_height = 14
 
+    def _role_column(label):
+        key = label.upper().replace(" ", "").replace("+", "_")
+        if key.startswith("LIB") or key.startswith("NAV") or key.startswith("TUR"):
+            return "right"
+        return "left"
+
+    role_labels = []
+    for day in data:
+        for item in day["items"]:
+            for label, _ in item.get("roles", []):
+                role_labels.append(label)
+
+    left_label_widths = []
+    right_label_widths = []
+    for label in role_labels:
+        width = pdf.stringWidth(f"{label}: ", role_label_font, 9)
+        if _role_column(label) == "right":
+            right_label_widths.append(width)
+        else:
+            left_label_widths.append(width)
+
+    default_left = max(
+        pdf.stringWidth("CER: ", role_label_font, 9),
+        pdf.stringWidth("CRU + MIC: ", role_label_font, 9),
+    )
+    default_right = max(
+        pdf.stringWidth("LIB: ", role_label_font, 9),
+        pdf.stringWidth("NAV: ", role_label_font, 9),
+        pdf.stringWidth("TUR: ", role_label_font, 9),
+    )
+    label_width_left = max(left_label_widths) if left_label_widths else default_left
+    label_width_right = max(right_label_widths) if right_label_widths else default_right
+    label_width_single = max(label_width_left, label_width_right)
+
+    def _build_column_layout(pdf, entries, column_width, label_width=None):
+        if not entries:
+            return {"entries": [], "height": 0, "label_width": label_width or 0}
+        if label_width is None:
+            label_texts = [f"{label}: " for label, _ in entries]
+            label_width = max(pdf.stringWidth(text, role_label_font, 9) for text in label_texts)
+        value_width = max(10, column_width - label_width)
+        layout = []
+        total_lines = 0
+        for label, value in entries:
+            label_text = f"{label}: "
+            value_font = role_value_emphasis if value in ("ABERTO", "EXTERNO") else role_value_font
+            value_lines = _wrap_pdf_text(pdf, value, value_font, 9, value_width)
+            layout.append((label_text, label_width, value_lines, value_font))
+            total_lines += len(value_lines)
+        return {"entries": layout, "height": total_lines * role_leading, "label_width": label_width}
+
+    def _build_item_layout(pdf, item):
+        time_text = item["time"]
+        community_text = item["community"]
+        label_text = item["label"]
+        status_text = item["status"]
+
+        roles = item["roles"] if not status_text else []
+        single_role = len(roles) == 1 and not status_text
+        role_inline_text = None
+        if single_role:
+            role_label, role_value = roles[0]
+            role_inline_text = f"{role_label}: {role_value}"
+
+        details_text = ""
+        if label_text and role_inline_text:
+            details_text = f"{label_text} — {role_inline_text}"
+        elif label_text:
+            details_text = label_text
+        elif role_inline_text:
+            details_text = role_inline_text
+
+        inline_available = max_width - (x_sep - left) - sep_width
+        details_lines = []
+        details_inline = False
+        if details_text:
+            if inline_available >= 80:
+                details_lines = _wrap_pdf_text(
+                    pdf, details_text, label_font, label_size, inline_available
+                )
+                details_inline = True
+            else:
+                details_lines = _wrap_pdf_text(
+                    pdf, details_text, label_font, label_size, inline_available
+                )
+
+        render_roles = bool(roles) and not role_inline_text and not status_text
+        use_two_columns = False
+        left_layout = None
+        right_layout = None
+        roles_block_height = 0
+        if render_roles:
+            if len(roles) >= 4:
+                left_entries = []
+                right_entries = []
+                for label, value in roles:
+                    if _role_column(label) == "right":
+                        right_entries.append((label, value))
+                    else:
+                        left_entries.append((label, value))
+                if right_entries:
+                    use_two_columns = True
+                    column_width = (roles_width - column_gap) / 2
+                    left_layout = _build_column_layout(
+                        pdf, left_entries, column_width, label_width_left
+                    )
+                    right_layout = _build_column_layout(
+                        pdf, right_entries, column_width, label_width_right
+                    )
+                    roles_block_height = max(left_layout["height"], right_layout["height"])
+                else:
+                    left_layout = _build_column_layout(
+                        pdf, roles, roles_width, label_width_single
+                    )
+                    roles_block_height = left_layout["height"]
+            else:
+                left_layout = _build_column_layout(
+                    pdf, roles, roles_width, label_width_single
+                )
+                roles_block_height = left_layout["height"]
+
+        block_height = header_leading
+        if details_lines:
+            if details_inline:
+                block_height += label_leading * max(0, len(details_lines) - 1)
+            else:
+                block_height += label_leading * len(details_lines)
+        if status_text:
+            block_height += label_leading + GAP_BETWEEN_MASSES
+        elif render_roles and roles_block_height:
+            block_height += GAP_BETWEEN_MASSES + roles_block_height + GAP_BETWEEN_MASSES
+        else:
+            block_height += GAP_BETWEEN_MASSES
+
+        return {
+            "time_text": time_text,
+            "community_text": community_text,
+            "label_text": label_text,
+            "status_text": status_text,
+            "details_lines": details_lines,
+            "details_inline": details_inline,
+            "render_roles": render_roles,
+            "use_two_columns": use_two_columns,
+            "left_layout": left_layout,
+            "right_layout": right_layout,
+            "roles_block_height": roles_block_height,
+            "block_height": block_height,
+            "roles": roles,
+        }
+
+    for day in data:
+        first_layout = _build_item_layout(pdf, day["items"][0]) if day["items"] else None
+        month_changed = day["date"].month != current_month
+
+        required_for_day = day_header_height + GAP_AFTER_DAY_HEADER
+        if first_layout:
+            required_for_day += first_layout["block_height"]
+
+        required = required_for_day
+        if month_changed:
+            required += month_header_height + GAP_AFTER_MONTH_HEADER
+        else:
+            required += GAP_BEFORE_DAY_HEADER
+
+        if y - required < bottom:
+            y = _start_page(pdf)
+
+        if month_changed:
+            y = _draw_month_header(pdf, y, day["date"])
+            current_month = day["date"].month
+        else:
+            y -= GAP_BEFORE_DAY_HEADER
+
+        y = _draw_day_header(pdf, y, day["date"])
+
+        for item_index, item in enumerate(day["items"]):
+            layout = first_layout if item_index == 0 and first_layout else _build_item_layout(pdf, item)
+            if y - layout["block_height"] < bottom:
+                y = _start_page(pdf)
+                y = _draw_day_header(pdf, y, day["date"])
+
+            pdf.setFont(time_font, time_size)
+            pdf.setFillColor(text_color)
+            pdf.drawString(x_time, y, layout["time_text"])
+
+            pdf.setFont(community_font, community_size)
+            pdf.setFillColor(muted_color)
+            pdf.drawString(x_comm, y, layout["community_text"])
+            pdf.setFillColor(text_color)
+
+            if layout["details_lines"] and layout["details_inline"]:
+                pdf.setFont(label_font, label_size)
+                pdf.drawString(x_sep, y, sep_text)
+                pdf.drawString(x_sep + sep_width, y, layout["details_lines"][0])
+
+            y -= header_leading
+
+            if layout["details_lines"]:
+                pdf.setFont(label_font, label_size)
+                details_indent = x_sep + sep_width
+                if layout["details_inline"]:
+                    for line in layout["details_lines"][1:]:
+                        pdf.drawString(details_indent, y, line)
+                        y -= label_leading
+                else:
+                    pdf.drawString(x_sep, y, sep_text)
+                    pdf.drawString(details_indent, y, layout["details_lines"][0])
+                    y -= label_leading
+                    for line in layout["details_lines"][1:]:
+                        pdf.drawString(details_indent, y, line)
+                        y -= label_leading
+
+            if layout["status_text"]:
+                pdf.setFont(status_font, 9)
+                pdf.setFillColor(muted_color)
+                pdf.drawString(x_sep + sep_width, y, layout["status_text"])
+                pdf.setFillColor(text_color)
+                y -= label_leading
+                y -= GAP_BETWEEN_MASSES
+                continue
+
+            if layout["render_roles"]:
+                y -= GAP_BETWEEN_MASSES
+                roles_x = left + roles_indent
+                if layout["use_two_columns"] and layout["right_layout"]:
+                    column_width = (roles_width - column_gap) / 2
+                    left_x = roles_x
+                    right_x = roles_x + column_width + column_gap
+                    y_left = y
+                    y_right = y
+                    for label_text, label_width, value_lines, value_font in layout["left_layout"]["entries"]:
+                        pdf.setFont(role_label_font, 9)
+                        pdf.drawString(left_x, y_left, label_text)
+                        pdf.setFont(value_font, 9)
+                        pdf.drawString(left_x + label_width, y_left, value_lines[0])
+                        y_left -= role_leading
+                        for line in value_lines[1:]:
+                            pdf.drawString(left_x + label_width, y_left, line)
+                            y_left -= role_leading
+                    for label_text, label_width, value_lines, value_font in layout["right_layout"]["entries"]:
+                        pdf.setFont(role_label_font, 9)
+                        pdf.drawString(right_x, y_right, label_text)
+                        pdf.setFont(value_font, 9)
+                        pdf.drawString(right_x + label_width, y_right, value_lines[0])
+                        y_right -= role_leading
+                        for line in value_lines[1:]:
+                            pdf.drawString(right_x + label_width, y_right, line)
+                            y_right -= role_leading
+                    y -= max(layout["left_layout"]["height"], layout["right_layout"]["height"])
+                else:
+                    for label_text, label_width, value_lines, value_font in layout["left_layout"]["entries"]:
+                        pdf.setFont(role_label_font, 9)
+                        pdf.drawString(roles_x, y, label_text)
+                        pdf.setFont(value_font, 9)
+                        pdf.drawString(roles_x + label_width, y, value_lines[0])
+                        y -= role_leading
+                        for line in value_lines[1:]:
+                            pdf.drawString(roles_x + label_width, y, line)
+                            y -= role_leading
+
+            y -= GAP_BETWEEN_MASSES
+        y -= GAP_AFTER_DAY_BLOCK
     pdf.save()
     buffer.seek(0)
     response = HttpResponse(buffer.read(), content_type="application/pdf")
@@ -923,17 +1655,18 @@ def _claim_response(request, claim, return_target, success_message=None):
         return redirect("dashboard")
 
     if return_target == "dashboard_pending":
-        confirmation = Confirmation.objects.filter(assignment_id=claim.target_assignment_id).select_related(
-            "assignment__slot__mass_instance",
-            "assignment__slot__position_type",
+        assignment = Assignment.objects.filter(id=claim.target_assignment_id, is_active=True).select_related(
+            "slot__mass_instance",
+            "slot__position_type",
+            "confirmation",
         ).first()
-        if confirmation and confirmation.assignment.is_active:
+        if assignment:
             return _htmx_or_redirect(
                 request,
                 "acolytes/_partials/dashboard_pending_row.html",
                 {
-                    "confirmation": confirmation,
-                    "claims_by_slot": _claim_map_for_slots(parish, [confirmation.assignment.slot_id]),
+                    "assignment": assignment,
+                    "claims_by_slot": _claim_map_for_slots(parish, [assignment.slot_id]),
                 },
                 "dashboard",
                 success_message,
@@ -1823,6 +2556,8 @@ def event_series_days(request):
     default_label = draft["title"] if start_date == end_date else ""
     if request.method == "POST":
         formset = OccurrenceFormSet(request.POST, form_kwargs={"parish": parish})
+        extra_occurrences_by_index = [[] for _ in range(len(formset))]
+        base_occurrence_ids = [None for _ in range(len(formset))]
         if formset.is_valid():
             series = EventSeries.objects.create(
                 parish=parish,
@@ -1843,23 +2578,65 @@ def event_series_days(request):
             )
             log_audit(parish, request.user, "EventSeries", series.id, "create", {"title": series.title})
             occurrences = []
-            for form in formset:
-                data = form.cleaned_data
-                label = data.get("label") or draft["title"]
-                occurrence = EventOccurrence.objects.create(
-                    parish=parish,
-                    event_series=series,
-                    date=data["date"],
-                    time=data["time"],
-                    community=data["community"],
-                    requirement_profile=data["requirement_profile"],
-                    label=label,
-                    conflict_action=data["conflict_action"],
-                    move_to_date=data.get("move_to_date"),
-                    move_to_time=data.get("move_to_time"),
-                    move_to_community=data.get("move_to_community"),
-                )
-                occurrences.append(occurrence)
+            for i, form in enumerate(formset):
+                day_index = i
+                slot_indices = {0}
+                for key in request.POST.keys():
+                    match = re.search(rf'^form-{day_index}-time-(\d+)$', key)
+                    if match:
+                        slot_indices.add(int(match.group(1)))
+
+                for slot_index in sorted(slot_indices):
+                    if slot_index == 0:
+                        data = form.cleaned_data
+                        time_value = data.get("time")
+                        community_value = data.get("community")
+                        profile_value = data.get("requirement_profile")
+                        conflict_value = data.get("conflict_action") or "keep"
+                        label_value = data.get("label")
+                        move_date_value = data.get("move_to_date")
+                        move_time_value = data.get("move_to_time")
+                        move_community_value = data.get("move_to_community")
+                        community_id = community_value.id if community_value else default_community
+                        profile_id = profile_value.id if profile_value else default_profile
+                        move_community_id = move_community_value.id if move_community_value else None
+                    else:
+                        time_key = f'form-{day_index}-time-{slot_index}'
+                        community_key = f'form-{day_index}-community-{slot_index}'
+                        profile_key = f'form-{day_index}-requirement_profile-{slot_index}'
+                        conflict_key = f'form-{day_index}-conflict_action-{slot_index}'
+                        label_key = f'form-{day_index}-label-{slot_index}'
+                        move_date_key = f'form-{day_index}-move_to_date-{slot_index}'
+                        move_time_key = f'form-{day_index}-move_to_time-{slot_index}'
+                        move_community_key = f'form-{day_index}-move_to_community-{slot_index}'
+
+                        time_value = _parse_time_value(request.POST.get(time_key))
+                        community_value = _parse_fk_id(request.POST.get(community_key))
+                        profile_value = _parse_fk_id(request.POST.get(profile_key))
+                        conflict_value = request.POST.get(conflict_key, "keep")
+                        label_value = request.POST.get(label_key)
+                        move_date_value = _parse_date(request.POST.get(move_date_key), None)
+                        move_time_value = _parse_time_value(request.POST.get(move_time_key))
+                        move_community_value = _parse_fk_id(request.POST.get(move_community_key))
+                        community_id = community_value or default_community
+                        profile_id = profile_value or default_profile
+                        move_community_id = move_community_value or None
+
+                    if time_value:
+                        occurrence = EventOccurrence.objects.create(
+                            parish=parish,
+                            event_series=series,
+                            date=form.cleaned_data["date"],
+                            time=time_value,
+                            community_id=community_id,
+                            requirement_profile_id=profile_id,
+                            label=label_value or draft["title"],
+                            conflict_action=conflict_value,
+                            move_to_date=move_date_value,
+                            move_to_time=move_time_value,
+                            move_to_community_id=move_community_id,
+                        )
+                        occurrences.append(occurrence)
             try:
                 apply_event_occurrences(series, occurrences, actor=request.user)
             except ValueError as exc:
@@ -1873,7 +2650,7 @@ def event_series_days(request):
                         starts_at__date=data.get("date"),
                         starts_at__time=data.get("time"),
                         status="scheduled",
-                    ).first()
+                    ).exclude(event_series_id=series.id).first()
                     conflicts.append(conflict)
                 return render(
                     request,
@@ -1882,6 +2659,8 @@ def event_series_days(request):
                         "formset": formset,
                         "conflicts": conflicts,
                         "draft": draft,
+                        "extra_occurrences_by_index": extra_occurrences_by_index,
+                        "base_occurrence_ids": base_occurrence_ids,
                     },
                 )
             request.session.pop("event_series_draft", None)
@@ -1900,6 +2679,8 @@ def event_series_days(request):
                 }
             )
         formset = OccurrenceFormSet(initial=initial, form_kwargs={"parish": parish})
+        extra_occurrences_by_index = [[] for _ in range(len(formset))]
+        base_occurrence_ids = [None for _ in range(len(formset))]
 
     conflicts = []
     for form in formset:
@@ -1910,7 +2691,7 @@ def event_series_days(request):
             starts_at__date=data.get("date"),
             starts_at__time=data.get("time"),
             status="scheduled",
-        ).first()
+        ).exclude(event_series_id=series.id).first()
         conflicts.append(conflict)
 
     return render(
@@ -1923,6 +2704,8 @@ def event_series_days(request):
             "series": None,
             "default_label": default_label,
             "default_time": draft.get("default_time"),
+            "extra_occurrences_by_index": extra_occurrences_by_index,
+            "base_occurrence_ids": base_occurrence_ids,
         },
     )
 
@@ -2055,45 +2838,203 @@ def event_series_occurrences(request, series_id):
     occurrences_by_date = defaultdict(list)
     for occ in series.occurrences.all().order_by("time"):
         occurrences_by_date[occ.date].append(occ)
+    base_occurrence_ids = []
+    extra_occurrences_by_index = []
+    for date_value in dates:
+        existing_list = occurrences_by_date.get(date_value, [])
+        base_occurrence_ids.append(existing_list[0].id if existing_list else None)
+        extra_occurrences_by_index.append(existing_list[1:] if len(existing_list) > 1 else [])
     OccurrenceFormSet = formset_factory(EventOccurrenceForm, extra=0)
+    def _normalize_conflict_action(value, date_value, time_value, community_id):
+        if value not in {"cancel_existing", "move_existing"}:
+            return value
+        if not (date_value and time_value and community_id):
+            return value
+        has_conflict = MassInstance.objects.filter(
+            parish=parish,
+            community_id=community_id,
+            starts_at__date=date_value,
+            starts_at__time=time_value,
+            status="scheduled",
+        ).exclude(event_series_id=series.id).exists()
+        return value if has_conflict else "keep"
+
+    def _cancel_mass_instance(instance):
+        instance.status = "canceled"
+        instance.save(update_fields=["status", "updated_at"])
+        MassOverride.objects.create(
+            parish=parish,
+            instance=instance,
+            override_type="cancel_instance",
+            payload={"reason": "event_series", "event_series_id": series.id},
+            created_by=request.user,
+        )
+        log_audit(parish, request.user, "MassInstance", instance.id, "cancel", {"event_series_id": series.id})
+
+    def _reconcile_series_masses():
+        desired_slots = {
+            (occ.date, occ.time, occ.community_id)
+            for occ in EventOccurrence.objects.filter(event_series=series).exclude(conflict_action="skip")
+        }
+        scheduled = MassInstance.objects.filter(event_series=series, status="scheduled")
+        grouped = defaultdict(list)
+        for instance in scheduled:
+            local_dt = timezone.localtime(instance.starts_at)
+            key = (local_dt.date(), local_dt.time().replace(tzinfo=None), instance.community_id)
+            grouped[key].append(instance)
+
+        for key, instances in grouped.items():
+            if key not in desired_slots:
+                for instance in instances:
+                    _cancel_mass_instance(instance)
+                continue
+            if len(instances) > 1:
+                for instance in instances[1:]:
+                    _cancel_mass_instance(instance)
+
     if request.method == "POST":
         formset = OccurrenceFormSet(request.POST, form_kwargs={"parish": parish})
         if formset.is_valid():
             occurrences = []
-            for form in formset:
+            submitted_occurrence_ids = set()
+            for i, form in enumerate(formset):
                 data = form.cleaned_data
                 label = data.get("label") or series.title
                 existing_list = occurrences_by_date.get(data["date"], [])
-                existing = existing_list[0] if existing_list else None
+                occurrence_id = _parse_fk_id(request.POST.get(f"form-{i}-occurrence_id"))
+                existing = None
+                if occurrence_id:
+                    existing = EventOccurrence.objects.filter(event_series=series, id=occurrence_id).first()
+                if not existing:
+                    existing = existing_list[0] if existing_list else None
                 if existing:
+                    community_id = data["community"].id if data.get("community") else series.default_community_id
+                    conflict_value = _normalize_conflict_action(
+                        data.get("conflict_action"),
+                        data.get("date"),
+                        data.get("time"),
+                        community_id,
+                    )
                     existing.time = data["time"]
                     existing.community = data["community"]
                     existing.requirement_profile = data["requirement_profile"]
                     existing.label = label
-                    existing.conflict_action = data["conflict_action"]
+                    existing.conflict_action = conflict_value
                     existing.move_to_date = data.get("move_to_date")
                     existing.move_to_time = data.get("move_to_time")
                     existing.move_to_community = data.get("move_to_community")
                     existing.save()
                     occurrences.append(existing)
+                    submitted_occurrence_ids.add(existing.id)
                 else:
-                    occurrences.append(
-                        EventOccurrence.objects.create(
+                    community_id = data["community"].id if data.get("community") else series.default_community_id
+                    conflict_value = _normalize_conflict_action(
+                        data.get("conflict_action"),
+                        data.get("date"),
+                        data.get("time"),
+                        community_id,
+                    )
+                    created = EventOccurrence.objects.create(
+                        parish=parish,
+                        event_series=series,
+                        date=data["date"],
+                        time=data["time"],
+                        community=data["community"],
+                        requirement_profile=data["requirement_profile"],
+                        label=label,
+                        conflict_action=conflict_value,
+                        move_to_date=data.get("move_to_date"),
+                        move_to_time=data.get("move_to_time"),
+                        move_to_community=data.get("move_to_community"),
+                    )
+                    occurrences.append(created)
+                    submitted_occurrence_ids.add(created.id)
+
+                base_community = data.get("community")
+                base_community_id = base_community.id if base_community else series.default_community_id
+                base_profile = data.get("requirement_profile")
+                base_profile_id = base_profile.id if base_profile else default_profile_id
+
+                slot_indices = []
+                for key in request.POST.keys():
+                    match = re.search(rf'^form-{i}-time-(\d+)$', key)
+                    if match:
+                        slot_indices.append(int(match.group(1)))
+                slot_indices = sorted(set(slot_indices))
+
+                for slot_index in slot_indices:
+                    if slot_index == 0:
+                        continue
+                    occurrence_id = _parse_fk_id(request.POST.get(f"form-{i}-occurrence_id-{slot_index}"))
+                    time_key = f'form-{i}-time-{slot_index}'
+                    community_key = f'form-{i}-community-{slot_index}'
+                    profile_key = f'form-{i}-requirement_profile-{slot_index}'
+                    conflict_key = f'form-{i}-conflict_action-{slot_index}'
+                    label_key = f'form-{i}-label-{slot_index}'
+                    move_date_key = f'form-{i}-move_to_date-{slot_index}'
+                    move_time_key = f'form-{i}-move_to_time-{slot_index}'
+                    move_community_key = f'form-{i}-move_to_community-{slot_index}'
+
+                    time_value = _parse_time_value(request.POST.get(time_key))
+                    if not time_value:
+                        continue
+                    community_id = _parse_fk_id(request.POST.get(community_key)) or base_community_id
+                    profile_id = _parse_fk_id(request.POST.get(profile_key)) or base_profile_id
+                    conflict_value = _normalize_conflict_action(
+                        request.POST.get(conflict_key, "keep"),
+                        data.get("date"),
+                        time_value,
+                        community_id,
+                    )
+                    label_value = request.POST.get(label_key) or series.title
+                    move_date_value = _parse_date(request.POST.get(move_date_key), None)
+                    move_time_value = _parse_time_value(request.POST.get(move_time_key))
+                    move_community_id = _parse_fk_id(request.POST.get(move_community_key)) or None
+
+                    if time_value == data.get("time") and community_id == base_community_id:
+                        continue
+
+                    existing_extra = None
+                    if occurrence_id:
+                        existing_extra = EventOccurrence.objects.filter(event_series=series, id=occurrence_id).first()
+                    if not existing_extra:
+                        existing_extra = EventOccurrence.objects.filter(
+                            event_series=series,
+                            date=data["date"],
+                            time=time_value,
+                            community_id=community_id,
+                        ).first()
+                    if existing_extra:
+                        existing_extra.requirement_profile_id = profile_id
+                        existing_extra.label = label_value
+                        existing_extra.conflict_action = conflict_value
+                        existing_extra.move_to_date = move_date_value
+                        existing_extra.move_to_time = move_time_value
+                        existing_extra.move_to_community_id = move_community_id
+                        existing_extra.save()
+                        occurrences.append(existing_extra)
+                        submitted_occurrence_ids.add(existing_extra.id)
+                    else:
+                        created = EventOccurrence.objects.create(
                             parish=parish,
                             event_series=series,
                             date=data["date"],
-                            time=data["time"],
-                            community=data["community"],
-                            requirement_profile=data["requirement_profile"],
-                            label=label,
-                            conflict_action=data["conflict_action"],
-                            move_to_date=data.get("move_to_date"),
-                            move_to_time=data.get("move_to_time"),
-                            move_to_community=data.get("move_to_community"),
+                            time=time_value,
+                            community_id=community_id,
+                            requirement_profile_id=profile_id,
+                            label=label_value,
+                            conflict_action=conflict_value,
+                            move_to_date=move_date_value,
+                            move_to_time=move_time_value,
+                            move_to_community_id=move_community_id,
                         )
-                    )
+                        occurrences.append(created)
+                        submitted_occurrence_ids.add(created.id)
             try:
                 apply_event_occurrences(series, occurrences, actor=request.user)
+                if submitted_occurrence_ids:
+                    EventOccurrence.objects.filter(event_series=series).exclude(id__in=submitted_occurrence_ids).delete()
+                _reconcile_series_masses()
             except ValueError as exc:
                 messages.error(request, str(exc))
                 conflicts = []
@@ -2105,9 +3046,7 @@ def event_series_occurrences(request, series_id):
                         starts_at__date=data.get("date"),
                         starts_at__time=data.get("time"),
                         status="scheduled",
-                    ).exclude(
-                         event_series=series
-                     ).first()
+                    ).exclude(event_series_id=series.id).first()
                     conflicts.append(conflict)
                 return render(
                     request,
@@ -2119,6 +3058,8 @@ def event_series_occurrences(request, series_id):
                         "series": series,
                         "default_label": series.title,
                         "default_time": default_time_value.strftime("%H:%M"),
+                        "extra_occurrences_by_index": extra_occurrences_by_index,
+                        "base_occurrence_ids": base_occurrence_ids,
                     },
                 )
             log_audit(parish, request.user, "EventSeries", series.id, "update", {"occurrences": len(occurrences)})
@@ -2153,9 +3094,7 @@ def event_series_occurrences(request, series_id):
             starts_at__date=data.get("date"),
             starts_at__time=data.get("time"),
             status="scheduled",
-        ).exclude(
-            event_series=series
-        ).first()
+        ).exclude(event_series_id=series.id).first()
         conflicts.append(conflict)
 
     return render(
@@ -2168,6 +3107,8 @@ def event_series_occurrences(request, series_id):
             "series": series,
             "default_label": series.title,
             "default_time": default_time_value.strftime("%H:%M"),
+            "extra_occurrences_by_index": extra_occurrences_by_index,
+            "base_occurrence_ids": base_occurrence_ids,
         },
     )
 
@@ -2225,6 +3166,8 @@ def event_series_delete(request, series_id):
 def scheduling_dashboard(request):
     parish = request.active_parish
     jobs = ScheduleJobRequest.objects.filter(parish=parish).order_by("-created_at")[:10]
+    if request.headers.get("HX-Request") and request.GET.get("partial") == "jobs":
+        return render(request, "scheduling/_jobs_list.html", {"jobs": jobs})
     if request.method == "POST":
         if request.POST.get("action") == "run":
             ScheduleJobRequest.objects.create(
@@ -2505,39 +3448,180 @@ def audit_log(request):
 def reports_frequency(request):
     parish = request.active_parish
     today = timezone.localdate()
-    start_date = _parse_date(request.GET.get("start"), today - timedelta(days=29))
-    end_date = _parse_date(request.GET.get("end"), today)
+    now = timezone.now()
 
-    assignments = (
-        Assignment.objects.filter(
-            parish=parish,
-            assignment_state__in=["published", "locked"],
-            slot__mass_instance__starts_at__date__range=(start_date, end_date),
-        )
-        .filter(created_at__lte=F("slot__mass_instance__starts_at"))
+    # Calculate min and max dates from MassInstance
+    mass_dates = MassInstance.objects.filter(community__parish=parish).aggregate(min_date=Min('starts_at__date'), max_date=Max('starts_at__date'))
+    min_date = mass_dates.get('min_date')
+    max_date = mass_dates.get('max_date')
+
+    if min_date and max_date:
+        default_start = min_date - timedelta(days=1)
+        default_end = max_date + timedelta(days=1)
+    else:
+        default_start = today - timedelta(days=29)
+        default_end = today
+
+    start_date = _parse_date(request.GET.get("start"), default_start)
+    end_date = _parse_date(request.GET.get("end"), default_end)
+
+    assignment_states = ["proposed", "published", "locked"]
+    assignments_period = Assignment.objects.filter(
+        parish=parish,
+        assignment_state__in=assignment_states,
+        slot__mass_instance__starts_at__date__range=(start_date, end_date),
+    )
+    received_counts = {
+        row["acolyte_id"]: row["total"]
+        for row in assignments_period.values("acolyte_id").annotate(total=Count("id"))
+    }
+    assignments_active = (
+        assignments_period.filter(created_at__lte=F("slot__mass_instance__starts_at"))
         .filter(Q(ended_at__isnull=True) | Q(ended_at__gte=F("slot__mass_instance__starts_at")))
     )
-    counts = {row["acolyte_id"]: row["total"] for row in assignments.values("acolyte_id").annotate(total=Count("id"))}
+    active_counts = {
+        row["acolyte_id"]: row["total"]
+        for row in assignments_active.values("acolyte_id").annotate(total=Count("id"))
+    }
+
+    future_assignments = Assignment.objects.filter(
+        parish=parish,
+        assignment_state__in=assignment_states,
+        slot__mass_instance__starts_at__gte=now,
+    ).filter(created_at__lte=F("slot__mass_instance__starts_at"))
+    future_assignments = future_assignments.filter(
+        Q(ended_at__isnull=True) | Q(ended_at__gte=F("slot__mass_instance__starts_at"))
+    )
+    future_counts = {
+        row["acolyte_id"]: row["total"]
+        for row in future_assignments.values("acolyte_id").annotate(total=Count("id"))
+    }
+
+    all_time_assignments = Assignment.objects.filter(
+        parish=parish,
+        assignment_state__in=assignment_states,
+    ).filter(created_at__lte=F("slot__mass_instance__starts_at"))
+    all_time_assignments = all_time_assignments.filter(
+        Q(ended_at__isnull=True) | Q(ended_at__gte=F("slot__mass_instance__starts_at"))
+    )
+    all_time_counts = {
+        row["acolyte_id"]: row["total"]
+        for row in all_time_assignments.values("acolyte_id").annotate(total=Count("id"))
+    }
+
+    confirmation_period = Confirmation.objects.filter(
+        parish=parish,
+        assignment__assignment_state__in=assignment_states,
+        assignment__slot__mass_instance__starts_at__date__range=(start_date, end_date),
+    )
+    confirmation_counts = {
+        row["assignment__acolyte_id"]: row
+        for row in confirmation_period.values("assignment__acolyte_id").annotate(
+            declined=Count("id", filter=Q(status="declined")),
+            canceled=Count("id", filter=Q(status="canceled_by_acolyte")),
+            no_show=Count("id", filter=Q(status="no_show")),
+        )
+    }
+
+    ceded_counts = {
+        row["acolyte_id"]: row["total"]
+        for row in Assignment.objects.filter(
+            parish=parish,
+            assignment_state__in=assignment_states,
+            end_reason__in=["swap", "claim_transfer"],
+            slot__mass_instance__starts_at__date__range=(start_date, end_date),
+        )
+        .values("acolyte_id")
+        .annotate(total=Count("id"))
+    }
+
     stats_map = {stat.acolyte_id: stat for stat in AcolyteStats.objects.filter(parish=parish)}
+    intent_map = {intent.acolyte_id: intent for intent in AcolyteIntent.objects.filter(parish=parish)}
+
+    acolytes = list(parish.acolytes.filter(active=True).order_by("display_name"))
+    acolyte_count = len(acolytes)
+    avg_total = (
+        sum(active_counts.get(acolyte.id, 0) for acolyte in acolytes) / acolyte_count
+        if acolyte_count
+        else 0
+    )
+    avg_received = (
+        sum(received_counts.get(acolyte.id, 0) for acolyte in acolytes) / acolyte_count
+        if acolyte_count
+        else 0
+    )
+
+    period_days = max((end_date - start_date).days + 1, 1)
+    period_factor = period_days / 30
+
+    def _allocation_text(ratio, target, is_reserve=False):
+        if is_reserve:
+            return "Reserva"
+        if not target or target <= 0:
+            return "Sem alvo"
+        if ratio is None:
+            return "Sem alvo"
+        if ratio < 0.8:
+            label = "Sub"
+        elif ratio <= 1.2:
+            label = "Na media"
+        else:
+            label = "Super"
+        return f"{label} {ratio:.1f}x"
 
     rows = []
-    for acolyte in parish.acolytes.filter(active=True).order_by("display_name"):
+    for acolyte in acolytes:
         stat = stats_map.get(acolyte.id)
-        total = counts.get(acolyte.id, 0)
+        intent = intent_map.get(acolyte.id)
+        is_reserve = acolyte.scheduling_mode == "reserve"
+        total = active_counts.get(acolyte.id, 0)
+        received = received_counts.get(acolyte.id, 0)
+        future = future_counts.get(acolyte.id, 0)
+        total_all_time = all_time_counts.get(acolyte.id, 0)
+        confirmation = confirmation_counts.get(acolyte.id, {})
+        declined = confirmation.get("declined", 0)
+        canceled = confirmation.get("canceled", 0)
+        no_show = confirmation.get("no_show", 0)
+        ceded = ceded_counts.get(acolyte.id, 0)
+        reliability = stat.reliability_score if stat else 0
+        credit = stat.credit_balance if stat else 0
+
+        if is_reserve:
+            target = 0
+        elif intent and intent.desired_frequency_per_month:
+            target = intent.desired_frequency_per_month * period_factor
+        else:
+            level = intent.willingness_level if intent else "normal"
+            factor = {"low": 0.8, "normal": 1.0, "high": 1.2}.get(level, 1.0)
+            target = avg_received * factor
+
+        raw_ratio = (received / target) if target else None
+        effective = max(0.0, received - declined - canceled - no_show - ceded)
+        reliability_factor = (stat.reliability_score / 100.0) if stat else 1.0
+        adjusted_ratio = ((effective * reliability_factor) / target) if target else None
+
         rows.append(
             {
                 "acolyte": acolyte,
                 "total": total,
+                "received": received,
+                "future": future,
+                "total_all_time": total_all_time,
                 "services_30": stat.services_last_30_days if stat else 0,
                 "services_90": stat.services_last_90_days if stat else 0,
-                "reliability": stat.reliability_score if stat else 0,
-                "credit": stat.credit_balance if stat else 0,
+                "reliability": reliability,
+                "credit": credit,
+                "declined": declined,
+                "canceled": canceled,
+                "no_show": no_show,
+                "ceded": ceded,
+                "allocation_raw": _allocation_text(raw_ratio, target, is_reserve),
+                "allocation_adjusted": _allocation_text(adjusted_ratio, target, is_reserve),
                 "has_user": bool(acolyte.user_id),
             }
         )
 
     max_total = max([row["total"] for row in rows], default=0) or 1
-    avg_total = sum(row["total"] for row in rows) / len(rows) if rows else 0
 
     return render(
         request,
@@ -2548,6 +3632,8 @@ def reports_frequency(request):
             "end_date": end_date,
             "max_total": max_total,
             "avg_total": avg_total,
+            "avg_received": avg_received,
+            "period_days": period_days,
         },
     )
 
@@ -2559,23 +3645,24 @@ def replacement_center(request):
     parish = request.active_parish
     now = timezone.now()
     consolidation_end = now + timedelta(days=parish.consolidation_days)
-    replacements_qs = (
-        ReplacementRequest.objects.filter(parish=parish, status="pending")
-        .select_related("slot__mass_instance__community", "slot__mass_instance", "slot__position_type")
-        .order_by("slot__mass_instance__starts_at")
-    )
-    pending_in_window = replacements_qs.filter(slot__mass_instance__starts_at__lte=consolidation_end).count()
-    replacements = list(replacements_qs)
+    reconcile_pending_replacements(parish, actor=request.user, now=now)
+    replacements = _actionable_replacements(parish, now, consolidation_end)
+    pending_in_window = len(replacements)
     open_slots = AssignmentSlot.objects.filter(
         parish=parish,
         status="open",
         required=True,
+        externally_covered=False,
+        mass_instance__status="scheduled",
+        mass_instance__starts_at__gte=now,
         mass_instance__starts_at__lte=consolidation_end,
     ).count()
     pending_confirmations = Confirmation.objects.filter(
         parish=parish,
         status="pending",
         assignment__is_active=True,
+        assignment__slot__mass_instance__status="scheduled",
+        assignment__slot__mass_instance__starts_at__gte=now,
         assignment__slot__mass_instance__starts_at__lte=consolidation_end,
     ).count()
     if replacements:
@@ -5141,7 +6228,7 @@ def confirm_assignment(request, assignment_id):
             request,
             "acolytes/_partials/dashboard_pending_row.html",
             {
-                "confirmation": confirmation,
+                "assignment": assignment,
                 "claims_by_slot": _claim_map_for_slots(parish, [assignment.slot_id]),
             },
             "dashboard",
@@ -5186,32 +6273,34 @@ def decline_assignment(request, assignment_id):
     slot.status = "open"
     slot.save(update_fields=["status", "updated_at"])
     log_audit(parish, request.user, "Confirmation", confirmation.id, "update", {"status": "declined"})
-    replacement = create_replacement_request(
-        parish,
-        slot,
-        actor=request.user,
-        notes=f"Criada por recusa de {assignment.acolyte.display_name}",
-    )
-    if parish.notify_on_cancellation:
-        for user in users_with_roles(parish, ADMIN_ROLE_CODES):
-            enqueue_notification(
-                parish,
-                user,
-                "ASSIGNMENT_CANCELED_ALERT_ADMIN",
-                {"slot_id": slot.id},
-                idempotency_key=f"cancel:{assignment.id}:{user.id}",
-            )
-    if parish.auto_assign_on_decline:
-        ScheduleJobRequest.objects.create(
-            parish=parish,
-            requested_by=request.user,
-            job_type="replacement",
-            horizon_days=0,
-            payload_json={
-                "slot_id": slot.id,
-                "replacement_request_id": replacement.id,
-            },
+    replacement = None
+    if should_create_replacement(parish, slot, now=timezone.now()):
+        replacement = create_replacement_request(
+            parish,
+            slot,
+            actor=request.user,
+            notes=f"Criada por recusa de {assignment.acolyte.display_name}",
         )
+        if parish.notify_on_cancellation:
+            for user in users_with_roles(parish, ADMIN_ROLE_CODES):
+                enqueue_notification(
+                    parish,
+                    user,
+                    "ASSIGNMENT_CANCELED_ALERT_ADMIN",
+                    {"slot_id": slot.id},
+                    idempotency_key=f"cancel:{assignment.id}:{user.id}",
+                )
+        if parish.auto_assign_on_decline and replacement:
+            ScheduleJobRequest.objects.create(
+                parish=parish,
+                requested_by=request.user,
+                job_type="replacement",
+                horizon_days=0,
+                payload_json={
+                    "slot_id": slot.id,
+                    "replacement_request_id": replacement.id,
+                },
+            )
     
     # For HTMX, return updated hero assignment
     if request.headers.get("HX-Request"):
@@ -5270,21 +6359,22 @@ def cancel_assignment(request, assignment_id):
     slot.status = "open"
     slot.save(update_fields=["status", "updated_at"])
     log_audit(parish, request.user, "Confirmation", confirmation.id, "update", {"status": "canceled_by_acolyte"})
-    create_replacement_request(
-        parish,
-        slot,
-        actor=request.user,
-        notes=f"Criada por cancelamento de {assignment.acolyte.display_name}",
-    )
-    if parish.notify_on_cancellation:
-        for user in users_with_roles(parish, ADMIN_ROLE_CODES):
-            enqueue_notification(
-                parish,
-                user,
-                "ASSIGNMENT_CANCELED_ALERT_ADMIN",
-                {"slot_id": slot.id},
-                idempotency_key=f"cancel:{assignment.id}:{user.id}",
-            )
+    if should_create_replacement(parish, slot, now=timezone.now()):
+        create_replacement_request(
+            parish,
+            slot,
+            actor=request.user,
+            notes=f"Criada por cancelamento de {assignment.acolyte.display_name}",
+        )
+        if parish.notify_on_cancellation:
+            for user in users_with_roles(parish, ADMIN_ROLE_CODES):
+                enqueue_notification(
+                    parish,
+                    user,
+                    "ASSIGNMENT_CANCELED_ALERT_ADMIN",
+                    {"slot_id": slot.id},
+                    idempotency_key=f"cancel:{assignment.id}:{user.id}",
+                )
     
     # For HTMX, return empty response with success message (will remove the card)
     if request.headers.get("HX-Request"):
