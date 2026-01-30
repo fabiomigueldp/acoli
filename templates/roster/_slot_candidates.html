@@ -1,5 +1,5 @@
 {% load extras %}
-<div class="p-6 max-h-[80vh] overflow-y-auto">
+<div class="p-5 sm:p-6 max-h-[85vh] overflow-y-auto">
     <div class="flex items-center justify-between mb-6">
         <div>
             <h3 class="text-lg font-semibold text-ink">Atribuir slot</h3>
@@ -7,7 +7,7 @@
                 {{ slot.mass_instance.starts_at|date:"d/m/Y H:i" }} - {{ slot.mass_instance.community.code }} - {{ slot.position_type.name }}
             </p>
         </div>
-        <button type="button" class="text-slate hover:text-ink transition-colors"
+        <button type="button" class="p-2 -mr-2 text-slate hover:text-ink transition-colors"
                 onclick="document.getElementById('modal-container').classList.add('hidden')">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -25,9 +25,9 @@
         
         <div class="mb-6">
             <label class="label mb-3">Acolitos recomendados</label>
-            <div class="space-y-2 max-h-96 overflow-y-auto">
+            <div class="space-y-2">
                 {% for candidate in candidates %}
-                <label class="candidate-option block p-3 border border-sand-200 rounded-lg cursor-pointer hover:border-moss hover:bg-moss/5 transition-all">
+                <label class="candidate-option block p-4 border border-sand-200 rounded-lg cursor-pointer hover:border-moss hover:bg-moss/5 transition-all">
                     <input type="radio" name="candidate_radio" value="{{ candidate.acolyte.id }}" class="sr-only candidate-radio">
                     <div class="flex items-start justify-between gap-3">
                         <div class="flex-1 min-w-0">
@@ -63,11 +63,11 @@
         </div>
         
         <div class="flex flex-col-reverse sm:flex-row justify-end gap-3">
-            <button type="button" class="btn-secondary"
+            <button type="button" class="btn-secondary w-full sm:w-auto"
                     onclick="document.getElementById('modal-container').classList.add('hidden')">
                 Cancelar
             </button>
-            <button type="submit" class="btn-primary" id="confirm-assign-btn" disabled>
+            <button type="submit" class="btn-primary w-full sm:w-auto" id="confirm-assign-btn" disabled>
                 Confirmar
             </button>
         </div>
@@ -85,27 +85,50 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const radios = document.querySelectorAll('.candidate-radio');
-    const hiddenInput = document.getElementById('selected-acolyte-id');
-    const confirmBtn = document.getElementById('confirm-assign-btn');
-    const candidateOptions = document.querySelectorAll('.candidate-option');
-    
+function initSlotCandidatesModal(root) {
+    const radios = root.querySelectorAll('.candidate-radio');
+    const hiddenInput = root.querySelector('#selected-acolyte-id');
+    const confirmBtn = root.querySelector('#confirm-assign-btn');
+    const candidateOptions = root.querySelectorAll('.candidate-option');
+    const form = root.querySelector('#assign-candidate-form');
+
+    if (!radios.length || !hiddenInput || !confirmBtn) {
+        return;
+    }
+
     radios.forEach((radio, index) => {
         radio.addEventListener('change', function() {
             hiddenInput.value = this.value;
             confirmBtn.disabled = false;
-            
+
             candidateOptions.forEach(opt => opt.classList.remove('border-moss', 'bg-moss/10'));
             if (this.checked) {
                 candidateOptions[index].classList.add('border-moss', 'bg-moss/10');
             }
         });
     });
-    
-    // Close modal after successful assignment
-    document.getElementById('assign-candidate-form').addEventListener('htmx:afterSwap', function() {
-        document.getElementById('modal-container').classList.add('hidden');
-    });
+
+    if (form) {
+        form.addEventListener('htmx:afterSwap', function() {
+            document.getElementById('modal-container').classList.add('hidden');
+        });
+    }
+}
+
+function bootSlotCandidatesModal() {
+    const modalContent = document.getElementById('modal-container') || document;
+    initSlotCandidatesModal(modalContent);
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootSlotCandidatesModal);
+} else {
+    bootSlotCandidatesModal();
+}
+
+document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target && (evt.detail.target.id === 'modal-container' || evt.detail.target.id === 'modal-content')) {
+        initSlotCandidatesModal(evt.detail.target);
+    }
 });
 </script>

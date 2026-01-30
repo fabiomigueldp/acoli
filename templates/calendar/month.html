@@ -90,27 +90,35 @@
   <div class="card lg:hidden">
     <div class="mb-6">
       <h3 class="font-semibold text-lg text-ink">Eventos do mês</h3>
-      <p class="text-sm text-slate">Lista completa para dispositivos móveis</p>
+      <p class="text-sm text-slate">Lista agrupada por dia</p>
     </div>
-    <div class="space-y-4">
-      {% for instance in instances %}
-        <a class="block border border-black/8 rounded-xl p-4 hover:bg-sand/40 hover:border-moss/20 transition-all duration-200 hover:shadow-sm group {% if instance.id in my_confirmed_ids %}bg-moss-50/70 border-moss-200{% elif instance.id in my_pending_ids %}bg-sun-50/70 border-sun-200{% elif instance.id in pending_confirmation_ids %}bg-sun-50/30 border-sun-200{% endif %}" href="{% url 'mass_detail' instance.id %}">
-          <div class="flex items-center justify-between mb-2">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 bg-slate rounded-full flex items-center justify-center text-white font-serif text-sm font-bold">
-                {{ instance.community.code|slice:":1" }}
-              </div>
-              <div>
-                <div class="text-sm text-slate font-medium">{{ instance.starts_at|date:"D, d/m" }}</div>
-                <div class="font-semibold text-ink group-hover:text-moss transition-colors">{{ instance.starts_at|date:"H:i" }} • {{ instance.community.code }}</div>
-              </div>
-            </div>
-            <div class="text-right">
-              <span class="badge">{{ instance.status|mass_status_label }}</span>
-            </div>
+    {% regroup instances by starts_at.date as instances_by_date %}
+    <div class="space-y-6">
+      {% for group in instances_by_date %}
+        <div>
+          <div class="flex items-center gap-3 mb-3">
+            <div class="text-sm font-semibold text-ink">{{ group.grouper|date:"l" }}</div>
+            <span class="text-xs uppercase tracking-widest text-slate">{{ group.grouper|date:"d/m" }}</span>
           </div>
-          <div class="text-sm text-slate ml-13">{{ instance.liturgy_label|default:"Missa" }}</div>
-        </a>
+          <div class="space-y-3">
+            {% for instance in group.list %}
+              <a class="block border border-black/8 rounded-xl p-4 hover:bg-sand/40 hover:border-moss/20 transition-all duration-200 hover:shadow-sm group {% if instance.id in my_confirmed_ids %}bg-moss-50/70 border-moss-200{% elif instance.id in my_pending_ids %}bg-sun-50/70 border-sun-200{% elif instance.id in pending_confirmation_ids %}bg-sun-50/30 border-sun-200{% endif %}" href="{% url 'mass_detail' instance.id %}">
+                <div class="flex items-center justify-between gap-3">
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-slate rounded-full flex items-center justify-center text-white font-serif text-sm font-bold">
+                      {{ instance.community.code|slice:":1" }}
+                    </div>
+                    <div>
+                      <div class="font-semibold text-ink group-hover:text-moss transition-colors">{{ instance.starts_at|date:"H:i" }} · {{ instance.community.code }}</div>
+                      <div class="text-sm text-slate">{{ instance.liturgy_label|default:"Missa" }}</div>
+                    </div>
+                  </div>
+                  <span class="badge">{{ instance.status|mass_status_label }}</span>
+                </div>
+              </a>
+            {% endfor %}
+          </div>
+        </div>
       {% empty %}
         <div class="text-center py-8">
           <div class="w-16 h-16 bg-sand rounded-full flex items-center justify-center mx-auto mb-4">

@@ -1,9 +1,9 @@
 {% extends 'base.html' %}
 {% block title %}Novo horario{% endblock %}
 {% block content %}
-<div class="card max-w-2xl">
-  <h2 class="font-serif text-xl mb-4">Criar horario fixo</h2>
-   <form method="post" class="space-y-4" id="mass-template-form">
+ <div class="card max-w-2xl">
+   <h2 class="font-serif text-xl mb-4">Criar horario fixo</h2>
+    <form method="post" class="space-y-4" id="mass-template-form">
     {% csrf_token %}
     {{ form.non_field_errors }}
     <div class="grid sm:grid-cols-2 gap-4">
@@ -57,11 +57,10 @@
           </label>
         </div>
       </div>
-       </div>
-     </div>
+    </div>
+    <div class="flex flex-col sm:flex-row justify-end gap-3 pt-2">
+      <button class="btn-primary" type="submit">Salvar</button>
+    </div>
    </form>
-   <div class="mt-6 flex justify-end">
-     <button class="btn-primary" form="mass-template-form">Salvar</button>
-   </div>
  </div>
 {% endblock %}

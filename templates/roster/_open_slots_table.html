@@ -1,7 +1,48 @@
 {% load extras %}
 {% if slots %}
 <div class="card">
-  <div class="overflow-x-auto">
+  <div class="space-y-3 lg:hidden">
+    {% for slot in slots %}
+      <div class="rounded-xl border border-black/5 bg-white/80 p-4" id="slot-card-{{ slot.id }}">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="text-sm text-slate">{{ slot.mass_instance.starts_at|date:"d/m/Y" }} · {{ slot.mass_instance.starts_at|date:"H:i" }}</div>
+            <div class="text-base font-medium text-ink">{{ slot.mass_instance.community.code }} · {{ slot.position_type.name }}</div>
+          </div>
+          {% with days_until=slot.mass_instance.starts_at|timeuntil %}
+            {% if 'dia' in days_until or 'hour' in days_until or 'minute' in days_until %}
+              <span class="text-xs px-2 py-1 bg-red-100 text-red-700 rounded">{{ days_until }}</span>
+            {% else %}
+              <span class="text-xs text-slate">{{ days_until }}</span>
+            {% endif %}
+          {% endwith %}
+        </div>
+        <div class="mt-3 grid gap-2">
+          <button type="button"
+                  class="btn-primary w-full"
+                  hx-get="{% url 'roster_open_slot_get_candidates' slot.id %}"
+                  hx-target="#modal-container"
+                  hx-swap="innerHTML"
+                  onclick="document.getElementById('modal-container').classList.remove('hidden')">
+            Atribuir
+          </button>
+          <button type="button"
+                  class="btn-secondary w-full"
+                  hx-post="{% url 'roster_open_slot_mark_external' slot.id %}"
+                  hx-target="#slot-card-{{ slot.id }}"
+                  hx-swap="delete"
+                  hx-confirm="Marcar este slot como coberto externamente?">
+            Externo
+          </button>
+          <a href="{% url 'mass_detail' slot.mass_instance.id %}" class="btn-link w-full justify-center text-center">
+            Ver missa
+          </a>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="overflow-x-auto hidden lg:block">
     <table class="min-w-full text-sm">
       <thead>
         <tr class="text-left text-xs text-slate uppercase tracking-widest border-b border-black/5">
@@ -34,7 +75,7 @@
           <td class="py-3 pr-4 text-right">
             <div class="flex items-center justify-end gap-2">
               <button type="button" 
-                      class="text-sm px-3 py-1 border border-moss hover:bg-moss hover:text-white transition-colors rounded"
+                      class="btn-secondary btn-compact"
                       hx-get="{% url 'roster_open_slot_get_candidates' slot.id %}"
                       hx-target="#modal-container"
                       hx-swap="innerHTML"
@@ -42,7 +83,7 @@
                 Atribuir
               </button>
               <button type="button"
-                      class="text-sm px-3 py-1 border border-slate hover:bg-slate hover:text-white transition-colors rounded"
+                      class="btn-secondary btn-compact"
                       hx-post="{% url 'roster_open_slot_mark_external' slot.id %}"
                       hx-target="#slot-row-{{ slot.id }}"
                       hx-swap="delete"
@@ -50,7 +91,7 @@
                 Externo
               </button>
               <a href="{% url 'mass_detail' slot.mass_instance.id %}" 
-                 class="text-sm text-slate hover:text-ink">
+                 class="btn-link">
                 Ver missa
               </a>
             </div>
@@ -62,20 +103,20 @@
   </div>
 
   {% if page_obj.has_other_pages %}
-  <div class="flex items-center justify-between mt-4 pt-4 border-t border-black/5">
+  <div class="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t border-black/5">
     <div class="text-sm text-slate">
       Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
     </div>
     <div class="flex gap-2">
       {% if page_obj.has_previous %}
         <a href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
-           class="btn-secondary">
+           class="btn-secondary w-full sm:w-auto text-center">
           Anterior
         </a>
       {% endif %}
       {% if page_obj.has_next %}
         <a href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
-           class="btn-primary">
+           class="btn-primary w-full sm:w-auto text-center">
           Proxima
         </a>
       {% endif %}

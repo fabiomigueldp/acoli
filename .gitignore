@@ -13,3 +13,8 @@ htmlcov/
 *.pot
 *.mo
 node_modules/
+
+# Backups do banco de dados criados automaticamente pelos scripts
+backups/
+*.backup.*
+db.sqlite3-journal

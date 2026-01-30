@@ -87,7 +87,55 @@
           <p class="text-xs text-slate">{{ day.date|date:"l" }}</p>
         </div>
       </div>
-      <div class="overflow-x-auto mt-4">
+      <div class="mt-4 space-y-3 lg:hidden">
+        {% for item in day.items %}
+          {% with instance=item.instance %}
+            <div class="rounded-xl border border-black/5 bg-white/80 p-4">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <div class="text-sm text-slate">{{ instance.starts_at|date:"H:i" }} · {{ instance.community.code }}</div>
+                  <div class="text-base font-medium text-ink">{{ instance.liturgy_label|default:"Missa" }}</div>
+                </div>
+                <a class="btn-secondary btn-compact" href="{% url 'mass_detail' instance.id %}">Ver</a>
+              </div>
+              <div class="mt-3 space-y-2">
+                {% for column in columns %}
+                  {% with slot=item.slot_map|get_item:column.key %}
+                    <div class="flex items-center justify-between gap-3 text-sm border-t border-sand-100 pt-2">
+                      <span class="text-slate">{{ column.label }}</span>
+                      <span class="text-ink">
+                        {% if instance.status == "canceled" %}
+                          <span class="text-xs uppercase tracking-widest text-slate">Cancelada</span>
+                        {% elif not slot or not slot.required %}
+                          <span class="text-slate">N/A</span>
+                        {% elif slot.externally_covered %}
+                          <span class="text-xs uppercase tracking-widest text-slate">Externo</span>
+                        {% else %}
+                          {% with active=slot.active_assignment %}
+                            {% if active %}
+                              <span>{{ active.acolyte.display_name }}</span>
+                              {% if slot.is_locked %}
+                                <span class="ml-2 badge">Consolidada</span>
+                              {% endif %}
+                            {% else %}
+                              <a class="btn-secondary btn-compact" href="{% url 'slot_assign' instance.id slot.id %}">Atribuir</a>
+                              {% if slot.is_locked %}
+                                <span class="ml-2 badge">Consolidada</span>
+                              {% endif %}
+                            {% endif %}
+                          {% endwith %}
+                        {% endif %}
+                      </span>
+                    </div>
+                  {% endwith %}
+                {% endfor %}
+              </div>
+            </div>
+          {% endwith %}
+        {% endfor %}
+      </div>
+
+      <div class="overflow-x-auto mt-4 hidden lg:block">
         <table class="min-w-full text-sm">
           <thead>
             <tr class="text-left text-xs text-slate uppercase tracking-widest">

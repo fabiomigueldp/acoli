@@ -14,7 +14,7 @@
     {% if claims %}
       <div class="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[280px]">
         <div class="space-y-2">
-          <div class="text-[11px] uppercase tracking-[0.2em] text-slate">Solicitacoes</div>
+          <div class="text-xs uppercase tracking-[0.2em] text-slate">Solicitacoes</div>
           <div class="space-y-2">
             {% for claim in claims %}
               <div class="flex items-start justify-between gap-3 rounded-lg bg-sand-50 px-3 py-2">
@@ -45,7 +45,7 @@
             hx-target="#assignment-{{ assignment.id }}"
             hx-swap="outerHTML"
             hx-vals='{"return": "dashboard_pending"}'
-            class="text-sm px-4 py-2 bg-sand-100 text-ink rounded-lg hover:bg-sand-200 transition-colors"
+            class="btn-primary w-full sm:w-auto"
             type="button">
             Confirmar
           </button>
@@ -56,15 +56,15 @@
         {% if status == "confirmed" %}
           <span class="text-xs font-medium uppercase tracking-[0.2em] text-moss">Confirmado</span>
         {% else %}
-          <button
-            hx-post="{% url 'confirm_assignment' assignment.id %}"
-            hx-target="#assignment-{{ assignment.id }}"
-            hx-swap="outerHTML"
-            hx-vals='{"return": "dashboard_pending"}'
-            class="text-sm px-4 py-2 bg-sand-100 text-ink rounded-lg hover:bg-sand-200 transition-colors"
-            type="button">
-            Confirmar
-          </button>
+        <button
+          hx-post="{% url 'confirm_assignment' assignment.id %}"
+          hx-target="#assignment-{{ assignment.id }}"
+          hx-swap="outerHTML"
+          hx-vals='{"return": "dashboard_pending"}'
+          class="btn-primary w-full sm:w-auto"
+          type="button">
+          Confirmar
+        </button>
         {% endif %}
       </div>
     {% endif %}

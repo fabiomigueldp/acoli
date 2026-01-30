@@ -17,26 +17,26 @@
               <div class="text-base font-medium text-ink">Nao necessario</div>
             {% else %}
               {% with active=slot.active_assignment %}
-                <div class="flex flex-wrap items-center gap-2">
-                  <div class="text-lg font-medium text-ink">{% if active %}{{ active.acolyte.display_name }}{% else %}Vaga aberta{% endif %}</div>
-                  {% if active %}
-                    {% with status=active.confirmation_status %}
-                      {% if status == "confirmed" %}
-                        <span class="rounded-full bg-moss/15 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-moss">Confirmada</span>
-                      {% elif status == "declined" %}
-                        <span class="rounded-full bg-sun/15 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-sun">Recusada</span>
-                      {% elif status == "no_show" %}
-                        <span class="rounded-full bg-slate/15 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-slate">Nao compareceu</span>
-                      {% elif status == "canceled_by_acolyte" %}
-                        <span class="rounded-full bg-slate/15 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-slate">Cancelada</span>
-                      {% elif status == "replaced" %}
-                        <span class="rounded-full bg-slate/15 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-slate">Substituida</span>
-                      {% else %}
-                        <span class="rounded-full bg-sun/15 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-sun">Pendente</span>
-                      {% endif %}
-                    {% endwith %}
-                  {% endif %}
-                </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <div class="text-lg font-medium text-ink">{% if active %}{{ active.acolyte.display_name }}{% else %}Vaga aberta{% endif %}</div>
+                    {% if active %}
+                      {% with status=active.confirmation_status %}
+                        {% if status == "confirmed" %}
+                        <span class="rounded-full bg-moss/15 px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-moss">Confirmada</span>
+                        {% elif status == "declined" %}
+                        <span class="rounded-full bg-sun/15 px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-sun">Recusada</span>
+                        {% elif status == "no_show" %}
+                        <span class="rounded-full bg-slate/15 px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-slate">Nao compareceu</span>
+                        {% elif status == "canceled_by_acolyte" %}
+                        <span class="rounded-full bg-slate/15 px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-slate">Cancelada</span>
+                        {% elif status == "replaced" %}
+                        <span class="rounded-full bg-slate/15 px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-slate">Substituida</span>
+                        {% else %}
+                        <span class="rounded-full bg-sun/15 px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-sun">Pendente</span>
+                        {% endif %}
+                      {% endwith %}
+                    {% endif %}
+                  </div>
               {% endwith %}
             {% endif %}
           </div>
@@ -45,8 +45,8 @@
         {% with active=slot.active_assignment %}
           {% with claims=claims_by_slot|get_item:slot.id %}
             {% if active and active.acolyte.user_id == request.user.id and claims %}
-              <div class="border-t border-black/5 pt-4">
-                <div class="text-[11px] uppercase tracking-[0.2em] text-slate">Solicitacoes de posicao</div>
+                <div class="border-t border-black/5 pt-4">
+                <div class="text-xs uppercase tracking-[0.2em] text-slate">Solicitacoes de posicao</div>
                 <div class="mt-2 space-y-2">
                   {% for claim in claims %}
                     <div class="flex items-center justify-between gap-3 rounded-lg bg-sand-50 px-3 py-2">
@@ -78,7 +78,7 @@
                     hx-target="#slots-section"
                     hx-swap="outerHTML"
                     hx-vals='{"return": "slots_section"}'
-                    class="text-xs uppercase tracking-[0.2em] text-moss hover:text-moss-700"
+                    class="btn-link text-xs uppercase tracking-[0.2em] text-moss"
                     type="button">
                     Solicitar posicao
                   </button>
@@ -91,30 +91,30 @@
         {% if can_manage_parish and slot.required and not slot.externally_covered %}
           {% with active=slot.active_assignment %}
             <div class="space-y-3 border-t border-black/5 pt-4">
-              <div class="flex flex-wrap items-center gap-2">
+              <div class="flex flex-col sm:flex-row sm:flex-wrap items-center gap-2">
                 {% if active %}
                   {% if active.confirmation_status != "confirmed" %}
                     <button
-                      class="btn-primary btn-compact"
+                      class="btn-primary btn-compact w-full sm:w-auto"
                       hx-post="{% url 'slot_confirm_assignment' instance.id slot.id %}"
                       hx-target="#slots-section"
                       hx-swap="outerHTML"
                     >Confirmar presenca</button>
                   {% endif %}
                   <button
-                    class="btn-danger btn-compact"
+                    class="btn-danger btn-compact w-full sm:w-auto"
                     hx-post="{% url 'slot_remove_assignment' instance.id slot.id %}"
                     hx-target="#slots-section"
                     hx-swap="outerHTML"
                     hx-confirm="Remover este acolito da escala?"
                   >Remover da escala</button>
                 {% endif %}
-                <a class="btn-secondary btn-compact" href="{% url 'slot_assign' instance.id slot.id %}">Escolher outro</a>
+                <a class="btn-secondary btn-compact w-full sm:w-auto" href="{% url 'slot_assign' instance.id slot.id %}">Escolher outro</a>
               </div>
-              <div class="flex flex-wrap items-center gap-2 border-t border-black/5 pt-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 border-t border-black/5 pt-3">
                 {% for candidate in slot_suggestions|get_list_item:slot.id %}
                   <button
-                    class="btn-secondary btn-compact"
+                    class="btn-secondary btn-compact w-full"
                     hx-post="{% if active %}{% url 'slot_replace' instance.id slot.id %}{% else %}{% url 'slot_assign' instance.id slot.id %}{% endif %}"
                     hx-vals='{"acolyte_id": "{{ candidate.id }}"}'
                     hx-target="#slots-section"

@@ -7,11 +7,17 @@
 <div class="max-w-6xl mx-auto">
     <!-- Header -->
     <div class="mb-6">
-        <div class="flex items-center gap-2 text-sm text-ink-500 mb-2">
-            <a href="{% url 'people_directory' %}" class="hover:text-ink-700">Pessoas</a>
-            <span>/</span>
-            <span class="text-ink-700">{{ acolyte.display_name }}</span>
-        </div>
+        <nav class="flex items-center gap-2 text-sm text-ink-500 mb-2" aria-label="Breadcrumb">
+            <a href="{% url 'people_directory' %}" class="inline-flex items-center gap-1 hover:text-ink-700">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+                <span class="sm:hidden">Voltar</span>
+                <span class="hidden sm:inline">Pessoas</span>
+            </a>
+            <span class="hidden sm:inline">/</span>
+            <span class="text-ink-700 truncate max-w-[180px]">{{ acolyte.display_name }}</span>
+        </nav>
         
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
@@ -39,7 +45,7 @@
 
     <!-- Navigation Tabs -->
     <div class="border-b border-sand-200 mb-6">
-        <nav class="flex gap-6" aria-label="Tabs">
+        <nav class="tab-nav flex gap-6 -mb-px pb-1" aria-label="Tabs">
             {% for tab in tabs %}
             <a href="{% url 'people_acolyte_detail' acolyte.id %}?tab={{ tab.id }}"
                hx-get="{% url 'people_acolyte_detail' acolyte.id %}?tab={{ tab.id }}"
@@ -97,9 +103,9 @@
 
 <!-- Modal Container -->
 <div id="modal-container" class="hidden fixed inset-0 z-50 overflow-y-auto">
-    <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="flex items-end sm:items-center justify-center min-h-screen p-4 pb-24">
         <div class="fixed inset-0 bg-ink-900/50 transition-opacity" onclick="document.getElementById('modal-container').classList.add('hidden')"></div>
-        <div class="relative bg-white rounded-lg shadow-xl max-w-lg w-full">
+        <div class="relative bg-white rounded-t-2xl sm:rounded-lg shadow-xl max-w-lg w-full max-h-[85vh] overflow-y-auto">
             <div id="modal-content">
                 <!-- Modal content loaded here via HTMX -->
             </div>

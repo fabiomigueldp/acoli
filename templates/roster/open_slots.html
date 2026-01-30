@@ -11,7 +11,7 @@
       </div>
     </div>
 
-    <div class="grid grid-cols-3 gap-4 mb-6">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
       <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
         <div class="text-2xl font-semibold text-red-700">{{ total_open_slots }}</div>
         <div class="text-sm text-red-600">Abertos</div>
@@ -100,10 +100,10 @@
 
 <!-- Modal Container for HTMX -->
 <div id="modal-container" class="hidden fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-  <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+  <div class="flex items-end sm:items-center justify-center min-h-screen px-4 pt-4 pb-24 text-center sm:block sm:p-0">
     <div class="fixed inset-0 bg-ink/40 backdrop-blur-sm transition-opacity" aria-hidden="true" onclick="document.getElementById('modal-container').classList.add('hidden')"></div>
     <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-    <div class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-soft transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full border border-black/5">
+    <div class="inline-block align-bottom bg-white rounded-t-2xl sm:rounded-2xl text-left overflow-hidden shadow-soft transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full border border-black/5">
       <!-- Modal content will be loaded here via HTMX -->
     </div>
   </div>

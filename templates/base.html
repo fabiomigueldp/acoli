@@ -4,7 +4,7 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>{% block title %}Acoli{% endblock %}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -38,7 +38,7 @@
   <div class="relative">
     <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-black/8 shadow-soft">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center justify-between h-20">
+        <div class="flex items-center justify-between h-16 sm:h-20">
           <div class="flex items-center gap-6">
             <a href="{% url 'dashboard' %}" class="font-serif text-2xl text-moss hover:text-sun transition-colors duration-200">Acoli</a>
             {% if active_parish %}
@@ -60,7 +60,7 @@
                 </span>
               </div>
               {% if request.resolver_match and request.resolver_match.url_name == "dashboard" and is_admin and acolyte %}
-                <div class="inline-flex rounded-full border border-sand-200 bg-sand-50 p-1 text-[11px] font-medium sm:text-xs">
+                <div class="inline-flex rounded-full border border-sand-200 bg-sand-50 p-1 text-xs font-medium sm:text-sm">
                   <a
                     href="?view=admin"
                     class="rounded-full px-2 py-1 transition-colors sm:px-3 {% if dashboard_view == 'admin' %}bg-white text-ink shadow-sm{% else %}text-slate hover:text-ink{% endif %}">
@@ -77,7 +77,7 @@
             {% if parish_memberships %}
               <div class="relative group">
                 <button class="text-sm px-4 py-2 rounded-xl border border-black/12 bg-white/80 hover:bg-white hover:border-black/20 transition-all duration-200 shadow-sm hover:shadow-md">Trocar paroquia</button>
-                <div class="absolute right-0 mt-3 w-64 bg-white shadow-soft rounded-xl p-3 hidden group-hover:block border border-black/5">
+                <div class="absolute right-0 mt-3 w-64 bg-white shadow-soft rounded-xl p-3 hidden group-hover:block group-focus-within:block border border-black/5">
                   {% for membership in parish_memberships %}
                     <a class="block text-sm px-4 py-3 rounded-lg hover:bg-sand transition-colors duration-150" href="{% url 'switch_parish' membership.parish_id %}">{{ membership.parish.name }}</a>
                   {% endfor %}
@@ -85,14 +85,14 @@
               </div>
             {% endif %}
             {% if request.user.is_authenticated %}
-              <a class="text-sm text-slate hover:text-ink transition-colors duration-200" href="{% url 'logout_confirm' %}">Sair</a>
+              <a class="text-sm text-slate hover:text-ink transition-colors duration-200 px-3 py-2 rounded-lg hover:bg-sand/50" href="{% url 'logout_confirm' %}">Sair</a>
             {% endif %}
           </div>
         </div>
       </div>
     </header>
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 grid lg:grid-cols-[220px_1fr] gap-6">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-24 sm:pb-6 grid lg:grid-cols-[220px_1fr] gap-6">
       <nav class="hidden lg:flex flex-col gap-3 text-sm bg-white/50 backdrop-blur-sm rounded-2xl p-6 shadow-soft border border-white/20">
         <a class="nav-link" href="{% url 'dashboard' %}">Painel</a>
         <a class="nav-link" href="{% url 'calendar_month' %}">Calendario</a>
@@ -121,7 +121,7 @@
 
       <main>
         <!-- Toast Notifications Container -->
-        <div id="toast-container" class="fixed top-24 right-6 z-50 space-y-2 pointer-events-none">
+        <div id="toast-container" class="fixed top-24 left-4 right-4 sm:left-auto sm:right-6 z-50 space-y-2 pointer-events-none">
           <!-- Toasts will be injected here -->
         </div>
         {% include 'partials/_messages.html' %}
@@ -131,7 +131,7 @@
     </div>
 
     <!-- Mobile Bottom Navigation -->
-    <nav class="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-black/8 flex sm:hidden justify-around py-2.5 text-xs z-40">
+    <nav class="mobile-bottom-nav fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-black/8 flex sm:hidden justify-around py-2.5 text-xs z-40">
       <a href="{% url 'dashboard' %}" class="flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-lg transition-colors duration-150 {% if request.resolver_match.url_name == 'dashboard' %}text-moss{% else %}text-ink{% endif %}">
         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
           <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
@@ -160,8 +160,8 @@
 
     <!-- Mobile Bottom Sheet -->
     <div id="mobile-more-backdrop" class="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 hidden sm:hidden opacity-0 transition-opacity duration-200" aria-hidden="true"></div>
-    <div id="mobile-more-sheet" role="dialog" aria-modal="true" aria-label="Menu adicional" class="fixed inset-x-0 bottom-0 z-50 sm:hidden translate-y-full transition-transform duration-200 ease-out">
-      <div class="bg-white/95 backdrop-blur-md rounded-t-2xl shadow-soft border-t border-black/8 pb-20">
+    <div id="mobile-more-sheet" role="dialog" aria-modal="true" aria-label="Menu adicional" class="mobile-bottom-sheet fixed inset-x-0 bottom-0 z-50 sm:hidden translate-y-full transition-transform duration-200 ease-out">
+      <div class="bg-white/95 backdrop-blur-md rounded-t-2xl shadow-soft border-t border-black/8 pb-20 max-h-[85vh] overflow-y-auto">
         <!-- Drag handle -->
         <div class="flex justify-center pt-3 pb-2">
           <div class="w-10 h-1 bg-black/10 rounded-full"></div>
@@ -187,6 +187,88 @@
             </svg>
             <span class="font-medium">Trocas</span>
           </a>
+          {% if can_manage_parish %}
+            <div class="pt-4 text-xs uppercase tracking-widest text-slate font-medium">Administracao</div>
+            <a href="{% url 'people_directory' %}" class="flex items-center gap-4 px-4 py-3 rounded-xl transition-colors duration-150 {% if request.resolver_match.url_name == 'people_directory' %}bg-moss-50 text-moss{% else %}text-ink hover:bg-sand/60{% endif %}">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v-.106A12.318 12.318 0 008.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+              </svg>
+              <span class="font-medium">Pessoas</span>
+            </a>
+            <a href="{% url 'template_list' %}" class="flex items-center gap-4 px-4 py-3 rounded-xl transition-colors duration-150 {% if request.resolver_match.url_name == 'template_list' %}bg-moss-50 text-moss{% else %}text-ink hover:bg-sand/60{% endif %}">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+              </svg>
+              <span class="font-medium">Horarios fixos</span>
+            </a>
+            <a href="{% url 'event_series_list' %}" class="flex items-center gap-4 px-4 py-3 rounded-xl transition-colors duration-150 {% if request.resolver_match.url_name == 'event_series_list' %}bg-moss-50 text-moss{% else %}text-ink hover:bg-sand/60{% endif %}">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 4.5v15m-3.75-3.75h7.5M3 6.75h18" />
+              </svg>
+              <span class="font-medium">Programacao liturgica</span>
+            </a>
+            <a href="{% url 'roster_view' %}" class="flex items-center gap-4 px-4 py-3 rounded-xl transition-colors duration-150 {% if request.resolver_match.url_name == 'roster_view' %}bg-moss-50 text-moss{% else %}text-ink hover:bg-sand/60{% endif %}">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" />
+              </svg>
+              <span class="font-medium">Escala geral</span>
+            </a>
+            <a href="{% url 'roster_open_slots' %}" class="flex items-center gap-4 px-4 py-3 rounded-xl transition-colors duration-150 {% if request.resolver_match.url_name == 'roster_open_slots' %}bg-moss-50 text-moss{% else %}text-ink hover:bg-sand/60{% endif %}">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v6m3-3H9m10.5 8.25h-15A2.25 2.25 0 012.25 18v-12A2.25 2.25 0 014.5 3.75h15A2.25 2.25 0 0121.75 6v12A2.25 2.25 0 0119.5 20.25z" />
+              </svg>
+              <span class="font-medium">Slots abertos</span>
+            </a>
+            <a href="{% url 'scheduling_dashboard' %}" class="flex items-center gap-4 px-4 py-3 rounded-xl transition-colors duration-150 {% if request.resolver_match.url_name == 'scheduling_dashboard' %}bg-moss-50 text-moss{% else %}text-ink hover:bg-sand/60{% endif %}">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5m-16.5 5.25h16.5m-16.5 5.25h16.5" />
+              </svg>
+              <span class="font-medium">Escalonar</span>
+            </a>
+            <a href="{% url 'replacement_center' %}" class="flex items-center gap-4 px-4 py-3 rounded-xl transition-colors duration-150 {% if request.resolver_match.url_name == 'replacement_center' %}bg-moss-50 text-moss{% else %}text-ink hover:bg-sand/60{% endif %}">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 12h9m-4.5 4.5V7.5" />
+              </svg>
+              <span class="font-medium">Substituicoes</span>
+            </a>
+            <a href="{% url 'reports_frequency' %}" class="flex items-center gap-4 px-4 py-3 rounded-xl transition-colors duration-150 {% if request.resolver_match.url_name == 'reports_frequency' %}bg-moss-50 text-moss{% else %}text-ink hover:bg-sand/60{% endif %}">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v18m4.5-14.25h9m-9 4.5h9m-9 4.5h9" />
+              </svg>
+              <span class="font-medium">Relatorios</span>
+            </a>
+            <a href="{% url 'audit_log' %}" class="flex items-center gap-4 px-4 py-3 rounded-xl transition-colors duration-150 {% if request.resolver_match.url_name == 'audit_log' %}bg-moss-50 text-moss{% else %}text-ink hover:bg-sand/60{% endif %}">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 3v2.25M14.25 3v2.25M3 7.5h18m-1.5 0v11.25A2.25 2.25 0 0117.25 21h-10.5A2.25 2.25 0 014.5 18.75V7.5" />
+              </svg>
+              <span class="font-medium">Auditoria</span>
+            </a>
+            <div class="pt-4 text-xs uppercase tracking-widest text-slate font-medium">Estrutura</div>
+            <a href="{% url 'structure_communities_list' %}" class="flex items-center gap-4 px-4 py-3 rounded-xl transition-colors duration-150 {% if request.resolver_match.url_name == 'structure_communities_list' %}bg-moss-50 text-moss{% else %}text-ink hover:bg-sand/60{% endif %}">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 21h18M3 7.5h18M3 7.5l9-4.5 9 4.5M4.5 10.5h15v9.75h-15V10.5z" />
+              </svg>
+              <span class="font-medium">Comunidades</span>
+            </a>
+            <a href="{% url 'structure_roles_list' %}" class="flex items-center gap-4 px-4 py-3 rounded-xl transition-colors duration-150 {% if request.resolver_match.url_name == 'structure_roles_list' %}bg-moss-50 text-moss{% else %}text-ink hover:bg-sand/60{% endif %}">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3.75l8.25 4.5L12 12.75 3.75 8.25 12 3.75zM3.75 8.25v7.5L12 20.25l8.25-4.5v-7.5" />
+              </svg>
+              <span class="font-medium">Funcoes na escala</span>
+            </a>
+            <a href="{% url 'structure_requirement_profiles_list' %}" class="flex items-center gap-4 px-4 py-3 rounded-xl transition-colors duration-150 {% if request.resolver_match.url_name == 'structure_requirement_profiles_list' %}bg-moss-50 text-moss{% else %}text-ink hover:bg-sand/60{% endif %}">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m-6-8h6m-7.5 10.5h9A2.25 2.25 0 0020.25 16.5v-9A2.25 2.25 0 0018 5.25H6A2.25 2.25 0 003.75 7.5v9A2.25 2.25 0 006 19.5z" />
+              </svg>
+              <span class="font-medium">Perfis de requisitos</span>
+            </a>
+            <a href="{% url 'parish_settings' %}" class="flex items-center gap-4 px-4 py-3 rounded-xl transition-colors duration-150 {% if request.resolver_match.url_name == 'parish_settings' %}bg-moss-50 text-moss{% else %}text-ink hover:bg-sand/60{% endif %}">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12a7.5 7.5 0 0115 0m-13.5 0a6 6 0 1112 0m-13.5 0v7.5m13.5-7.5v7.5" />
+              </svg>
+              <span class="font-medium">Configuracoes</span>
+            </a>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -208,6 +290,8 @@
           sheet.classList.add('translate-y-0');
         });
         btn.setAttribute('aria-expanded', 'true');
+        btn.classList.add('text-moss');
+        btn.classList.remove('text-ink');
       }
 
       function closeSheet() {
@@ -216,6 +300,8 @@
         sheet.classList.remove('translate-y-0');
         sheet.classList.add('translate-y-full');
         btn.setAttribute('aria-expanded', 'false');
+        btn.classList.remove('text-moss');
+        btn.classList.add('text-ink');
         setTimeout(() => backdrop.classList.add('hidden'), 200);
       }
 
@@ -226,6 +312,9 @@
 
       btn.addEventListener('click', toggle);
       backdrop.addEventListener('click', closeSheet);
+      sheet.querySelectorAll('a').forEach((link) => {
+        link.addEventListener('click', closeSheet);
+      });
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && btn.getAttribute('aria-expanded') === 'true') closeSheet();
       });
@@ -238,7 +327,7 @@
      <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
        <div class="fixed inset-0 bg-ink/40 backdrop-blur-sm transition-opacity" aria-hidden="true" onclick="window.closeConfirmModal()"></div>
        <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-       <div class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-soft transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-black/5">
+       <div class="inline-block align-bottom bg-white rounded-t-2xl sm:rounded-2xl text-left overflow-hidden shadow-soft transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full w-full max-h-[85vh] overflow-y-auto border border-black/5">
          <div class="bg-white px-6 pt-6 pb-4">
            <div class="sm:flex sm:items-start">
              <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
@@ -395,6 +484,22 @@
                 }
               });
             }
+          }
+
+          const optionButtons = options ? options.querySelectorAll('.custom-select-option') : [];
+          if (options && optionButtons.length > 10 && !options.querySelector('.custom-select-search')) {
+            const search = document.createElement('input');
+            search.type = 'text';
+            search.placeholder = 'Buscar...';
+            search.className = 'custom-select-search';
+            search.addEventListener('input', function(e) {
+              const term = e.target.value.toLowerCase();
+              optionButtons.forEach(function(opt) {
+                const text = opt.textContent.trim().toLowerCase();
+                opt.style.display = text.includes(term) ? '' : 'none';
+              });
+            });
+            options.insertBefore(search, options.firstChild);
           }
 
           if (button) {

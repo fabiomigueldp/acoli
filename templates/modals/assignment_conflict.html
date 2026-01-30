@@ -1,11 +1,16 @@
 {% if show_conflict_modal %}
 <!-- Modal Backdrop -->
-<div id="assignmentConflictModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center" onclick="if(event.target === this) closeConflictModal()">
+<div id="assignmentConflictModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center" onclick="if(event.target === this) closeConflictModal()">
   <!-- Modal Content -->
-  <div class="bg-white rounded-2xl shadow-soft border border-black/10 max-w-md w-full mx-4 overflow-hidden" onclick="event.stopPropagation()">
+  <div class="bg-white rounded-t-2xl sm:rounded-2xl shadow-soft border border-black/10 max-w-md w-full mx-4 overflow-hidden max-h-[85vh]" onclick="event.stopPropagation()">
     <!-- Modal Header -->
-    <div class="px-6 py-4 border-b border-black/10">
+    <div class="px-6 py-4 border-b border-black/10 flex items-center justify-between">
       <h3 class="text-xl font-serif text-ink">Conflito de Atribuição</h3>
+      <button type="button" class="p-2 -mr-2 text-slate hover:text-ink" onclick="closeConflictModal()" aria-label="Fechar">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
     </div>
     
     <!-- Modal Body -->
@@ -15,13 +20,13 @@
     </div>
     
     <!-- Modal Footer -->
-    <div class="px-6 py-4 bg-sand/30 border-t border-black/10 flex items-center justify-end gap-3">
-      <button type="button" class="btn-secondary" onclick="closeConflictModal()">Cancelar</button>
+    <div class="px-6 py-4 bg-sand/30 border-t border-black/10 flex flex-col-reverse sm:flex-row items-center justify-end gap-3">
+      <button type="button" class="btn-secondary w-full sm:w-auto" onclick="closeConflictModal()">Cancelar</button>
       <form method="post" action="{% url 'move_acolyte' instance.id new_slot.id %}" style="display: inline;" onsubmit="handleMoveSubmit(event)">
         {% csrf_token %}
         <input type="hidden" name="current_slot_id" value="{{ current_slot.id }}">
         <input type="hidden" name="acolyte_id" value="{{ conflict_acolyte.id }}">
-        <button type="submit" class="btn-primary" id="moveButton">Mover para Esta Posição</button>
+        <button type="submit" class="btn-primary w-full sm:w-auto" id="moveButton">Mover para Esta Posição</button>
       </form>
     </div>
   </div>

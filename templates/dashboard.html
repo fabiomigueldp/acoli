@@ -14,7 +14,26 @@
     <!-- Admin View -->
     <div class="space-y-8">
       <!-- Risk Radar -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="md:hidden -mx-4 px-4 pb-2">
+        <div class="flex gap-3 overflow-x-auto snap-x snap-mandatory">
+          <div class="card text-center min-w-[160px] snap-center">
+            <div class="text-3xl font-serif text-moss mb-1">{{ open_slots_count }}</div>
+            <div class="text-xs text-ink font-medium">Vagas abertas</div>
+            <div class="text-xs text-slate mt-1">14 dias</div>
+          </div>
+          <div class="card text-center min-w-[160px] snap-center">
+            <div class="text-3xl font-serif text-moss mb-1">{{ pending_replacements }}</div>
+            <div class="text-xs text-ink font-medium">Substituicoes</div>
+            <div class="text-xs text-slate mt-1">Pendentes</div>
+          </div>
+          <div class="card text-center min-w-[160px] snap-center">
+            <div class="text-3xl font-serif text-moss mb-1">{{ pending_swaps }}</div>
+            <div class="text-xs text-ink font-medium">Trocas</div>
+            <div class="text-xs text-slate mt-1">Pendentes</div>
+          </div>
+        </div>
+      </div>
+      <div class="hidden md:grid grid-cols-1 md:grid-cols-3 gap-6">
         <div class="card text-center">
           <div class="text-4xl font-serif text-moss mb-2">{{ open_slots_count }}</div>
           <div class="text-sm text-ink font-medium">Vagas abertas (14 dias)</div>
@@ -57,12 +76,12 @@
                     Aprovado por {{ swap.target_acolyte.user.full_name|default:swap.target_acolyte.display_name }} · Solicitado por {{ swap.requestor_acolyte.user.full_name|default:swap.requestor_acolyte.display_name }}
                   </div>
                 </div>
-                <div class="flex gap-2">
+                <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                   <button
                     hx-post="{% url 'swap_request_approve' swap.id %}"
                     hx-target="#dashboard-swap-{{ swap.id }}"
                     hx-swap="outerHTML"
-                    class="btn-primary text-sm px-3 py-2">
+                    class="btn-primary text-sm px-3 py-2 w-full sm:w-auto">
                     Aprovar
                   </button>
                   <button
@@ -70,7 +89,7 @@
                     hx-target="#dashboard-swap-{{ swap.id }}"
                     hx-swap="outerHTML"
                     hx-confirm="Tem certeza que deseja cancelar esta troca?"
-                    class="btn-danger text-sm px-3 py-2">
+                    class="btn-danger text-sm px-3 py-2 w-full sm:w-auto">
                     Cancelar
                   </button>
                 </div>
