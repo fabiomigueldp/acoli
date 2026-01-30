@@ -8,3 +8,4 @@ python-dateutil==2.9.0.post0
 ortools==9.12.4544
 gunicorn==22.0.0
 reportlab==4.1.0
+python-dotenv
