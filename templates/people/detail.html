@@ -130,124 +130,249 @@
         </form>
       {% endif %}
 
-      <form method="post" class="card space-y-4">
-        {% csrf_token %}
-        <input type="hidden" name="form_type" value="acolyte" />
-        <h3 class="font-semibold">Perfil de acolito</h3>
-        {% if not acolyte %}
-          <p class="text-sm text-slate">Este membro ainda nao possui perfil de acolito. Preencha abaixo para criar.</p>
-        {% endif %}
-        <div class="grid gap-4 sm:grid-cols-2">
+      {% if acolyte %}
+        <form method="post" class="card space-y-4">
+          {% csrf_token %}
+          <input type="hidden" name="form_type" value="acolyte" />
+          <h3 class="font-semibold">Perfil de acolito</h3>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label class="label">Nome para escalas</label>
+              {{ acolyte_form.display_name }}
+            </div>
+             <div>
+               <label class="label">Comunidade de origem</label>
+               <div class="custom-select">
+                 <input type="hidden" name="community_of_origin" value="{{ acolyte_form.community_of_origin.value }}">
+                 <button type="button" class="custom-select-button">
+                   <span class="selected-text">
+                     {% if acolyte_form.community_of_origin.value %}
+                       {% for choice_value, choice_label in acolyte_form.community_of_origin.field.choices %}
+                         {% if acolyte_form.community_of_origin.value == choice_value %}{{ choice_label|slice:":3" }}{% endif %}
+                       {% endfor %}
+                     {% else %}
+                       Selecionar...
+                     {% endif %}
+                   </span>
+                 </button>
+                 <div class="custom-select-options">
+                   {% for choice_value, choice_label in acolyte_form.community_of_origin.field.choices %}
+                     <button type="button" class="custom-select-option {% if acolyte_form.community_of_origin.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label|slice:":3" }}</button>
+                   {% endfor %}
+                 </div>
+               </div>
+             </div>
+             <div>
+               <label class="label">Nivel de experiencia</label>
+               <div class="custom-select">
+                 <input type="hidden" name="experience_level" value="{{ acolyte_form.experience_level.value }}">
+                 <button type="button" class="custom-select-button">
+                   <span class="selected-text">
+                     {% if acolyte_form.experience_level.value %}
+                       {% for choice_value, choice_label in acolyte_form.experience_level.field.choices %}
+                         {% if acolyte_form.experience_level.value == choice_value %}{{ choice_label }}{% endif %}
+                       {% endfor %}
+                     {% else %}
+                       Selecionar...
+                     {% endif %}
+                   </span>
+                 </button>
+                 <div class="custom-select-options">
+                   {% for choice_value, choice_label in acolyte_form.experience_level.field.choices %}
+                     <button type="button" class="custom-select-option {% if acolyte_form.experience_level.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
+                   {% endfor %}
+                 </div>
+               </div>
+             </div>
+             <div>
+               <label class="label">Modo de escala</label>
+               <div class="custom-select">
+                 <input type="hidden" name="scheduling_mode" value="{{ acolyte_form.scheduling_mode.value }}">
+                 <button type="button" class="custom-select-button">
+                   <span class="selected-text">
+                     {% if acolyte_form.scheduling_mode.value %}
+                       {% for choice_value, choice_label in acolyte_form.scheduling_mode.field.choices %}
+                         {% if acolyte_form.scheduling_mode.value == choice_value %}{{ choice_label }}{% endif %}
+                       {% endfor %}
+                     {% else %}
+                       Selecionar...
+                     {% endif %}
+                   </span>
+                 </button>
+                 <div class="custom-select-options">
+                   {% for choice_value, choice_label in acolyte_form.scheduling_mode.field.choices %}
+                     <button type="button" class="custom-select-option {% if acolyte_form.scheduling_mode.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
+                   {% endfor %}
+                 </div>
+               </div>
+               <p class="form-help">Reserva tecnica: so entra se nao houver outra opcao disponivel.</p>
+             </div>
+             <div>
+               <label class="label">Familia / grupo</label>
+               <div class="custom-select">
+                 <input type="hidden" name="family_group" value="{{ acolyte_form.family_group.value }}">
+                 <button type="button" class="custom-select-button">
+                   <span class="selected-text">
+                     {% if acolyte_form.family_group.value %}
+                       {% for choice_value, choice_label in acolyte_form.family_group.field.choices %}
+                         {% if acolyte_form.family_group.value == choice_value %}{{ choice_label }}{% endif %}
+                       {% endfor %}
+                     {% else %}
+                       Selecionar...
+                     {% endif %}
+                   </span>
+                 </button>
+                 <div class="custom-select-options">
+                   {% for choice_value, choice_label in acolyte_form.family_group.field.choices %}
+                     <button type="button" class="custom-select-option {% if acolyte_form.family_group.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
+                   {% endfor %}
+                 </div>
+               </div>
+             </div>
+            <div class="sm:col-span-2">
+              <label class="label">Notas</label>
+              {{ acolyte_form.notes }}
+            </div>
+             <div class="sm:col-span-2">
+                <label class="inline-flex cursor-pointer p-4 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                  <input type="checkbox" id="{{ acolyte_form.active.id_for_label }}" name="{{ acolyte_form.active.name }}" class="sr-only peer" {% if acolyte_form.active.value %}checked{% endif %}>
+                  <div class="shrink-0 relative w-9 h-5 bg-gray-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-600"></div>
+                  <div class="ms-3 select-none">
+                    <p class="text-sm font-medium text-gray-900 mb-1">Perfil ativo</p>
+                    <p class="text-sm font-normal text-gray-600">Desativar remove escalas futuras e libera as vagas.</p>
+                  </div>
+                </label>
+             </div>
+          </div>
+          <button class="btn-primary" type="submit">Salvar perfil</button>
+        </form>
+      {% else %}
+        <div class="card space-y-4">
           <div>
-            <label class="label">Nome para escalas</label>
-            {{ acolyte_form.display_name }}
+            <h3 class="font-semibold">Perfil de acolito</h3>
+            <p class="text-sm text-slate">Este membro ainda nao possui perfil de acolito.</p>
           </div>
-           <div>
-             <label class="label">Comunidade de origem</label>
-             <div class="custom-select">
-               <input type="hidden" name="community_of_origin" value="{{ acolyte_form.community_of_origin.value }}">
-               <button type="button" class="custom-select-button">
-                 <span class="selected-text">
-                   {% if acolyte_form.community_of_origin.value %}
-                     {% for choice_value, choice_label in acolyte_form.community_of_origin.field.choices %}
-                       {% if acolyte_form.community_of_origin.value == choice_value %}{{ choice_label|slice:":3" }}{% endif %}
-                     {% endfor %}
-                   {% else %}
-                     Selecionar...
-                   {% endif %}
-                 </span>
-               </button>
-               <div class="custom-select-options">
-                 {% for choice_value, choice_label in acolyte_form.community_of_origin.field.choices %}
-                   <button type="button" class="custom-select-option {% if acolyte_form.community_of_origin.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label|slice:":3" }}</button>
-                 {% endfor %}
-               </div>
-             </div>
-           </div>
-           <div>
-             <label class="label">Nivel de experiencia</label>
-             <div class="custom-select">
-               <input type="hidden" name="experience_level" value="{{ acolyte_form.experience_level.value }}">
-               <button type="button" class="custom-select-button">
-                 <span class="selected-text">
-                   {% if acolyte_form.experience_level.value %}
-                     {% for choice_value, choice_label in acolyte_form.experience_level.field.choices %}
-                       {% if acolyte_form.experience_level.value == choice_value %}{{ choice_label }}{% endif %}
-                     {% endfor %}
-                   {% else %}
-                     Selecionar...
-                   {% endif %}
-                 </span>
-               </button>
-               <div class="custom-select-options">
-                 {% for choice_value, choice_label in acolyte_form.experience_level.field.choices %}
-                   <button type="button" class="custom-select-option {% if acolyte_form.experience_level.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
-                 {% endfor %}
-               </div>
-             </div>
-           </div>
-           <div>
-             <label class="label">Modo de escala</label>
-             <div class="custom-select">
-               <input type="hidden" name="scheduling_mode" value="{{ acolyte_form.scheduling_mode.value }}">
-               <button type="button" class="custom-select-button">
-                 <span class="selected-text">
-                   {% if acolyte_form.scheduling_mode.value %}
-                     {% for choice_value, choice_label in acolyte_form.scheduling_mode.field.choices %}
-                       {% if acolyte_form.scheduling_mode.value == choice_value %}{{ choice_label }}{% endif %}
-                     {% endfor %}
-                   {% else %}
-                     Selecionar...
-                   {% endif %}
-                 </span>
-               </button>
-               <div class="custom-select-options">
-                 {% for choice_value, choice_label in acolyte_form.scheduling_mode.field.choices %}
-                   <button type="button" class="custom-select-option {% if acolyte_form.scheduling_mode.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
-                 {% endfor %}
-               </div>
-             </div>
-             <p class="form-help">Reserva tecnica: so entra se nao houver outra opcao disponivel.</p>
-           </div>
-           <div>
-             <label class="label">Familia / grupo</label>
-             <div class="custom-select">
-               <input type="hidden" name="family_group" value="{{ acolyte_form.family_group.value }}">
-               <button type="button" class="custom-select-button">
-                 <span class="selected-text">
-                   {% if acolyte_form.family_group.value %}
-                     {% for choice_value, choice_label in acolyte_form.family_group.field.choices %}
-                       {% if acolyte_form.family_group.value == choice_value %}{{ choice_label }}{% endif %}
-                     {% endfor %}
-                   {% else %}
-                     Selecionar...
-                   {% endif %}
-                 </span>
-               </button>
-               <div class="custom-select-options">
-                 {% for choice_value, choice_label in acolyte_form.family_group.field.choices %}
-                   <button type="button" class="custom-select-option {% if acolyte_form.family_group.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
-                 {% endfor %}
-               </div>
-             </div>
-           </div>
-          <div class="sm:col-span-2">
-            <label class="label">Notas</label>
-            {{ acolyte_form.notes }}
-          </div>
-           <div class="sm:col-span-2">
-              <label class="inline-flex cursor-pointer p-4 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-                <input type="checkbox" id="{{ acolyte_form.active.id_for_label }}" name="{{ acolyte_form.active.name }}" class="sr-only peer" {% if acolyte_form.active.value %}checked{% endif %}>
-                <div class="shrink-0 relative w-9 h-5 bg-gray-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-600"></div>
-                <div class="ms-3 select-none">
-                  <p class="text-sm font-medium text-gray-900 mb-1">Perfil ativo</p>
-                  <p class="text-sm font-normal text-gray-600">Desativar remove escalas futuras e libera as vagas.</p>
+          <details class="group">
+            <summary class="cursor-pointer inline-flex items-center gap-2 text-sm px-4 py-2 rounded-full border border-black/10 bg-white">
+              Criar perfil de acolito
+            </summary>
+            <form method="post" class="space-y-4 mt-4">
+              {% csrf_token %}
+              <input type="hidden" name="form_type" value="acolyte" />
+              <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label class="label">Nome para escalas</label>
+                  {{ acolyte_form.display_name }}
                 </div>
-              </label>
-           </div>
+                 <div>
+                   <label class="label">Comunidade de origem</label>
+                   <div class="custom-select">
+                     <input type="hidden" name="community_of_origin" value="{{ acolyte_form.community_of_origin.value }}">
+                     <button type="button" class="custom-select-button">
+                       <span class="selected-text">
+                         {% if acolyte_form.community_of_origin.value %}
+                           {% for choice_value, choice_label in acolyte_form.community_of_origin.field.choices %}
+                             {% if acolyte_form.community_of_origin.value == choice_value %}{{ choice_label|slice:":3" }}{% endif %}
+                           {% endfor %}
+                         {% else %}
+                           Selecionar...
+                         {% endif %}
+                       </span>
+                     </button>
+                     <div class="custom-select-options">
+                       {% for choice_value, choice_label in acolyte_form.community_of_origin.field.choices %}
+                         <button type="button" class="custom-select-option {% if acolyte_form.community_of_origin.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label|slice:":3" }}</button>
+                       {% endfor %}
+                     </div>
+                   </div>
+                 </div>
+                 <div>
+                   <label class="label">Nivel de experiencia</label>
+                   <div class="custom-select">
+                     <input type="hidden" name="experience_level" value="{{ acolyte_form.experience_level.value }}">
+                     <button type="button" class="custom-select-button">
+                       <span class="selected-text">
+                         {% if acolyte_form.experience_level.value %}
+                           {% for choice_value, choice_label in acolyte_form.experience_level.field.choices %}
+                             {% if acolyte_form.experience_level.value == choice_value %}{{ choice_label }}{% endif %}
+                           {% endfor %}
+                         {% else %}
+                           Selecionar...
+                         {% endif %}
+                       </span>
+                     </button>
+                     <div class="custom-select-options">
+                       {% for choice_value, choice_label in acolyte_form.experience_level.field.choices %}
+                         <button type="button" class="custom-select-option {% if acolyte_form.experience_level.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
+                       {% endfor %}
+                     </div>
+                   </div>
+                 </div>
+                 <div>
+                   <label class="label">Modo de escala</label>
+                   <div class="custom-select">
+                     <input type="hidden" name="scheduling_mode" value="{{ acolyte_form.scheduling_mode.value }}">
+                     <button type="button" class="custom-select-button">
+                       <span class="selected-text">
+                         {% if acolyte_form.scheduling_mode.value %}
+                           {% for choice_value, choice_label in acolyte_form.scheduling_mode.field.choices %}
+                             {% if acolyte_form.scheduling_mode.value == choice_value %}{{ choice_label }}{% endif %}
+                           {% endfor %}
+                         {% else %}
+                           Selecionar...
+                         {% endif %}
+                       </span>
+                     </button>
+                     <div class="custom-select-options">
+                       {% for choice_value, choice_label in acolyte_form.scheduling_mode.field.choices %}
+                         <button type="button" class="custom-select-option {% if acolyte_form.scheduling_mode.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
+                       {% endfor %}
+                     </div>
+                   </div>
+                   <p class="form-help">Reserva tecnica: so entra se nao houver outra opcao disponivel.</p>
+                 </div>
+                 <div>
+                   <label class="label">Familia / grupo</label>
+                   <div class="custom-select">
+                     <input type="hidden" name="family_group" value="{{ acolyte_form.family_group.value }}">
+                     <button type="button" class="custom-select-button">
+                       <span class="selected-text">
+                         {% if acolyte_form.family_group.value %}
+                           {% for choice_value, choice_label in acolyte_form.family_group.field.choices %}
+                             {% if acolyte_form.family_group.value == choice_value %}{{ choice_label }}{% endif %}
+                           {% endfor %}
+                         {% else %}
+                           Selecionar...
+                         {% endif %}
+                       </span>
+                     </button>
+                     <div class="custom-select-options">
+                       {% for choice_value, choice_label in acolyte_form.family_group.field.choices %}
+                         <button type="button" class="custom-select-option {% if acolyte_form.family_group.value == choice_value %}selected{% endif %}" data-value="{{ choice_value }}">{{ choice_label }}</button>
+                       {% endfor %}
+                     </div>
+                   </div>
+                 </div>
+                <div class="sm:col-span-2">
+                  <label class="label">Notas</label>
+                  {{ acolyte_form.notes }}
+                </div>
+                 <div class="sm:col-span-2">
+                    <label class="inline-flex cursor-pointer p-4 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                      <input type="checkbox" id="{{ acolyte_form.active.id_for_label }}" name="{{ acolyte_form.active.name }}" class="sr-only peer" {% if acolyte_form.active.value %}checked{% endif %}>
+                      <div class="shrink-0 relative w-9 h-5 bg-gray-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-600"></div>
+                      <div class="ms-3 select-none">
+                        <p class="text-sm font-medium text-gray-900 mb-1">Perfil ativo</p>
+                        <p class="text-sm font-normal text-gray-600">Desativar remove escalas futuras e libera as vagas.</p>
+                      </div>
+                    </label>
+                 </div>
+              </div>
+              <button class="btn-primary" type="submit">Salvar perfil</button>
+            </form>
+          </details>
         </div>
-        <button class="btn-primary" type="submit">Salvar perfil</button>
-      </form>
+      {% endif %}
 
       {% if acolyte %}
         <form method="post" class="card space-y-4">

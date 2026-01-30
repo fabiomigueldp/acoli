@@ -1,0 +1,14 @@
+<div id="horizon-assignment-{{ assignment.id }}"{% if oob %} hx-swap-oob="true"{% endif %} class="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+  <div class="flex items-center gap-4">
+    <div class="text-sm font-medium text-ink">{{ assignment.slot.mass_instance.starts_at|date:"d M" }}</div>
+    <div>
+      <div class="text-base text-ink font-medium">{{ assignment.slot.mass_instance.community.code }} - {{ assignment.slot.position_type.name }}</div>
+      <div class="text-sm text-slate">{{ assignment.slot.mass_instance.starts_at|date:"H:i" }}</div>
+    </div>
+  </div>
+  {% if assignment.confirmation_status == 'confirmed' %}
+    <span class="text-xs font-medium uppercase tracking-[0.2em] text-moss">Confirmado</span>
+  {% else %}
+    <span class="text-xs font-medium uppercase tracking-[0.2em] text-sun">Pendente</span>
+  {% endif %}
+</div>

@@ -173,56 +173,23 @@
       {% endif %}
 
       <!-- Pending Actions (Inbox) -->
-      {% if pending_assignments or incoming_swaps %}
-        <div class="rounded-2xl bg-sun-50/70 p-6 shadow-soft border border-sun-100">
-          <div class="mb-6 space-y-2">
-            <div class="text-xs uppercase tracking-[0.2em] text-slate">Acoes pendentes</div>
-            <h2 class="font-serif text-2xl text-ink">Resolva antes de fechar</h2>
-          </div>
-          <div class="space-y-3">
-            {% for assignment in pending_assignments %}
-              {% include "acolytes/_partials/dashboard_pending_row.html" %}
-            {% endfor %}
-            {% for swap in incoming_swaps %}
-              <div id="swap-{{ swap.id }}" class="flex flex-col gap-3 rounded-xl bg-white/80 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <div class="space-y-1">
-                  <div class="text-sm text-slate">{{ swap.mass_instance.starts_at|date:"D, d M • H:i" }}</div>
-                  <div class="text-base text-ink font-medium">Troca solicitada</div>
-                  <div class="text-sm text-slate">{{ swap.requested_position.name }}</div>
-                </div>
-                <div class="flex w-full gap-2 sm:w-auto">
-                  <button hx-post="{% url 'swap_request_accept' swap.id %}" hx-target="#swap-{{ swap.id }}" hx-swap="outerHTML" class="btn-primary flex-1 sm:flex-none">Aceitar</button>
-                  <button hx-post="{% url 'swap_request_reject' swap.id %}" hx-target="#swap-{{ swap.id }}" hx-swap="outerHTML" class="btn-secondary flex-1 sm:flex-none">Recusar</button>
-                </div>
-              </div>
-            {% endfor %}
-          </div>
-        </div>
-      {% endif %}
+      {% include "acolytes/_partials/dashboard_pending_section.html" %}
 
       <!-- Future Assignments (Horizon) -->
-      {% if horizon_assignments %}
+      {% if hero_assignment or horizon_assignments %}
         <div class="rounded-2xl bg-white/80 p-6 shadow-soft border border-white/70">
           <div class="mb-6 flex items-center justify-between">
             <h2 class="font-serif text-2xl text-ink">Agenda futura</h2>
             <span class="text-xs uppercase tracking-[0.2em] text-slate">Proximas semanas</span>
           </div>
           <div class="divide-y divide-sand-100">
+            {% if hero_assignment %}
+              {% include "acolytes/_partials/dashboard_horizon_row.html" with assignment=hero_assignment %}
+            {% endif %}
             {% for assignment in horizon_assignments %}
-              <div class="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <div class="flex items-center gap-4">
-                  <div class="text-sm font-medium text-ink">{{ assignment.slot.mass_instance.starts_at|date:"d M" }}</div>
-                  <div>
-                    <div class="text-base text-ink font-medium">{{ assignment.slot.mass_instance.community.code }} - {{ assignment.slot.position_type.name }}</div>
-                    <div class="text-sm text-slate">{{ assignment.slot.mass_instance.starts_at|date:"H:i" }}</div>
-                  </div>
-                </div>
-                {% if assignment.confirmation_status == 'confirmed' %}
-                  <span class="text-xs font-medium uppercase tracking-[0.2em] text-moss">Confirmado</span>
-                {% else %}
-                  <span class="text-xs font-medium uppercase tracking-[0.2em] text-sun">Pendente</span>
-                {% endif %}
-              </div>
+              {% if not hero_assignment or assignment.id != hero_assignment.id %}
+                {% include "acolytes/_partials/dashboard_horizon_row.html" %}
+              {% endif %}
             {% endfor %}
           </div>
         </div>

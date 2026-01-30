@@ -1,0 +1,28 @@
+{% if pending_assignments or incoming_swaps %}
+  <div id="dashboard-pending-section"{% if oob %} hx-swap-oob="true"{% endif %} class="rounded-2xl bg-sun-50/70 p-6 shadow-soft border border-sun-100">
+    <div class="mb-6 space-y-2">
+      <div class="text-xs uppercase tracking-[0.2em] text-slate">Acoes pendentes</div>
+      <h2 class="font-serif text-2xl text-ink">Resolva antes de fechar</h2>
+    </div>
+    <div class="space-y-3">
+      {% for assignment in pending_assignments %}
+        {% include "acolytes/_partials/dashboard_pending_row.html" %}
+      {% endfor %}
+      {% for swap in incoming_swaps %}
+        <div id="swap-{{ swap.id }}" class="flex flex-col gap-3 rounded-xl bg-white/80 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div class="space-y-1">
+            <div class="text-sm text-slate">{{ swap.mass_instance.starts_at|date:"D, d M • H:i" }}</div>
+            <div class="text-base text-ink font-medium">Troca solicitada</div>
+            <div class="text-sm text-slate">{{ swap.requested_position.name }}</div>
+          </div>
+          <div class="flex w-full gap-2 sm:w-auto">
+            <button hx-post="{% url 'swap_request_accept' swap.id %}" hx-target="#swap-{{ swap.id }}" hx-swap="outerHTML" class="btn-primary flex-1 sm:flex-none">Aceitar</button>
+            <button hx-post="{% url 'swap_request_reject' swap.id %}" hx-target="#swap-{{ swap.id }}" hx-swap="outerHTML" class="btn-secondary flex-1 sm:flex-none">Recusar</button>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+{% else %}
+  <div id="dashboard-pending-section"{% if oob %} hx-swap-oob="true"{% endif %}></div>
+{% endif %}

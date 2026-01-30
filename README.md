@@ -19,6 +19,8 @@ pip install -r requirements.txt
 ```
 
 2) Configure variaveis de ambiente (use `.env.example` como base).
+   - Para desenvolvimento local, crie `.env` com `DEBUG=1` e `APP_BASE_URL` local.
+   - Se `DEBUG=0`, voce precisa definir `ALLOWED_HOSTS` para evitar erro no boot.
 
 3) Rode migracoes e carregue dados iniciais:
 
