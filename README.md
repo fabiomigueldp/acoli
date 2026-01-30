@@ -96,6 +96,47 @@ heroku run python manage.py loaddata fixtures/seed_parish.json
 - `python manage.py run_global_scheduler` (noturno)
 - `python manage.py send_notifications` (a cada 10-15 min)
 
+## Publicar com Cloudflare Tunnel (auto-host)
+1) Crie o tunnel e aponte o DNS:
+
+```bash
+cloudflared tunnel login
+cloudflared tunnel create acoli
+cloudflared tunnel route dns acoli acoli.com.br
+cloudflared tunnel route dns acoli www.acoli.com.br
+```
+
+2) Configure `~/.cloudflared/config.yml`:
+
+```yaml
+tunnel: <TUNNEL_ID>
+credentials-file: /Users/<usuario>/.cloudflared/<TUNNEL_ID>.json
+ingress:
+  - hostname: acoli.com.br
+    service: http://127.0.0.1:8001
+  - hostname: www.acoli.com.br
+    service: http://127.0.0.1:8001
+  - service: http_status:404
+```
+
+3) Variaveis de ambiente recomendadas:
+
+```bash
+DEBUG=0
+ALLOWED_HOSTS=acoli.com.br,www.acoli.com.br,localhost
+CSRF_TRUSTED_ORIGINS=https://acoli.com.br,https://www.acoli.com.br
+APP_BASE_URL=https://acoli.com.br
+SECURE_SSL_REDIRECT=1
+```
+
+4) Rode migracoes/estaticos e suba com gunicorn:
+
+```bash
+python manage.py migrate
+python manage.py collectstatic --noinput
+./.venv/bin/gunicorn acoli.wsgi --bind 127.0.0.1:8001 --log-file - -c gunicorn.conf.py
+```
+
 ## Testes
 ```bash
 python manage.py test
