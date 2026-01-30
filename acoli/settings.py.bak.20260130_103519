@@ -6,59 +6,25 @@ import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Carrega .env se existir (útil para gunicorn, manage.py, scripts, etc.)
-ENV_FILE = BASE_DIR / ".env"
-try:
-    from dotenv import load_dotenv
-    if ENV_FILE.exists():
-        load_dotenv(ENV_FILE)
-except Exception:
-    # Se python-dotenv não estiver disponível por algum motivo,
-    # o app ainda funciona com vars de ambiente do sistema.
-    pass
-
-
-# ========================
-# Core / Environment
-# ========================
-
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-insecure-key")
+DEBUG = os.environ.get("DEBUG")
+if DEBUG is None:
+    DEBUG = "1" if "DYNO" not in os.environ else "0"
+DEBUG = DEBUG == "1"
 
-DEBUG = os.environ.get("DEBUG", "0") == "1"
-
-ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.environ.get("ALLOWED_HOSTS", "").split(",")
-    if host.strip()
-]
-
-if DEBUG:
-    # Desenvolvimento local apenas
-    ALLOWED_HOSTS += ["localhost", "127.0.0.1", "0.0.0.0", "192.168.15.6"]
-
-# Em produção, falha explicitamente se não estiver configurado
-if not DEBUG and not ALLOWED_HOSTS:
-    raise RuntimeError("ALLOWED_HOSTS must be set in production")
+ALLOWED_HOSTS = [host.strip() for host in os.environ.get("ALLOWED_HOSTS", "").split(",") if host.strip()]
+if not ALLOWED_HOSTS:
+    ALLOWED_HOSTS = ["localhost", "127.0.0.1", "0.0.0.0"]
 
 
-# ========================
 # Cloudflare / Proxy HTTPS
-# ========================
-
-# Confia no HTTPS original do Cloudflare (tunnel/reverse proxy)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
 
-SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "0") == "1"
-SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "0") == "1"
-CSRF_COOKIE_SECURE = os.environ.get("CSRF_COOKIE_SECURE", "0") == "1"
 
-CSRF_TRUSTED_ORIGINS = [
-    origin.strip()
-    for origin in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
-    if origin.strip()
-]
 
+if DEBUG:
+    ALLOWED_HOSTS.append("192.168.15.6")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -162,8 +128,11 @@ EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "1") == "1"
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "acoli@example.com")
-
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "").rstrip("/")
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "0") == "1"
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if origin.strip()]
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
