@@ -5,6 +5,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f5e4d" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Acoli" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="{% url 'pwa_manifest' %}" />
+  <link rel="icon" href="{% static 'pwa/favicon.ico' %}" sizes="any" />
+  <link rel="apple-touch-icon" href="{% static 'pwa/apple-touch-icon.png' %}" />
+  <link rel="mask-icon" href="{% static 'pwa/safari-pinned-tab.svg' %}" color="#0f5e4d" />
+  <link rel="apple-touch-startup-image" href="{% static 'pwa/splash-iphone.png' %}" />
   <title>{% block title %}Acoli{% endblock %}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -588,6 +598,34 @@
           });
         }
       });
-   </script>
-</body>
+    </script>
+    <script>
+    (function() {
+      if (!('serviceWorker' in navigator)) {
+        return;
+      }
+      let refreshing = false;
+      function onControllerChange() {
+        if (refreshing) {
+          return;
+        }
+        refreshing = true;
+        window.location.reload();
+      }
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('{% url "pwa_sw" %}', { updateViaCache: 'none' })
+          .then(function(reg) {
+            navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+            reg.update().catch(function() {});
+            document.addEventListener('visibilitychange', function() {
+              if (document.visibilityState === 'visible') {
+                reg.update().catch(function() {});
+              }
+            });
+          })
+          .catch(function() {});
+      });
+    })();
+    </script>
+ </body>
 </html>

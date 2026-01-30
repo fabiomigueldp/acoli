@@ -1,9 +1,13 @@
 from django.urls import path
 
 from accounts.urls import urlpatterns as account_urls
-from web import views
+from web import views, pwa
 
 urlpatterns = [
+    path("manifest.webmanifest", pwa.manifest, name="pwa_manifest"),
+    path("sw.js", pwa.service_worker, name="pwa_sw"),
+    path("pwa/push/subscribe/", pwa.push_subscribe, name="pwa_push_subscribe"),
+    path("pwa/push/unsubscribe/", pwa.push_unsubscribe, name="pwa_push_unsubscribe"),
     path("", views.dashboard, name="dashboard"),
     path("calendar/", views.calendar_month, name="calendar_month"),
     path("calendar/<int:instance_id>/", views.mass_detail, name="mass_detail"),

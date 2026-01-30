@@ -5,6 +5,20 @@ from rest_framework.exceptions import AuthenticationFailed
 from core.models import Parish, ParishMembership
 
 
+class NoStoreHtmlMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        content_type = response.get("Content-Type", "")
+        if content_type.startswith("text/html"):
+            response["Cache-Control"] = "no-store"
+            response["Pragma"] = "no-cache"
+            response["Expires"] = "0"
+        return response
+
+
 class BackUrlMiddleware:
     """Middleware to track the last navigable URL for back navigation."""
     def __init__(self, get_response):
@@ -39,18 +53,18 @@ class ActiveParishMiddleware:
             parish_id = request.session.get("active_parish_id")
             if parish_id:
                 if request.user.is_system_admin:
-                    request.active_parish = Parish.objects.filter(id=parish_id).first()
+                    request.active_parish = Parish.objects.filter(id=parish_id).first()  # type: ignore[attr-defined]
                 else:
-                    membership = ParishMembership.objects.filter(user=request.user, parish_id=parish_id, active=True).select_related("parish").first()
+                    membership = ParishMembership.objects.filter(user=request.user, parish_id=parish_id, active=True).select_related("parish").first()  # type: ignore[attr-defined]
                     if membership:
                         request.active_parish = membership.parish
             if request.active_parish is None:
-                membership = ParishMembership.objects.filter(user=request.user, active=True).select_related("parish").first()
+                membership = ParishMembership.objects.filter(user=request.user, active=True).select_related("parish").first()  # type: ignore[attr-defined]
                 if membership:
                     request.active_parish = membership.parish
                     request.session["active_parish_id"] = membership.parish_id
             if request.active_parish is None and request.user.is_system_admin:
-                request.active_parish = Parish.objects.first()
+                request.active_parish = Parish.objects.first()  # type: ignore[attr-defined]
                 if request.active_parish:
                     request.session["active_parish_id"] = request.active_parish.id
         return self.get_response(request)
@@ -67,30 +81,30 @@ class ApiParishHeaderMiddleware:
                 try:
                     auth_result = self.basic_auth.authenticate(request)
                 except AuthenticationFailed:
-                    return HttpResponseForbidden("Paroquia invalida.")
+                    return HttpResponseForbidden(b"Paroquia invalida.")
                 if auth_result:
                     request.user, request.auth = auth_result
 
             parish_id = request.headers.get("X-Parish-ID") or request.GET.get("parish_id")
             if parish_id:
                 if not request.user.is_authenticated:
-                    return HttpResponseForbidden("Paroquia invalida.")
+                    return HttpResponseForbidden(b"Paroquia invalida.")
                 try:
                     parish_id = int(parish_id)
                 except (TypeError, ValueError):
-                    return HttpResponseForbidden("Paroquia invalida.")
+                    return HttpResponseForbidden(b"Paroquia invalida.")
                 if request.user.is_system_admin:
-                    parish = Parish.objects.filter(id=parish_id).first()
+                    parish = Parish.objects.filter(id=parish_id).first()  # type: ignore[attr-defined]
                 else:
-                    membership = ParishMembership.objects.filter(
+                    membership = ParishMembership.objects.filter(  # type: ignore[attr-defined]
                         user=request.user, parish_id=parish_id, active=True
                     ).select_related("parish").first()
                     parish = membership.parish if membership else None
                 if parish is None:
-                    return HttpResponseForbidden("Paroquia invalida.")
+                    return HttpResponseForbidden(b"Paroquia invalida.")
                 request.active_parish = parish
             if request.active_parish is None:
-                return HttpResponseBadRequest("Informe X-Parish-ID ou parish_id.")
+                return HttpResponseBadRequest(b"Informe X-Parish-ID ou parish_id.")
 
         return self.get_response(request)
 

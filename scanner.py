@@ -792,18 +792,15 @@ def main():
     print(f"   Est. tokens:   ~{token_estimate:,}")
     print()
 
-    # Save to file
-    try:
-        output_file = root / "snapshot.md"
-        output_file.write_text(snapshot, encoding="utf-8")
-        print(f"Saved to: {output_file}")
-    except Exception as e:
-        print(f"Error saving file: {e}")
-        print()
-        print("-" * 50)
-        print("Snapshot output:")
-        print("-" * 50)
-        print(snapshot)
+    # Copy to clipboard
+    if copy_to_clipboard(snapshot):
+        print("✓ Copied to clipboard successfully")
+    else:
+        print("✗ Failed to copy to clipboard")
+        print("Clipboard tools not found. Install:")
+        print("  macOS: built-in (pbcopy)")
+        print("  Linux: xclip, xsel, or wl-copy")
+        print("  Windows: built-in (clip.exe)")
 
 
 if __name__ == "__main__":
