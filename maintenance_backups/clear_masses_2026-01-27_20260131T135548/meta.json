@@ -1,0 +1,31 @@
+{
+  "created_at": "2026-01-31T13:55:48.732678-03:00",
+  "cutoff_date": "2026-01-27",
+  "counts": {
+    "past_masses": 0,
+    "past_slots": 0,
+    "past_assignments": 0,
+    "future_assignments_total": 87,
+    "confirmations": 2,
+    "claims": 3,
+    "replacement_requests": 22,
+    "swap_requests": 0,
+    "mass_interest": 0,
+    "mass_override": 0,
+    "ledger_rows": 0,
+    "audit_events": 89
+  },
+  "models_included": [
+    "core.MassInstance",
+    "core.AssignmentSlot",
+    "core.Assignment",
+    "core.Confirmation",
+    "core.PositionClaimRequest",
+    "core.ReplacementRequest",
+    "core.SwapRequest",
+    "core.MassInterest",
+    "core.MassOverride",
+    "core.AcolyteCreditLedger",
+    "core.AuditEvent"
+  ]
+}

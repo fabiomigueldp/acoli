@@ -42,9 +42,9 @@
                             {% endif %}
                         </td>
                         <td class="px-4 py-3 text-sm">
-                            {% if swap.mass_instance %}
-                            {{ swap.mass_instance.starts_at|date:"d/m" }}
-                            {{ swap.mass_instance.community.name }}
+                            {% if swap.requestor_assignment %}
+                            {{ swap.requestor_assignment.slot.mass_instance.starts_at|date:"d/m" }}
+                            {{ swap.requestor_assignment.slot.mass_instance.community.name }}
                             {% else %}
                             <span class="text-ink-400">-</span>
                             {% endif %}

@@ -97,7 +97,6 @@
         hx-post="{% url 'decline_assignment' assignment.id %}"
         hx-target="#assignment-{{ assignment.id }}"
         hx-swap="outerHTML"
-        hx-vals='{"return": "assignment_card"}'
         hx-confirm="Tem certeza que deseja rejeitar esta escala?"
         class="btn-danger w-full"
         type="button">
@@ -235,7 +234,6 @@
           hx-post="{% url 'decline_assignment' assignment.id %}"
           hx-target="#assignment-{{ assignment.id }}"
           hx-swap="outerHTML"
-          hx-vals='{"return": "assignment_card"}'
           hx-confirm="Tem certeza que deseja rejeitar esta escala?"
           class="btn-danger inline-flex items-center gap-2"
           type="button">

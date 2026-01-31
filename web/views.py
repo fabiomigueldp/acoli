@@ -764,14 +764,14 @@ def _build_roster_export_data(days):
 def _build_roster_lines(days):
     lines = []
     for day in _build_roster_export_data(days):
+        items = [item for item in day["items"] if not item.get("status")]
+        if not items:
+            continue
         lines.append(_format_roster_day_header(day["date"]))
-        for item in day["items"]:
+        for item in items:
             base = f"{item['time']} {item['community']}"
             if item["label"]:
                 base = f"{base} — {item['label']}"
-            if item["status"]:
-                lines.append(f"{base} — {item['status']}")
-                continue
             # single-role masses render inline
             roles = item.get("roles", [])
             if len(roles) == 1:
@@ -2554,6 +2554,7 @@ def event_series_days(request):
 
     OccurrenceFormSet = formset_factory(EventOccurrenceForm, extra=0)
     default_label = draft["title"] if start_date == end_date else ""
+    series = None
     if request.method == "POST":
         formset = OccurrenceFormSet(request.POST, form_kwargs={"parish": parish})
         extra_occurrences_by_index = [[] for _ in range(len(formset))]
@@ -2685,13 +2686,16 @@ def event_series_days(request):
     conflicts = []
     for form in formset:
         data = form.initial
-        conflict = MassInstance.objects.filter(
+        conflict_query = MassInstance.objects.filter(
             parish=parish,
             community_id=data.get("community"),
             starts_at__date=data.get("date"),
             starts_at__time=data.get("time"),
             status="scheduled",
-        ).exclude(event_series_id=series.id).first()
+        )
+        if series:
+            conflict_query = conflict_query.exclude(event_series_id=series.id)
+        conflict = conflict_query.first()
         conflicts.append(conflict)
 
     return render(
@@ -4733,9 +4737,9 @@ def _acolyte_swaps_context(request, parish, acolyte):
         Q(requestor_acolyte=acolyte) | Q(target_acolyte=acolyte),
         parish=parish
     ).select_related(
-        "requestor_acolyte",
-        "target_acolyte",
-        "mass_instance__community"
+        "requestor_acolyte", "target_acolyte",
+        "requestor_assignment__slot__mass_instance__community",
+        "target_assignment__slot__mass_instance__community"
     ).order_by("-created_at")
     
     # Replacement requests - find where acolyte is proposed or where acolyte's slot needs replacement
@@ -6214,120 +6218,25 @@ def confirm_assignment(request, assignment_id):
     
     return_target = request.POST.get("return")
     if return_target == "dashboard_hero":
-        if request.headers.get("HX-Request"):
-            hero_has_swap_options = AssignmentSlot.objects.filter(
-                parish=parish,
-                mass_instance=assignment.slot.mass_instance,
-            ).exclude(id=assignment.slot_id).filter(assignments__is_active=True).exists()
-            hero_html = render_to_string(
-                "acolytes/_partials/dashboard_hero_assignment.html",
-                {
-                    "hero_assignment": assignment,
-                    "claims_by_slot": _claim_map_for_slots(parish, [assignment.slot_id]),
-                    "hero_has_swap_options": hero_has_swap_options,
-                },
-                request=request,
-            )
-            horizon_html = render_to_string(
-                "acolytes/_partials/dashboard_horizon_row.html",
-                {"assignment": assignment, "oob": True},
-                request=request,
-            )
-            return HttpResponse(hero_html + horizon_html)
-        return redirect("dashboard")
+        return _htmx_or_redirect(
+            request,
+            "acolytes/_partials/dashboard_hero_assignment.html",
+            {
+                "hero_assignment": assignment,
+                "claims_by_slot": _claim_map_for_slots(parish, [assignment.slot_id]),
+            },
+            "dashboard",
+        )
     if return_target == "dashboard_pending":
-        if request.headers.get("HX-Request"):
-            acolyte = assignment.acolyte
-            now = timezone.now()
-            hero_assignment = Assignment.objects.filter(
-                parish=parish,
-                acolyte=acolyte,
-                is_active=True,
-                assignment_state__in=["proposed", "published", "locked"],
-                slot__mass_instance__starts_at__gte=now,
-                slot__mass_instance__status="scheduled",
-            ).select_related(
-                "slot__mass_instance__community",
-                "slot__position_type",
-                "confirmation",
-            ).order_by("slot__mass_instance__starts_at").first()
-
-            pending_assignments = Assignment.objects.filter(
-                parish=parish,
-                acolyte=acolyte,
-                is_active=True,
-                assignment_state__in=["proposed", "published", "locked"],
-                slot__mass_instance__status="scheduled",
-                slot__mass_instance__starts_at__gte=now,
-            ).filter(
-                Q(confirmation__status="pending") | Q(confirmation__isnull=True)
-            ).select_related(
-                "slot__mass_instance",
-                "slot__position_type",
-                "confirmation",
-            ).order_by("slot__mass_instance__starts_at")
-
-            if hero_assignment:
-                pending_assignments = pending_assignments.exclude(id=hero_assignment.id)
-
-            incoming_swaps = SwapRequest.objects.filter(
-                parish=parish,
-                target_acolyte=acolyte,
-                mass_instance__starts_at__gte=now,
-                status="pending",
-            ).select_related("mass_instance")
-
-            claims_by_slot = _claim_map_for_slots(
-                parish,
-                pending_assignments.values_list("slot_id", flat=True),
-            )
-
-            pending_html = render_to_string(
-                "acolytes/_partials/dashboard_pending_section.html",
-                {
-                    "pending_assignments": pending_assignments,
-                    "incoming_swaps": incoming_swaps,
-                    "claims_by_slot": claims_by_slot,
-                    "oob": True,
-                },
-                request=request,
-            )
-
-            horizon_html = ""
-            if hero_assignment and assignment.id == hero_assignment.id:
-                horizon_html = render_to_string(
-                    "acolytes/_partials/dashboard_horizon_row.html",
-                    {"assignment": assignment, "oob": True},
-                    request=request,
-                )
-            else:
-                horizon_assignments = Assignment.objects.filter(
-                    parish=parish,
-                    acolyte=acolyte,
-                    is_active=True,
-                    assignment_state__in=["proposed", "published", "locked"],
-                    slot__mass_instance__starts_at__gte=now,
-                ).select_related(
-                    "slot__mass_instance__community",
-                    "slot__position_type",
-                    "confirmation",
-                ).order_by("slot__mass_instance__starts_at")
-
-                if hero_assignment:
-                    horizon_assignments = horizon_assignments.exclude(id=hero_assignment.id)[:4]
-                else:
-                    horizon_assignments = horizon_assignments[:4]
-
-                horizon_ids = set(horizon_assignments.values_list("id", flat=True))
-                if assignment.id in horizon_ids:
-                    horizon_html = render_to_string(
-                        "acolytes/_partials/dashboard_horizon_row.html",
-                        {"assignment": assignment, "oob": True},
-                        request=request,
-                    )
-
-            return HttpResponse(pending_html + horizon_html)
-        return redirect("dashboard")
+        return _htmx_or_redirect(
+            request,
+            "acolytes/_partials/dashboard_pending_row.html",
+            {
+                "assignment": assignment,
+                "claims_by_slot": _claim_map_for_slots(parish, [assignment.slot_id]),
+            },
+            "dashboard",
+        )
     return _htmx_or_redirect(
         request,
         "acolytes/_partials/assignment_card.html",
@@ -6397,33 +6306,29 @@ def decline_assignment(request, assignment_id):
                 },
             )
     
-    return_target = request.POST.get("return")
-    # For HTMX, return updated hero assignment when requested
+    # For HTMX, return updated hero assignment
     if request.headers.get("HX-Request"):
-        if return_target == "dashboard_hero":
-            hero_assignment = Assignment.objects.filter(
-                parish=parish,
-                acolyte=assignment.acolyte,
-                is_active=True,
-                assignment_state__in=["proposed", "published", "locked"],
-                slot__mass_instance__starts_at__gte=timezone.now(),
-                slot__mass_instance__status="scheduled",
-            ).select_related(
-                "slot__mass_instance__community",
-                "slot__position_type",
-            ).order_by("slot__mass_instance__starts_at").first()
+        # Get new hero assignment
+        hero_assignment = Assignment.objects.filter(
+            parish=parish,
+            acolyte=assignment.acolyte,
+            is_active=True,
+            assignment_state__in=["proposed", "published", "locked"],
+            slot__mass_instance__starts_at__gte=timezone.now(),
+            slot__mass_instance__status="scheduled",
+        ).select_related(
+            "slot__mass_instance__community",
+            "slot__position_type",
+        ).order_by("slot__mass_instance__starts_at").first()
 
-            claims_by_slot = {}
-            if hero_assignment:
-                claims_by_slot = _claim_map_for_slots(parish, [hero_assignment.slot_id])
+        claims_by_slot = {}
+        if hero_assignment:
+            claims_by_slot = _claim_map_for_slots(parish, [hero_assignment.slot_id])
 
-            return render(request, "acolytes/_partials/dashboard_hero_assignment.html", {
-                "hero_assignment": hero_assignment,
-                "claims_by_slot": claims_by_slot,
-            })
-        response = HttpResponse("")
-        response["HX-Success-Message"] = "Escala recusada."
-        return response
+        return render(request, "acolytes/_partials/dashboard_hero_assignment.html", {
+            "hero_assignment": hero_assignment,
+            "claims_by_slot": claims_by_slot,
+        })
     return redirect("my_assignments")
 
 

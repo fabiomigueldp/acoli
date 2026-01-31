@@ -157,6 +157,21 @@ class RosterExportTests(TestCase):
     def test_export_whatsapp_returns_text(self):
         start = timezone.localdate()
         end = start + timedelta(days=2)
+        canceled_instance = MassInstance.objects.create(
+            parish=self.parish,
+            community=self.community,
+            starts_at=timezone.now() + timedelta(days=1, hours=2),
+            status="canceled",
+        )
+        AssignmentSlot.objects.create(
+            parish=self.parish,
+            mass_instance=canceled_instance,
+            position_type=PositionType.objects.get(parish=self.parish, code="LIB"),
+            slot_index=1,
+            required=True,
+            status="open",
+        )
         response = self.client.get(f"/roster/export/whatsapp/?start={start.isoformat()}&end={end.isoformat()}")
         self.assertEqual(response.status_code, 200)
         self.assertIn("ABERTO", response.content.decode("utf-8"))
+        self.assertNotIn("CANCELADA", response.content.decode("utf-8"))

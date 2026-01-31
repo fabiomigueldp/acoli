@@ -1,6 +1,8 @@
 body { font-family: 'Alegreya Sans', sans-serif; transition: all 0.3s ease; }
 .nav-link { padding: 0.5rem 0.875rem; border-radius: 0.875rem; color: #5a6a72; transition: all 0.2s ease; position: relative; overflow: hidden; }
 .nav-link:hover { background: linear-gradient(135deg, rgba(15, 94, 77, 0.1), rgba(15, 94, 77, 0.05)); color: #0f5e4d; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(15, 94, 77, 0.15); }
+.skip-link { position: absolute; left: -999px; top: 1rem; z-index: 60; background: white; color: #0b1f26; padding: 0.65rem 1rem; border-radius: 0.875rem; border: 1px solid rgba(10, 24, 32, 0.2); box-shadow: 0 10px 20px rgba(10, 24, 32, 0.15); }
+.skip-link:focus { left: 1rem; }
 .card { background: linear-gradient(135deg, white 0%, #fefefe 100%); border-radius: 1.5rem; padding: 1.75rem; box-shadow: 0 20px 40px rgba(10, 24, 32, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.8); transition: all 0.3s ease; }
 .card:hover { box-shadow: 0 25px 50px rgba(10, 24, 32, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.9); transform: translateY(-2px); }
 .label { display: block; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; color: #5a6a72; margin-bottom: 0.5rem; font-weight: 500; transition: color 0.2s ease; }
@@ -664,21 +666,6 @@ input[type="checkbox"] { width: 1rem; height: 1rem; padding: 0; border-radius: 0
   color: #0b1f26;
   transition: all 0.2s ease;
   text-decoration: none;
-}
-
-.lucide {
-  width: 1.25rem;
-  height: 1.25rem;
-}
-
-.icon-sm {
-  width: 1rem;
-  height: 1rem;
-}
-
-.icon-md {
-  width: 1.25rem;
-  height: 1.25rem;
 }
 
 .btn-link:hover {

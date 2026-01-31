@@ -14,19 +14,19 @@
     <!-- Admin View -->
     <div class="space-y-8">
       <!-- Risk Radar -->
-      <div class="md:hidden -mx-4 px-4 pb-2">
-        <div class="flex gap-3 overflow-x-auto snap-x snap-mandatory">
-          <div class="card text-center min-w-[160px] snap-center">
+      <div class="md:hidden">
+        <div class="grid grid-cols-2 gap-4">
+          <div class="card text-center">
             <div class="text-3xl font-serif text-moss mb-1">{{ open_slots_count }}</div>
             <div class="text-xs text-ink font-medium">Vagas abertas</div>
             <div class="text-xs text-slate mt-1">14 dias</div>
           </div>
-          <div class="card text-center min-w-[160px] snap-center">
+          <div class="card text-center">
             <div class="text-3xl font-serif text-moss mb-1">{{ pending_replacements }}</div>
             <div class="text-xs text-ink font-medium">Substituicoes</div>
             <div class="text-xs text-slate mt-1">Pendentes</div>
           </div>
-          <div class="card text-center min-w-[160px] snap-center">
+          <div class="card text-center col-span-2">
             <div class="text-3xl font-serif text-moss mb-1">{{ pending_swaps }}</div>
             <div class="text-xs text-ink font-medium">Trocas</div>
             <div class="text-xs text-slate mt-1">Pendentes</div>
@@ -113,43 +113,43 @@
         <div class="space-y-4">
           {% for mass in upcoming_masses %}
             <a href="{% url 'mass_detail' mass.id %}" class="group block rounded-xl border border-black/5 bg-white/80 p-5 transition-all hover:bg-white hover:shadow-soft">
-              <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                <div class="space-y-2">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div class="space-y-2 min-w-0">
                   <div class="text-xs uppercase tracking-wide text-slate">{{ mass.starts_at|date:"l, d/m/Y" }}</div>
-                  <div class="text-base font-medium text-ink">{{ mass.community.code }} - {{ mass.liturgy_label|default:"Missa" }}</div>
-                  <div class="flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate">
+                  <div class="text-base font-medium text-ink break-words">{{ mass.community.code }} - {{ mass.liturgy_label|default:"Missa" }}</div>
+                  <div class="flex flex-col gap-2 text-xs text-slate sm:flex-row sm:flex-wrap sm:gap-x-4 sm:gap-y-2">
                     {% if mass.open_slots_count %}
-                      <div class="flex items-center gap-2">
+                      <div class="flex items-center gap-2 min-w-0">
                         <span class="h-2 w-2 rounded-full bg-sun"></span>
-                        <span>Escala incompleta: <span class="font-medium text-ink">{{ mass.open_slots_count }} vaga{{ mass.open_slots_count|pluralize }}</span></span>
+                        <span class="min-w-0 break-words">Escala incompleta: <span class="font-medium text-ink">{{ mass.open_slots_count }} vaga{{ mass.open_slots_count|pluralize }}</span></span>
                       </div>
                     {% endif %}
                     {% if mass.active_assignments_count %}
-                      <div class="flex items-center gap-2">
+                      <div class="flex items-center gap-2 min-w-0">
                         <span class="h-2 w-2 rounded-full bg-moss"></span>
-                        <span>Confirmacoes: <span class="font-medium text-ink">{{ mass.confirmed_assignments_count }}/{{ mass.active_assignments_count }}</span></span>
+                        <span class="min-w-0 break-words">Confirmacoes: <span class="font-medium text-ink">{{ mass.confirmed_assignments_count }}/{{ mass.active_assignments_count }}</span></span>
                       </div>
                     {% else %}
-                      <div class="flex items-center gap-2">
+                      <div class="flex items-center gap-2 min-w-0">
                         <span class="h-2 w-2 rounded-full bg-slate"></span>
-                        <span>Sem acolitos escalados</span>
+                        <span class="min-w-0 break-words">Sem acolitos escalados</span>
                       </div>
                     {% endif %}
                     {% if mass.pending_confirmations_count %}
-                      <div class="flex items-center gap-2">
+                      <div class="flex items-center gap-2 min-w-0">
                         <span class="h-2 w-2 rounded-full bg-sun"></span>
-                        <span>Confirmacoes pendentes: <span class="font-medium text-ink">{{ mass.pending_confirmations_count }}</span></span>
+                        <span class="min-w-0 break-words">Confirmacoes pendentes: <span class="font-medium text-ink">{{ mass.pending_confirmations_count }}</span></span>
                       </div>
                     {% endif %}
                     {% if mass.is_soon and mass.open_slots_count %}
-                      <div class="flex items-center gap-2">
+                      <div class="flex items-center gap-2 min-w-0">
                         <span class="h-2 w-2 rounded-full bg-sun"></span>
-                        <span class="font-medium text-ink">Missa proxima sem escala</span>
+                        <span class="font-medium text-ink min-w-0 break-words">Missa proxima sem escala</span>
                       </div>
                     {% endif %}
                   </div>
                 </div>
-                <div class="text-2xl font-serif text-moss">{{ mass.starts_at|date:"H:i" }}</div>
+                <div class="text-xl font-serif text-moss sm:text-2xl sm:text-right self-end sm:self-auto">{{ mass.starts_at|date:"H:i" }}</div>
               </div>
             </a>
           {% empty %}
@@ -173,23 +173,56 @@
       {% endif %}
 
       <!-- Pending Actions (Inbox) -->
-      {% include "acolytes/_partials/dashboard_pending_section.html" %}
+      {% if pending_assignments or incoming_swaps %}
+        <div class="rounded-2xl bg-sun-50/70 p-6 shadow-soft border border-sun-100">
+          <div class="mb-6 space-y-2">
+            <div class="text-xs uppercase tracking-[0.2em] text-slate">Acoes pendentes</div>
+            <h2 class="font-serif text-2xl text-ink">Resolva antes de fechar</h2>
+          </div>
+          <div class="space-y-3">
+            {% for assignment in pending_assignments %}
+              {% include "acolytes/_partials/dashboard_pending_row.html" %}
+            {% endfor %}
+            {% for swap in incoming_swaps %}
+              <div id="swap-{{ swap.id }}" class="flex flex-col gap-3 rounded-xl bg-white/80 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div class="space-y-1">
+                  <div class="text-sm text-slate">{{ swap.mass_instance.starts_at|date:"D, d M • H:i" }}</div>
+                  <div class="text-base text-ink font-medium">Troca solicitada</div>
+                  <div class="text-sm text-slate">{{ swap.requested_position.name }}</div>
+                </div>
+                <div class="flex w-full gap-2 sm:w-auto">
+                  <button hx-post="{% url 'swap_request_accept' swap.id %}" hx-target="#swap-{{ swap.id }}" hx-swap="outerHTML" class="btn-primary flex-1 sm:flex-none">Aceitar</button>
+                  <button hx-post="{% url 'swap_request_reject' swap.id %}" hx-target="#swap-{{ swap.id }}" hx-swap="outerHTML" class="btn-secondary flex-1 sm:flex-none">Recusar</button>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
 
       <!-- Future Assignments (Horizon) -->
-      {% if hero_assignment or horizon_assignments %}
+      {% if horizon_assignments %}
         <div class="rounded-2xl bg-white/80 p-6 shadow-soft border border-white/70">
           <div class="mb-6 flex items-center justify-between">
             <h2 class="font-serif text-2xl text-ink">Agenda futura</h2>
             <span class="text-xs uppercase tracking-[0.2em] text-slate">Proximas semanas</span>
           </div>
           <div class="divide-y divide-sand-100">
-            {% if hero_assignment %}
-              {% include "acolytes/_partials/dashboard_horizon_row.html" with assignment=hero_assignment %}
-            {% endif %}
             {% for assignment in horizon_assignments %}
-              {% if not hero_assignment or assignment.id != hero_assignment.id %}
-                {% include "acolytes/_partials/dashboard_horizon_row.html" %}
-              {% endif %}
+              <div class="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex items-center gap-4">
+                  <div class="text-sm font-medium text-ink">{{ assignment.slot.mass_instance.starts_at|date:"d M" }}</div>
+                  <div>
+                    <div class="text-base text-ink font-medium">{{ assignment.slot.mass_instance.community.code }} - {{ assignment.slot.position_type.name }}</div>
+                    <div class="text-sm text-slate">{{ assignment.slot.mass_instance.starts_at|date:"H:i" }}</div>
+                  </div>
+                </div>
+                {% if assignment.confirmation_status == 'confirmed' %}
+                  <span class="text-xs font-medium uppercase tracking-[0.2em] text-moss">Confirmado</span>
+                {% else %}
+                  <span class="text-xs font-medium uppercase tracking-[0.2em] text-sun">Pendente</span>
+                {% endif %}
+              </div>
             {% endfor %}
           </div>
         </div>
